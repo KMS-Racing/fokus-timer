@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fokus-Timer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Courier New', monospace;
+      background: #0d0d0d;
+      color: #e0e0e0;
+      transition: background 1s;
+    }
+
+    body.pause-mode  { background: #0a1a0a; }
+    body.fertig-mode { background: #1a0a00; }
+
+    h1 {
+      font-size: 1.2rem;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 2rem;
+    }
+
+    #ascii-art {
+      font-size: 0.7rem;
+      line-height: 1.2;
+      color: #ff5f57;
+      margin-bottom: 1.5rem;
+      text-align: center;
+      min-height: 5rem;
+      white-space: pre;
+      transition: color 0.5s;
+    }
+
+    body.pause-mode  #ascii-art { color: #28c840; }
+    body.fertig-mode #ascii-art { color: #ff9f0a; }
+
+    #zeit {
+      font-size: 5rem;
+      font-weight: bold;
+      letter-spacing: 0.1em;
+      color: #ff5f57;
+      margin-bottom: 0.5rem;
+      transition: color 0.5s;
+    }
+
+    body.pause-mode  #zeit { color: #28c840; }
+    body.fertig-mode #zeit { color: #ff9f0a; }
+
+    #phase-label {
+      font-size: 0.9rem;
+      letter-spacing: 0.3em;
+      color: #666;
+      margin-bottom: 2rem;
+      text-transform: uppercase;
+    }
+
+    #fortschritt-ring {
+      width: 220px;
+      height: 220px;
+      margin-bottom: 2.5rem;
+      position: relative;
+    }
+
+    #fortschritt-ring svg {
+      transform: rotate(-90deg);
+    }
+
+    .ring-bg { fill: none; stroke: #222; stroke-width: 8; }
+    .ring-fg { fill: none; stroke: #ff5f57; stroke-width: 8; stroke-linecap: round;
+               transition: stroke-dashoffset 1s linear, stroke 0.5s; }
+
+    body.pause-mode  .ring-fg { stroke: #28c840; }
+    body.fertig-mode .ring-fg { stroke: #ff9f0a; }
+
+    #zeit-center {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    button {
+      padding: 0.6rem 1.6rem;
+      border: 1px solid #444;
+      background: transparent;
+      color: #ccc;
+      font-family: 'Courier New', monospace;
+      font-size: 0.85rem;
+      letter-spacing: 0.15em;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    button:hover { border-color: #ff5f57; color: #ff5f57; }
+    body.pause-mode  button:hover { border-color: #28c840; color: #28c840; }
+
+    button:disabled { opacity: 0.3; cursor: default; }
+    button:disabled:hover { border-color: #444; color: #ccc; }
+
+    #einstellungen {
+      display: flex;
+      gap: 2rem;
+      font-size: 0.75rem;
+      color: #555;
+    }
+
+    #einstellungen label { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
+
+    #einstellungen input[type=range] {
+      accent-color: #ff5f57;
+      width: 80px;
+    }
+
+    #runden {
+      margin-top: 1.5rem;
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .runde-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      border: 1px solid #444;
+      background: transparent;
+      transition: background 0.3s;
+    }
+    .runde-dot.fertig { background: #ff5f57; border-color: #ff5f57; }
+
+    #nachricht {
+      margin-top: 1.5rem;
+      font-size: 0.85rem;
+      color: #666;
+      letter-spacing: 0.1em;
+      min-height: 1.2em;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>Fokus-Timer</h1>
+
+  <div id="ascii-art"></div>
+
+  <div id="fortschritt-ring">
+    <svg width="220" height="220" viewBox="0 0 220 220">
+      <circle class="ring-bg" cx="110" cy="110" r="100"/>
+      <circle class="ring-fg" id="ring" cx="110" cy="110" r="100"
+              stroke-dasharray="628.3" stroke-dashoffset="0"/>
+    </svg>
+    <div id="zeit-center">
+      <div id="zeit">25:00</div>
+      <div id="phase-label">Fokus</div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button id="btn-start">▶ Start</button>
+    <button id="btn-pause" disabled>⏸ Pause</button>
+    <button id="btn-reset">↺ Reset</button>
+  </div>
+
+  <div id="einstellungen">
+    <label>
+      Fokus (Min)
+      <input type="range" id="sl-fokus" min="1" max="60" value="25" />
+      <span id="val-fokus">25</span>
+    </label>
+    <label>
+      Pause (Min)
+      <input type="range" id="sl-pause" min="1" max="30" value="5" />
+      <span id="val-pause">5</span>
+    </label>
+    <label>
+      Runden
+      <input type="range" id="sl-runden" min="1" max="8" value="4" />
+      <span id="val-runden">4</span>
+    </label>
+  </div>
+
+  <div id="runden"></div>
+  <div id="nachricht">Bereit zum Fokussieren!</div>
+
+  <script>
+    const ASCII_FOKUS = [
+      `  ██████╗   `,
+      ` ██╔═══██╗  `,
+      ` ██║   ██║  `,
+      ` ██║   ██║  `,
+      ` ╚██████╔╝  `,
+      `  ╚═════╝   `,
+    ];
+
+    const ASCII_PAUSE = [
+      ` ██████╗  ██████╗  `,
+      ` ██╔══██╗ ██╔══██╗ `,
+      ` ██████╔╝ ██████╔╝ `,
+      ` ██╔═══╝  ██╔═══╝  `,
+      ` ██║      ██║       `,
+      ` ╚═╝      ╚═╝       `,
+    ];
+
+    const NACHRICHTEN_FOKUS = [
+      "Tief atmen und loslegen!",
+      "Ablenkungen ausblenden ✓",
+      "Du schaffst das!",
+      "Jetzt ist deine Zeit.",
+      "Konzentration ist ein Muskel.",
+    ];
+
+    const NACHRICHTEN_PAUSE = [
+      "Kurz strecken! 🧘",
+      "Wasser trinken nicht vergessen.",
+      "Augen schließen, kurz ausruhen.",
+      "Gut gemacht — kurze Pause!",
+      "Entspann dich, du hast's verdient.",
+    ];
+
+    const circumference = 2 * Math.PI * 100; // ≈ 628.3
+
+    let gesamtSek, vergangen, interval, laeuft = false;
+    let phase = 'fokus'; // 'fokus' | 'pause'
+    let rundeAktuell = 0;
+    let maxRunden = 4;
+    let fokusMin = 25, pauseMin = 5;
+    let animFrame = 0;
+
+    const zeitEl    = document.getElementById('zeit');
+    const ringEl    = document.getElementById('ring');
+    const phaseEl   = document.getElementById('phase-label');
+    const rundenEl  = document.getElementById('runden');
+    const nachEl    = document.getElementById('nachricht');
+    const asciiEl   = document.getElementById('ascii-art');
+    const btnStart  = document.getElementById('btn-start');
+    const btnPause  = document.getElementById('btn-pause');
+    const btnReset  = document.getElementById('btn-reset');
+
+    function setAscii(lines, offset) {
+      const i = Math.floor(offset) % lines.length;
+      asciiEl.textContent = lines[i] + '\n' + lines[(i+1)%lines.length] + '\n' +
+                            lines[(i+2)%lines.length] + '\n' + lines[(i+3)%lines.length];
+    }
+
+    function renderRunden() {
+      rundenEl.innerHTML = '';
+      for (let i = 0; i < maxRunden; i++) {
+        const d = document.createElement('div');
+        d.className = 'runde-dot' + (i < rundeAktuell ? ' fertig' : '');
+        rundenEl.appendChild(d);
+      }
+    }
+
+    function formatZeit(sek) {
+      const m = String(Math.floor(sek / 60)).padStart(2, '0');
+      const s = String(sek % 60).padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    function updateRing() {
+      const pct = vergangen / gesamtSek;
+      ringEl.style.strokeDashoffset = circumference * pct;
+    }
+
+    function setPhase(p) {
+      phase = p;
+      document.body.className = p === 'pause' ? 'pause-mode' : '';
+      phaseEl.textContent = p === 'fokus' ? 'Fokus' : 'Pause';
+      gesamtSek = (p === 'fokus' ? fokusMin : pauseMin) * 60;
+      vergangen = 0;
+      zeitEl.textContent = formatZeit(gesamtSek);
+      updateRing();
+      const pool = p === 'fokus' ? NACHRICHTEN_FOKUS : NACHRICHTEN_PAUSE;
+      nachEl.textContent = pool[Math.floor(Math.random() * pool.length)];
+      const art = p === 'fokus' ? ASCII_FOKUS : ASCII_PAUSE;
+      setAscii(art, 0);
+    }
+
+    function tick() {
+      vergangen++;
+      zeitEl.textContent = formatZeit(gesamtSek - vergangen);
+      updateRing();
+      animFrame++;
+      const art = phase === 'fokus' ? ASCII_FOKUS : ASCII_PAUSE;
+      setAscii(art, Math.floor(animFrame / 8));
+
+      if (vergangen >= gesamtSek) {
+        clearInterval(interval);
+        laeuft = false;
+        btnStart.disabled = false;
+        btnPause.disabled = true;
+
+        if (phase === 'fokus') {
+          rundeAktuell++;
+          renderRunden();
+          if (rundeAktuell >= maxRunden) {
+            document.body.className = 'fertig-mode';
+            nachEl.textContent = '🎉 Alle Runden geschafft! Großartig!';
+            zeitEl.textContent = '00:00';
+            asciiEl.textContent = '★ ★ ★ ★ ★\n  FERTIG!  \n★ ★ ★ ★ ★';
+            return;
+          }
+          setPhase('pause');
+          startTimer();
+        } else {
+          setPhase('fokus');
+          btnStart.disabled = false;
+          nachEl.textContent = 'Pause vorbei — bereit für Runde ' + (rundeAktuell + 1) + '?';
+        }
+      }
+    }
+
+    function startTimer() {
+      if (laeuft) return;
+      if (vergangen === 0) {
+        gesamtSek = (phase === 'fokus' ? fokusMin : pauseMin) * 60;
+      }
+      laeuft = true;
+      btnStart.disabled = true;
+      btnPause.disabled = false;
+      interval = setInterval(tick, 1000);
+    }
+
+    function pauseTimer() {
+      clearInterval(interval);
+      laeuft = false;
+      btnStart.disabled = false;
+      btnPause.disabled = true;
+      nachEl.textContent = 'Pausiert…';
+    }
+
+    function resetTimer() {
+      clearInterval(interval);
+      laeuft = false;
+      rundeAktuell = 0;
+      animFrame = 0;
+      document.body.className = '';
+      btnStart.disabled = false;
+      btnPause.disabled = true;
+      setPhase('fokus');
+      renderRunden();
+      nachEl.textContent = 'Bereit zum Fokussieren!';
+    }
+
+    btnStart.addEventListener('click', startTimer);
+    btnPause.addEventListener('click', pauseTimer);
+    btnReset.addEventListener('click', resetTimer);
+
+    function setupSlider(sliderId, valId, callback) {
+      const sl = document.getElementById(sliderId);
+      const vl = document.getElementById(valId);
+      vl.textContent = sl.value;
+      sl.addEventListener('input', () => {
+        vl.textContent = sl.value;
+        callback(parseInt(sl.value));
+      });
+    }
+
+    setupSlider('sl-fokus',  'val-fokus',  v => { fokusMin = v; if (!laeuft && phase === 'fokus') { gesamtSek = v*60; vergangen = 0; zeitEl.textContent = formatZeit(gesamtSek); updateRing(); }});
+    setupSlider('sl-pause',  'val-pause',  v => { pauseMin = v; });
+    setupSlider('sl-runden', 'val-runden', v => { maxRunden = v; renderRunden(); });
+
+    resetTimer();
+  </script>
+</body>
+</html>
