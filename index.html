@@ -162,7 +162,7 @@
     <svg width="220" height="220" viewBox="0 0 220 220">
       <circle class="ring-bg" cx="110" cy="110" r="100"/>
       <circle class="ring-fg" id="ring" cx="110" cy="110" r="100"
-              stroke-dasharray="628.3" stroke-dashoffset="0"/>
+              stroke-dashoffset="0"/>
     </svg>
     <div id="zeit-center">
       <div id="zeit">25:00</div>
@@ -232,7 +232,8 @@
       "Entspann dich, du hast's verdient.",
     ];
 
-    const circumference = 2 * Math.PI * 100; // ≈ 628.3
+    const circumference = 2 * Math.PI * 100;
+    document.getElementById('ring').style.strokeDasharray = circumference;
 
     let gesamtSek, vergangen, interval, laeuft = false;
     let phase = 'fokus'; // 'fokus' | 'pause'
