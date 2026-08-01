@@ -352,6 +352,35 @@
     }
 
     // ==========================================================
+    // REIFEN-ABBAU (Trend der Rundenzeiten über das Rennen)
+    // ==========================================================
+
+    // Lineare Regression: legt eine "beste Gerade" durch die Rundenzeiten.
+    // slope = wie viele Millisekunden pro Runde langsamer (+) oder schneller (-).
+    // intercept = der rechnerische Startwert bei Runde 1 (für die Trendlinie).
+    function berechneTrend(runden) {
+      const n = runden.length;
+      const summeX  = (n - 1) * n / 2;                                  // 0 + 1 + ... + (n-1)
+      const summeY  = runden.reduce((a, b) => a + b, 0);
+      const summeXY = runden.reduce((a, b, i) => a + i * b, 0);
+      const summeXX = runden.reduce((a, _, i) => a + i * i, 0);
+
+      const nenner = n * summeXX - summeX * summeX;
+      const slope = nenner === 0 ? 0 : (n * summeXY - summeX * summeY) / nenner;
+      const intercept = (summeY - slope * summeX) / n;
+      return { slope, intercept };
+    }
+
+    // Aus dem Trend (ms pro Runde) eine verständliche Bewertung machen
+    function abbauBewertung(slopeMsProRunde) {
+      const s = slopeMsProRunde / 1000; // Sekunden pro Runde
+      if (s > 0.05)  return { text: 'Deutlicher Abbau', klasse: 'badge-rot' };
+      if (s > 0.02)  return { text: 'Leichter Abbau',   klasse: 'badge-gelb' };
+      if (s < -0.02) return { text: 'Wird schneller',   klasse: 'badge-gruen' };
+      return { text: 'Konstant', klasse: 'badge-gruen' };
+    }
+
+    // ==========================================================
     // MINI-DIAGRAMM (als SVG selbst gezeichnet)
     // ==========================================================
 
@@ -372,6 +401,18 @@
 
       const linie = punkte.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
 
+      // Gestrichelte Trendlinie (Reifen-Abbau) – nur ab 2 Runden sinnvoll
+      let trendLinie = '';
+      if (runden.length >= 2) {
+        const t = berechneTrend(runden);
+        const begrenze = (y) => Math.max(rand, Math.min(hoehe - rand, y));
+        const yStart = begrenze(rand + ((t.intercept - minWert) / spanne) * (hoehe - 2 * rand));
+        const yEnde  = begrenze(rand + ((t.intercept + t.slope * (runden.length - 1) - minWert) / spanne) * (hoehe - 2 * rand));
+        trendLinie =
+          '<line x1="' + rand + '" y1="' + yStart.toFixed(1) + '" x2="' + (breite - rand) + '" y2="' + yEnde.toFixed(1) +
+          '" stroke="#888" stroke-width="1" stroke-dasharray="4 3" opacity="0.7"><title>Trend (Reifen-Abbau)</title></line>';
+      }
+
       // Kreise für jede Runde; die beste Runde bekommt eine andere Farbe
       const kreise = punkte.map((p, i) => {
         const istBeste = runden[i] === minWert;
@@ -382,6 +423,7 @@
       }).join('');
 
       return '<svg viewBox="0 0 ' + breite + ' ' + hoehe + '" preserveAspectRatio="none">' +
+             trendLinie +
              '<polyline points="' + linie + '" fill="none" stroke="#ff5f57" stroke-width="1.5" opacity="0.6" />' +
              kreise +
              '</svg>';
@@ -466,6 +508,20 @@
         const stat = berechneStatistik(rennen.runden);
         const bewertung = konstanzBewertung(stat.schwankung);
 
+        // Reifen-Abbau nur berechnen, wenn es mindestens 2 Runden gibt
+        let abbauHtml = '';
+        if (rennen.runden.length >= 2) {
+          const trend = berechneTrend(rennen.runden);
+          const ab = abbauBewertung(trend.slope);
+          const proRunde = trend.slope / 1000;              // Sekunden pro Runde
+          const vorzeichen = proRunde >= 0 ? '+' : '';
+          abbauHtml =
+            '<div style="margin-top:0.4rem">Reifen-Abbau: ' +
+              '<span class="badge ' + ab.klasse + '">' + ab.text + '</span> ' +
+              '<span style="color:#888;font-size:0.8rem">' + vorzeichen + proRunde.toFixed(3) + ' s/Runde</span>' +
+            '</div>';
+        }
+
         const karte = document.createElement('div');
         karte.className = 'karte';
         karte.innerHTML =
@@ -484,6 +540,7 @@
             '<div class="stat"><div class="wert">±' + (stat.schwankung / 1000).toFixed(3) + 's</div><div class="name">Schwankung</div></div>' +
           '</div>' +
           '<div>Konstanz: <span class="badge ' + bewertung.klasse + '">' + bewertung.text + '</span></div>' +
+          abbauHtml +
           baueDiagramm(rennen.runden);
 
         // Löschen-Knopf für genau dieses Rennen
