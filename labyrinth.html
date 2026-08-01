@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KI-Ausbruch – Live lernen</title>
+  <title>KI-Ausbruch – Lern-Wettkampf</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -11,51 +11,64 @@
       font-family: 'Courier New', monospace; background: #0d0d0d; color: #e0e0e0; padding: 2rem 1rem;
     }
     h1 { font-size: 1.3rem; letter-spacing: 0.3em; text-transform: uppercase; color: #888; margin-bottom: 0.4rem; text-align: center; }
-    #untertitel { font-size: 0.8rem; color: #666; margin-bottom: 1.3rem; letter-spacing: 0.05em; text-align: center; max-width: 600px; line-height: 1.5; }
+    #untertitel { font-size: 0.8rem; color: #666; margin-bottom: 1.2rem; letter-spacing: 0.05em; text-align: center; max-width: 620px; line-height: 1.5; }
 
     .zeile-mitte { display: flex; gap: 0.6rem; flex-wrap: wrap; justify-content: center; align-items: center; margin-bottom: 1rem; }
+    .label-mini { font-size: 0.72rem; color: #666; letter-spacing: 0.1em; }
 
     button {
-      padding: 0.55rem 1.3rem; border: 1px solid #444; background: transparent; color: #ccc;
-      font-family: 'Courier New', monospace; font-size: 0.8rem; letter-spacing: 0.12em;
+      padding: 0.5rem 1.2rem; border: 1px solid #444; background: transparent; color: #ccc;
+      font-family: 'Courier New', monospace; font-size: 0.78rem; letter-spacing: 0.12em;
       cursor: pointer; text-transform: uppercase; transition: border-color 0.2s, color 0.2s, background 0.2s;
     }
-    button:hover:not(:disabled) { border-color: #bc7cff; color: #bc7cff; }
+    button:hover:not(:disabled) { border-color: #888; color: #fff; }
     button:disabled { opacity: 0.3; cursor: default; }
-    button.aktiv { border-color: #bc7cff; color: #bc7cff; background: #bc7cff22; }
+    button.aktiv { border-color: #888; color: #fff; background: #ffffff11; }
 
     canvas#spielfeld { background: #111; border: 1px solid #333; border-radius: 4px; max-width: 100%; }
 
-    .haupt { display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+    .haupt { display: flex; gap: 1.3rem; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+    #rechts { width: 270px; display: flex; flex-direction: column; gap: 0.8rem; }
 
-    #tafel { min-width: 230px; display: flex; flex-direction: column; gap: 0.9rem; }
-    .box { border: 1px solid #333; border-radius: 6px; padding: 0.8rem 1rem; }
-    .box h2 { font-size: 0.75rem; letter-spacing: 0.12em; color: #888; margin-bottom: 0.6rem; text-transform: uppercase; }
-    .zeile { display: flex; justify-content: space-between; margin: 0.3rem 0; font-size: 0.82rem; }
-    .zeile span:first-child { color: #666; }
-    .zeile .wert { font-weight: bold; color: #e0e0e0; }
-    .gross { font-size: 1.3rem; }
+    /* Methoden-Karten (anklickbar) */
+    .karte {
+      border: 1px solid #333; border-radius: 6px; padding: 0.6rem 0.8rem; cursor: pointer;
+      transition: border-color 0.15s, background 0.15s; position: relative;
+    }
+    .karte:hover { background: #ffffff08; }
+    .karte.fokus { background: #ffffff12; }
+    .karte .kopf { display: flex; justify-content: space-between; align-items: center; }
+    .karte .name { font-size: 0.82rem; font-weight: bold; }
+    .karte .rang { font-size: 0.95rem; }
+    .karte .grund { display: flex; justify-content: space-between; font-size: 0.75rem; color: #888; margin-top: 0.35rem; }
+    .karte .grund b { color: #ddd; }
 
-    /* kleiner Balken für die "Neugier" */
-    .balken-bg { background: #222; border-radius: 3px; height: 8px; width: 100%; margin-top: 2px; overflow: hidden; }
-    .balken-fg { background: #bc7cff; height: 100%; width: 0%; transition: width 0.2s; }
+    .box { border: 1px solid #333; border-radius: 6px; padding: 0.8rem 0.9rem; }
+    .box h2 { font-size: 0.72rem; letter-spacing: 0.1em; color: #888; margin-bottom: 0.55rem; text-transform: uppercase; }
+    #detail-text { font-size: 0.78rem; line-height: 1.7; }
+    #detail-text .z { display: flex; justify-content: space-between; }
+    #detail-text .z span:first-child { color: #666; }
+    #detail-text .beschr { color: #888; margin-top: 0.5rem; font-style: italic; line-height: 1.5; }
 
-    canvas#kurve { background: #111; border: 1px solid #333; border-radius: 4px; display: block; margin-top: 0.3rem; }
+    .balken-bg { background: #222; border-radius: 3px; height: 7px; width: 100%; margin: 3px 0 6px; overflow: hidden; }
+    .balken-fg { height: 100%; width: 0%; transition: width 0.2s; }
 
-    input[type=range] { accent-color: #bc7cff; }
-    label.regler { font-size: 0.75rem; color: #888; display: flex; align-items: center; gap: 0.5rem; }
+    canvas#kurve { background: #111; border: 1px solid #2a2a2a; border-radius: 4px; display: block; margin-top: 0.5rem; width: 100%; }
+    .kurve-legende { font-size: 0.62rem; color: #555; margin-top: 0.3rem; }
 
-    #nachricht { margin-top: 1.4rem; font-size: 0.92rem; color: #aaa; min-height: 1.4em; text-align: center; max-width: 600px; line-height: 1.6; }
+    input[type=range] { accent-color: #888; }
+    label.regler { font-size: 0.74rem; color: #888; display: flex; align-items: center; gap: 0.5rem; }
+
+    #nachricht { margin-top: 1.3rem; font-size: 0.9rem; color: #aaa; min-height: 1.4em; text-align: center; max-width: 620px; line-height: 1.6; }
     .badge { color: #28c840; font-weight: bold; }
   </style>
 </head>
 <body>
   <h1>KI-Ausbruch</h1>
-  <div id="untertitel">Schau einer KI beim <b>Lernen</b> zu. Sie kennt die Karte <b>nicht</b> und darf sich verirren. Durch Belohnungen wird sie Versuch f&uuml;r Versuch besser.</div>
+  <div id="untertitel">Drei Lern-Methoden treten <b>gegeneinander</b> an &mdash; keine kennt die Karte. Klick eine Methode an, um genauere Statistiken zu sehen.</div>
 
-  <!-- Labyrinth-Auswahl -->
-  <div class="zeile-mitte" id="labyrinth-wahl">
-    <span style="font-size:0.75rem;color:#666;letter-spacing:0.1em;">LABYRINTH:</span>
+  <div class="zeile-mitte">
+    <span class="label-mini">LABYRINTH:</span>
     <button data-maze="leicht" class="maze-btn">Leicht</button>
     <button data-maze="mittel" class="maze-btn">Mittel</button>
     <button data-maze="schwer" class="maze-btn">Schwer</button>
@@ -64,180 +77,145 @@
   <div class="haupt">
     <canvas id="spielfeld"></canvas>
 
-    <div id="tafel">
-      <div class="box">
-        <h2>Was gerade passiert</h2>
-        <div class="zeile"><span>Versuch Nr.</span><span class="wert gross" id="t-versuch">0</span></div>
-        <div class="zeile"><span>Schritte jetzt</span><span class="wert" id="t-jetzt">0</span></div>
-        <div class="zeile"><span>Bester Versuch</span><span class="wert" id="t-bester">–</span></div>
-        <div class="zeile"><span>Optimal möglich</span><span class="wert" id="t-optimal">–</span></div>
-        <div class="zeile"><span>Zufall braucht</span><span class="wert" id="t-zufall">–</span></div>
-        <div style="margin-top:0.6rem;">
-          <div class="zeile"><span>Neugier</span><span class="wert" id="t-neugier">100%</span></div>
-          <div class="balken-bg"><div class="balken-fg" id="t-neugier-balken"></div></div>
-        </div>
-      </div>
+    <div id="rechts">
+      <div id="karten"><!-- Methoden-Karten per JS --></div>
 
       <div class="box">
-        <h2>Lernkurve (Schritte pro Versuch)</h2>
-        <canvas id="kurve" width="230" height="90"></canvas>
-        <div style="font-size:0.65rem;color:#555;margin-top:0.3rem;">
-          <span style="color:#28c840;">■</span> geschafft &nbsp; <span style="color:#ff5f57;">■</span> verirrt
-        </div>
+        <h2 id="detail-titel">Überblick</h2>
+        <div id="detail-text"></div>
+        <canvas id="kurve" width="248" height="80"></canvas>
+        <div class="kurve-legende" id="kurve-legende"></div>
       </div>
     </div>
   </div>
 
-  <div class="zeile-mitte" style="margin-top:1.3rem;">
-    <button id="btn-lernen">&#9654; Lernen starten</button>
+  <div class="zeile-mitte" style="margin-top:1.2rem;">
+    <button id="btn-lernen">&#9654; Wettkampf starten</button>
     <button id="btn-vergessen">&#8635; Alles vergessen</button>
-    <label class="regler">Tempo
-      <input type="range" id="sl-tempo" min="1" max="60" value="12" />
-    </label>
+    <label class="regler">Tempo <input type="range" id="sl-tempo" min="1" max="60" value="12" /></label>
   </div>
 
-  <div id="nachricht">Wähle ein Labyrinth und drück „Lernen starten“.</div>
+  <div id="nachricht">Wähle ein Labyrinth und drück „Wettkampf starten“.</div>
 
   <script>
   /* =========================================================================
-     KI-AUSBRUCH – LIVE LERNEN  (Schritt 1: die 3 Labyrinthe)
+     KI-AUSBRUCH – LERN-WETTKAMPF
      -------------------------------------------------------------------------
-     Hier schaust du EINER KI (Q-Learning) beim Lernen zu. Sie kennt die Karte
-     nicht. Ein "Versuch" (Episode) = vom Start losrennen, bis sie den Ausgang
-     findet ODER sich verirrt (zu viele Schritte). Nach jedem Versuch lernt sie
-     dazu und startet neu. Über viele Versuche wird sie besser.
-
-     TEIL 1: Die drei Labyrinthe
-     TEIL 2: Zeichnen
-     TEIL 3: Die "Welt" + Belohnungen   (das Einzige, was die KI erfährt)
-     TEIL 4: Das Gehirn der KI (Q-Tabelle) + ein Lern-Schritt
-     TEIL 5: Der Lern-Motor (Versuche live ablaufen lassen)
-     TEIL 6: Anzeige, Lernkurve, Knöpfe
+     Drei Lern-Methoden lernen GLEICHZEITIG im selben Labyrinth (jede mit
+     eigenem Gehirn) und treten gegeneinander an. Keine kennt die Karte.
+       - Q-Learning : lernt nach jedem Schritt, optimistisch
+       - SARSA      : lernt nach jedem Schritt, vorsichtiger (echte nächste Aktion)
+       - Monte-Carlo: lernt erst am Ende jeder Runde
+     Klickt man eine Methode an ("Fokus"), sieht man genauere Statistiken;
+     sonst nur die Grund-Infos aller.
      ========================================================================= */
 
-
-  /* ==================== TEIL 1: DIE DREI LABYRINTHE ======================= */
-  // 1 = Wand, 0 = Weg. Jedes Labyrinth hat Start und Ziel (Zeile, Spalte).
+  /* ---- TEIL 1: Labyrinthe ---- */
   const LABYRINTHE = {
-    leicht: {
-      name: 'Leicht',
-      grid: [
-        [1,1,1,1,1,1,1,1,1],
-        [1,0,0,0,0,0,0,0,1],
-        [1,0,1,1,1,1,1,0,1],
-        [1,0,0,0,0,0,1,0,1],
-        [1,1,1,1,1,0,1,0,1],
-        [1,0,0,0,0,0,0,0,1],
-        [1,1,1,1,1,1,1,1,1],
-      ],
-      start: { zeile: 1, spalte: 1 }, ziel: { zeile: 5, spalte: 7 },
-    },
-    mittel: {
-      name: 'Mittel',
-      grid: [
-        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-        [1,0,0,0,1,0,0,0,0,0,1,0,0,0,1],
-        [1,0,1,0,1,0,1,1,1,0,1,0,1,0,1],
-        [1,0,1,0,0,0,1,0,0,0,0,0,1,0,1],
-        [1,0,1,1,1,1,1,0,1,1,1,1,1,0,1],
-        [1,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
-        [1,1,1,1,1,0,1,1,1,0,1,1,1,0,1],
-        [1,0,0,0,1,0,0,0,0,0,1,0,0,0,1],
-        [1,0,1,0,1,1,1,1,1,0,1,0,1,1,1],
-        [1,0,1,0,0,0,0,0,0,0,0,0,0,0,1],
-        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-      ],
-      start: { zeile: 1, spalte: 1 }, ziel: { zeile: 9, spalte: 13 },
-    },
-    schwer: {
-      name: 'Schwer',
-      grid: [
-        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-        [1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,1],
-        [1,0,1,0,1,0,1,1,1,1,1,0,1,0,1,0,1],
-        [1,0,1,0,0,0,0,0,0,0,1,0,0,0,1,0,1],
-        [1,0,1,1,1,1,1,1,1,0,1,1,1,1,1,0,1],
-        [1,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1],
-        [1,1,1,1,1,0,1,0,1,1,1,1,1,0,1,0,1],
-        [1,0,0,0,1,0,1,0,0,0,1,0,0,0,0,0,1],
-        [1,0,1,0,1,0,1,1,1,0,1,0,1,1,1,1,1],
-        [1,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
-        [1,0,1,1,1,1,1,0,1,1,1,1,1,1,1,0,1],
-        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-        [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-      ],
-      start: { zeile: 1, spalte: 1 }, ziel: { zeile: 11, spalte: 15 },
-    },
+    leicht: { name: 'Leicht', start: { zeile: 1, spalte: 1 }, ziel: { zeile: 5, spalte: 7 }, grid: [
+      [1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,0,0,0,1],
+      [1,0,1,1,1,1,1,0,1],
+      [1,0,0,0,0,0,1,0,1],
+      [1,1,1,1,1,0,1,0,1],
+      [1,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1],
+    ]},
+    mittel: { name: 'Mittel', start: { zeile: 1, spalte: 1 }, ziel: { zeile: 9, spalte: 13 }, grid: [
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,1,0,0,0,0,0,1,0,0,0,1],
+      [1,0,1,0,1,0,1,1,1,0,1,0,1,0,1],
+      [1,0,1,0,0,0,1,0,0,0,0,0,1,0,1],
+      [1,0,1,1,1,1,1,0,1,1,1,1,1,0,1],
+      [1,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
+      [1,1,1,1,1,0,1,1,1,0,1,1,1,0,1],
+      [1,0,0,0,1,0,0,0,0,0,1,0,0,0,1],
+      [1,0,1,0,1,1,1,1,1,0,1,0,1,1,1],
+      [1,0,1,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    ]},
+    schwer: { name: 'Schwer', start: { zeile: 1, spalte: 1 }, ziel: { zeile: 11, spalte: 15 }, grid: [
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,1],
+      [1,0,1,0,1,0,1,1,1,1,1,0,1,0,1,0,1],
+      [1,0,1,0,0,0,0,0,0,0,1,0,0,0,1,0,1],
+      [1,0,1,1,1,1,1,1,1,0,1,1,1,1,1,0,1],
+      [1,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1],
+      [1,1,1,1,1,0,1,0,1,1,1,1,1,0,1,0,1],
+      [1,0,0,0,1,0,1,0,0,0,1,0,0,0,0,0,1],
+      [1,0,1,0,1,0,1,1,1,0,1,0,1,1,1,1,1],
+      [1,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+      [1,0,1,1,1,1,1,0,1,1,1,1,1,1,1,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    ]},
   };
 
   const RICHTUNGEN = [
-    { zeile: -1, spalte: 0 }, // 0 oben
-    { zeile: 0, spalte: 1 },  // 1 rechts
-    { zeile: 1, spalte: 0 },  // 2 unten
-    { zeile: 0, spalte: -1 }, // 3 links
+    { zeile: -1, spalte: 0 }, { zeile: 0, spalte: 1 }, { zeile: 1, spalte: 0 }, { zeile: 0, spalte: -1 },
   ];
 
-  // ----- Aktueller Zustand (wird beim Umschalten neu gesetzt) -----
-  let aktMaze;            // das gewählte Labyrinth-Objekt
-  let aktName;            // der Schlüssel ('leicht'|'mittel'|'schwer')
-  let grid, START, ZIEL, ANZ_ZEILEN, ANZ_SPALTEN;
-  let ZELLE = 34;
+  // Die drei Lern-Methoden (Steckbriefe). alpha=Lerntempo, gamma=Weitblick, decay=wie schnell die Neugier sinkt.
+  const METHODEN = [
+    { id: 'q',     name: 'Q-Learning',  farbe: '#bc7cff', eckeX:  0, eckeY: -1, alpha: 0.4, gamma: 0.95, decay: 180,
+      beschr: 'Lernt nach jedem Schritt und rechnet immer mit der BESTEN möglichen nächsten Richtung (optimistisch).' },
+    { id: 'sarsa', name: 'SARSA',       farbe: '#58a6ff', eckeX: -1, eckeY:  1, alpha: 0.4, gamma: 0.95, decay: 180,
+      beschr: 'Lernt nach jedem Schritt, aber mit der Richtung, die es WIRKLICH als nächstes nimmt (vorsichtiger).' },
+    { id: 'mc',    name: 'Monte-Carlo', farbe: '#ff9f0a', eckeX:  1, eckeY:  1, alpha: 0.1, gamma: 0.99, decay: 700,
+      beschr: 'Lernt erst AM ENDE jeder Runde, aus dem gesamten Gewinn der Runde. Braucht mehr Übung.' },
+  ];
 
-  // Jedes Labyrinth merkt sich seinen eigenen Lern-Fortschritt.
-  const speicher = {}; // name -> { Q, kurve, episode, bester, besterWeg, optimal, zufall }
+  /* ---- Zustand ---- */
+  let aktName, grid, START, ZIEL, ANZ_ZEILEN, ANZ_SPALTEN, ZELLE = 34, maxSchritte;
+  let fokus = null;      // welche Methode ist angeklickt? (id oder null)
+  let laeuft = false, taktGeber = null;
+  const speicher = {};   // mazeName -> { optimal, zufall, methoden: {id -> state} }
 
+  /* ---- TEIL 2: Zeichnen ---- */
+  const canvas = document.getElementById('spielfeld'), ctx = canvas.getContext('2d');
+  const kurveCanvas = document.getElementById('kurve'), kctx = kurveCanvas.getContext('2d');
+  const el = id => document.getElementById(id);
 
-  /* ==================== TEIL 2: ZEICHNEN ================================== */
-  const canvas = document.getElementById('spielfeld');
-  const ctx = canvas.getContext('2d');
-  const kurveCanvas = document.getElementById('kurve');
-  const kctx = kurveCanvas.getContext('2d');
+  const istWand = (z, s) => (z < 0 || z >= ANZ_ZEILEN || s < 0 || s >= ANZ_SPALTEN) ? true : grid[z][s] === 1;
+  const amZiel = (z, s) => z === ZIEL.zeile && s === ZIEL.spalte;
+  const besteRichtung = q => q.indexOf(Math.max(...q));
+  const rndA = () => Math.random() * 4 | 0;
+  const schluessel = (z, s) => z + ',' + s;
 
-  function istWand(z, s) {
-    if (z < 0 || z >= ANZ_ZEILEN || s < 0 || s >= ANZ_SPALTEN) return true;
-    return grid[z][s] === 1;
-  }
+  function kachel(z, s, farbe) { ctx.fillStyle = farbe; ctx.fillRect(s * ZELLE + 3, z * ZELLE + 3, ZELLE - 6, ZELLE - 6); }
 
-  function zeichneAlles() {
-    // Labyrinth
+  function allesZeichnen() {
+    const sp = speicher[aktName];
     for (let z = 0; z < ANZ_ZEILEN; z++)
       for (let s = 0; s < ANZ_SPALTEN; s++) {
         ctx.fillStyle = istWand(z, s) ? '#2a2a33' : '#111';
         ctx.fillRect(s * ZELLE, z * ZELLE, ZELLE, ZELLE);
       }
 
-    // Der beste bisher gefundene Weg (blass grün) – "das hat die KI schon gelernt"
-    const sp = speicher[aktName];
-    if (sp && sp.besterWeg) {
-      ctx.fillStyle = '#28c840'; ctx.globalAlpha = 0.16;
-      for (const p of sp.besterWeg) ctx.fillRect(p.spalte * ZELLE + 6, p.zeile * ZELLE + 6, ZELLE - 12, ZELLE - 12);
-      ctx.globalAlpha = 1;
+    // Ist eine Methode fokussiert: ihren gelernten Weg + ihre Spur zeigen.
+    if (fokus) {
+      const m = METHODEN.find(x => x.id === fokus), st = sp.methoden[fokus];
+      if (st.besterWeg) { ctx.fillStyle = m.farbe; ctx.globalAlpha = 0.16;
+        for (const p of st.besterWeg) ctx.fillRect(p.spalte * ZELLE + 6, p.zeile * ZELLE + 6, ZELLE - 12, ZELLE - 12); ctx.globalAlpha = 1; }
+      if (st.agent) { ctx.fillStyle = m.farbe; ctx.globalAlpha = 0.18;
+        for (const p of st.agent.spur) ctx.fillRect(p.spalte * ZELLE + 10, p.zeile * ZELLE + 10, ZELLE - 20, ZELLE - 20); ctx.globalAlpha = 1; }
     }
 
-    // Spur des AKTUELLEN Versuchs (blass lila)
-    if (agent && agent.spur) {
-      ctx.fillStyle = '#bc7cff'; ctx.globalAlpha = 0.20;
-      for (const p of agent.spur) ctx.fillRect(p.spalte * ZELLE + 10, p.zeile * ZELLE + 10, ZELLE - 20, ZELLE - 20);
-      ctx.globalAlpha = 1;
-    }
-
-    // Start & Ziel
     kachel(START.zeile, START.spalte, '#28c840');
     kachel(ZIEL.zeile, ZIEL.spalte, '#ffd23f');
 
-    // Die KI selbst
-    if (agent) {
-      ctx.beginPath();
-      ctx.arc(agent.spalte * ZELLE + ZELLE / 2, agent.zeile * ZELLE + ZELLE / 2, ZELLE / 2 - 5, 0, Math.PI * 2);
-      ctx.fillStyle = '#bc7cff'; ctx.fill();
+    // Alle drei Agenten als Punkte (in ihren Ecken). Fokussierter voll, andere blasser.
+    for (const m of METHODEN) {
+      const st = sp.methoden[m.id]; if (!st.agent) continue;
+      ctx.globalAlpha = (fokus && fokus !== m.id) ? 0.4 : 1;
+      const x = st.agent.spalte * ZELLE + ZELLE / 2 + m.eckeX * (ZELLE / 4);
+      const y = st.agent.zeile * ZELLE + ZELLE / 2 + m.eckeY * (ZELLE / 4);
+      ctx.beginPath(); ctx.arc(x, y, ZELLE / 4 - 1, 0, Math.PI * 2); ctx.fillStyle = m.farbe; ctx.fill();
+      ctx.globalAlpha = 1;
     }
   }
-  function kachel(z, s, farbe) { ctx.fillStyle = farbe; ctx.fillRect(s * ZELLE + 3, z * ZELLE + 3, ZELLE - 6, ZELLE - 6); }
 
-
-  /* ============= TEIL 3: DIE "WELT" + BELOHNUNGEN ========================= */
-  // Die KI sagt nur "ich will in Richtung a" und erfährt: wo lande ich + Punkte.
-  //   +100 Ausgang | -5 gegen Wand (stehen bleiben) | -1 normaler Schritt
+  /* ---- TEIL 3: Welt + Belohnungen (für alle gleich) ---- */
   function fuehreAus(z, s, a) {
     let nz = z + RICHTUNGEN[a].zeile, ns = s + RICHTUNGEN[a].spalte, belohnung;
     if (istWand(nz, ns)) { belohnung = -5; nz = z; ns = s; }
@@ -245,215 +223,252 @@
     else belohnung = -1;
     return { zeile: nz, spalte: ns, belohnung };
   }
-  const amZiel = (z, s) => z === ZIEL.zeile && s === ZIEL.spalte;
-  const besteRichtung = q => q.indexOf(Math.max(...q));
 
-
-  /* ========= TEIL 4: DAS GEHIRN DER KI (Q-TABELLE) ======================== */
-  // Q merkt sich für jedes Feld 4 Zahlen: wie gut jede Richtung bisher war.
-  const ALPHA = 0.4, GAMMA = 0.95; // Lerntempo & Weitblick
-  const schluessel = (z, s) => z + ',' + s;
-
+  /* ---- TEIL 4: Q-Tabelle + gelernter Weg ---- */
   function holeQ(Q, z, s) { const k = schluessel(z, s); if (!Q[k]) Q[k] = [0, 0, 0, 0]; return Q[k]; }
 
-  // Der gelernte Weg (immer beste Richtung) – oder null, wenn er im Kreis läuft.
   function gelernterWeg(Q) {
     const weg = [{ zeile: START.zeile, spalte: START.spalte }];
     let z = START.zeile, s = START.spalte; const gesehen = new Set([schluessel(z, s)]);
     while (!amZiel(z, s) && weg.length < 300) {
-      const feld = Q[schluessel(z, s)]; if (!feld) return null;
-      const a = besteRichtung(feld);
-      const nz = z + RICHTUNGEN[a].zeile, ns = s + RICHTUNGEN[a].spalte;
+      const f = Q[schluessel(z, s)]; if (!f) return null;
+      const a = besteRichtung(f), nz = z + RICHTUNGEN[a].zeile, ns = s + RICHTUNGEN[a].spalte;
       if (istWand(nz, ns)) return null;
-      z = nz; s = ns;
-      if (gesehen.has(schluessel(z, s))) return null;
+      z = nz; s = ns; if (gesehen.has(schluessel(z, s))) return null;
       gesehen.add(schluessel(z, s)); weg.push({ zeile: z, spalte: s });
     }
     return amZiel(z, s) ? weg : null;
   }
 
+  const neugier = (st, m) => Math.max(0.05, 1 - st.episode / m.decay);
 
-  /* ============ TEIL 5: DER LERN-MOTOR =================================== */
-  let agent = null;      // die KI während eines Versuchs
-  let laeuft = false;    // läuft die Animation gerade?
-  let maxSchritte;       // ab wann gilt ein Versuch als "verirrt"
-
-  function neuerVersuch() {
-    agent = {
-      zeile: START.zeile, spalte: START.spalte,
-      schritte: 0, spur: [{ zeile: START.zeile, spalte: START.spalte }],
-    };
-  }
-
-  // Ein einziger Lern-Schritt (Q-Learning).
-  function lernSchritt() {
-    const sp = speicher[aktName];
-    const neugier = Math.max(0.05, 1 - sp.episode / 180); // sinkt mit den Versuchen
-    const q = holeQ(sp.Q, agent.zeile, agent.spalte);
-    const a = (Math.random() < neugier) ? (Math.random() * 4 | 0) : besteRichtung(q);
-    const r = fuehreAus(agent.zeile, agent.spalte, a);
-    const qNext = holeQ(sp.Q, r.zeile, r.spalte);
-    q[a] += ALPHA * (r.belohnung + GAMMA * Math.max(...qNext) - q[a]); // Lern-Formel
-    agent.zeile = r.zeile; agent.spalte = r.spalte;
-    agent.schritte++;
-    agent.spur.push({ zeile: agent.zeile, spalte: agent.spalte });
-
-    // Versuch zu Ende? (angekommen ODER verirrt)
-    if (amZiel(agent.zeile, agent.spalte)) beendeVersuch(true);
-    else if (agent.schritte >= maxSchritte) beendeVersuch(false);
-  }
-
-  function beendeVersuch(geschafft) {
-    const sp = speicher[aktName];
-    sp.episode++;
-    sp.kurve.push(geschafft ? agent.schritte : -1);
-    if (sp.kurve.length > 60) sp.kurve.shift();
-
-    if (geschafft && (sp.bester === null || agent.schritte < sp.bester)) {
-      sp.bester = agent.schritte;
-      const gw = gelernterWeg(sp.Q); if (gw) sp.besterWeg = gw;
+  /* ---- TEIL 5: Lern-Motor (ein Schritt pro Methode) ---- */
+  function neuerVersuch(st, m) {
+    st.agent = { zeile: START.zeile, spalte: START.spalte, schritte: 0,
+                 spur: [{ zeile: START.zeile, spalte: START.spalte }], verlauf: [], aktion: null };
+    if (m.id === 'sarsa') {
+      const eps = neugier(st, m);
+      st.agent.aktion = (Math.random() < eps) ? rndA() : besteRichtung(holeQ(st.Q, START.zeile, START.spalte));
     }
-    neuerVersuch(); // sofort nächster Versuch
   }
 
-  // "Gelernt?" = die letzten 8 Versuche alle geschafft und nah am Optimum.
-  function hatGelernt(sp) {
-    if (sp.kurve.length < 8) return false;
-    const letzte = sp.kurve.slice(-8);
-    return letzte.every(x => x > 0 && x <= sp.optimal * 1.3);
+  function macheSchritt(st, m) {
+    const ag = st.agent, eps = neugier(st, m);
+    const q = holeQ(st.Q, ag.zeile, ag.spalte);
+    const a = (m.id === 'sarsa') ? ag.aktion : ((Math.random() < eps) ? rndA() : besteRichtung(q));
+    const r = fuehreAus(ag.zeile, ag.spalte, a);
+    const qNext = holeQ(st.Q, r.zeile, r.spalte);
+
+    if (m.id === 'q') {
+      q[a] += m.alpha * (r.belohnung + m.gamma * Math.max(...qNext) - q[a]);
+    } else if (m.id === 'sarsa') {
+      const aNext = (Math.random() < eps) ? rndA() : besteRichtung(qNext);
+      q[a] += m.alpha * (r.belohnung + m.gamma * qNext[aNext] - q[a]);
+      ag.aktion = aNext;
+    } else { // mc: nur merken, noch nicht lernen
+      ag.verlauf.push({ z: ag.zeile, s: ag.spalte, a: a, belohnung: r.belohnung });
+    }
+
+    ag.zeile = r.zeile; ag.spalte = r.spalte; ag.schritte++;
+    ag.spur.push({ zeile: r.zeile, spalte: r.spalte });
+
+    if (amZiel(r.zeile, r.spalte)) endeEpisode(st, m, true);
+    else if (ag.schritte >= maxSchritte) endeEpisode(st, m, false);
   }
 
+  function endeEpisode(st, m, geschafft) {
+    if (m.id === 'mc') { // jetzt erst lernen: Gesamt-Gewinn rückwärts verteilen
+      let G = 0;
+      for (let i = st.agent.verlauf.length - 1; i >= 0; i--) {
+        const t = st.agent.verlauf[i]; G = t.belohnung + m.gamma * G;
+        const q = holeQ(st.Q, t.z, t.s); q[t.a] += m.alpha * (G - q[t.a]);
+      }
+    }
+    st.episode++;
+    st.kurve.push(geschafft ? st.agent.schritte : -1);
+    if (st.kurve.length > 60) st.kurve.shift();
+    if (geschafft && (st.bester === null || st.agent.schritte < st.bester)) {
+      st.bester = st.agent.schritte;
+      const gw = gelernterWeg(st.Q); if (gw) st.besterWeg = gw;
+    }
+    neuerVersuch(st, m);
+  }
 
-  /* ============ TEIL 6: ANZEIGE, LERNKURVE, KNÖPFE ======================= */
-  const el = id => document.getElementById(id);
+  function hatGelernt(st, optimal) {
+    if (st.kurve.length < 8) return false;
+    return st.kurve.slice(-8).every(x => x > 0 && x <= optimal * 1.3);
+  }
 
-  function aktualisiereTafel() {
+  /* ---- TEIL 6: Anzeige ---- */
+  function rangliste() {
     const sp = speicher[aktName];
-    el('t-versuch').textContent = sp.episode;
-    el('t-jetzt').textContent = agent ? agent.schritte : 0;
-    el('t-bester').textContent = sp.bester === null ? '–' : sp.bester + ' Schritte';
-    el('t-optimal').textContent = sp.optimal + ' Schritte';
-    el('t-zufall').textContent = '~' + sp.zufall + ' Schritte';
-    const neugier = Math.max(0.05, 1 - sp.episode / 180);
-    el('t-neugier').textContent = Math.round(neugier * 100) + '%';
-    el('t-neugier-balken').style.width = Math.round(neugier * 100) + '%';
+    return METHODEN.map(m => ({ m, bester: sp.methoden[m.id].bester }))
+      .sort((a, b) => (a.bester === null ? 1e9 : a.bester) - (b.bester === null ? 1e9 : b.bester));
+  }
+
+  function baueKarten() {
+    el('karten').innerHTML = '';
+    for (const m of METHODEN) {
+      const d = document.createElement('div');
+      d.className = 'karte'; d.dataset.id = m.id;
+      d.innerHTML =
+        '<div class="kopf"><span class="name" style="color:' + m.farbe + '">● ' + m.name + '</span><span class="rang" id="rang-' + m.id + '"></span></div>' +
+        '<div class="grund"><span>Bester: <b id="best-' + m.id + '">–</b></span><span id="stat-' + m.id + '">wartet</span></div>';
+      d.addEventListener('click', () => { fokus = (fokus === m.id) ? null : m.id; markiereKarten(); zeichneUndZeige(); });
+      el('karten').appendChild(d);
+    }
+  }
+  function markiereKarten() {
+    document.querySelectorAll('.karte').forEach(k => k.classList.toggle('fokus', k.dataset.id === fokus));
+  }
+
+  function aktualisiereKarten() {
+    const sp = speicher[aktName], rang = rangliste(), medaille = ['🥇', '🥈', '🥉'];
+    rang.forEach((r, i) => { el('rang-' + r.m.id).textContent = r.bester === null ? '' : medaille[i]; });
+    for (const m of METHODEN) {
+      const st = sp.methoden[m.id];
+      el('best-' + m.id).textContent = st.bester === null ? '–' : st.bester;
+      el('stat-' + m.id).innerHTML = hatGelernt(st, sp.optimal) ? '<span class="badge">✓ gelernt</span>'
+        : (st.bester !== null ? 'lernt…' : 'sucht…');
+    }
+  }
+
+  function aktualisiereDetail() {
+    const sp = speicher[aktName];
+    if (!fokus) {
+      el('detail-titel').textContent = 'Überblick';
+      const beste = rangliste()[0];
+      el('detail-text').innerHTML =
+        '<div class="z"><span>Labyrinth</span><span>' + sp.name + '</span></div>' +
+        '<div class="z"><span>Optimal möglich</span><span>' + sp.optimal + ' Schritte</span></div>' +
+        '<div class="z"><span>Zufall (lernt nie)</span><span>~' + sp.zufall + ' Schritte</span></div>' +
+        '<div class="z"><span>Führt gerade</span><span>' + (beste.bester === null ? '–' : beste.m.name) + '</span></div>' +
+        '<div class="beschr">Klick eine Methode oben an, um genauere Statistiken zu sehen.</div>';
+      el('kurve-legende').innerHTML = METHODEN.map(m => '<span style="color:' + m.farbe + '">▬</span> ' + m.name).join(' &nbsp; ');
+    } else {
+      const m = METHODEN.find(x => x.id === fokus), st = sp.methoden[fokus], eps = Math.round(neugier(st, m) * 100);
+      el('detail-titel').innerHTML = '<span style="color:' + m.farbe + '">' + m.name + '</span> — Details';
+      el('detail-text').innerHTML =
+        '<div class="z"><span>Versuche</span><span><b>' + st.episode + '</b></span></div>' +
+        '<div class="z"><span>Schritte jetzt</span><span>' + (st.agent ? st.agent.schritte : 0) + '</span></div>' +
+        '<div class="z"><span>Bester Versuch</span><span>' + (st.bester === null ? '–' : st.bester + ' Schritte') + '</span></div>' +
+        '<div class="z"><span>Optimal möglich</span><span>' + sp.optimal + ' Schritte</span></div>' +
+        '<div class="z"><span>Neugier</span><span>' + eps + '%</span></div>' +
+        '<div class="balken-bg"><div class="balken-fg" style="width:' + eps + '%;background:' + m.farbe + '"></div></div>' +
+        '<div class="beschr">' + m.beschr + '</div>';
+      el('kurve-legende').innerHTML = '<span style="color:#28c840">■</span> geschafft &nbsp; <span style="color:#ff5f57">■</span> verirrt';
+    }
   }
 
   function zeichneKurve() {
-    const sp = speicher[aktName];
-    const W = kurveCanvas.width, H = kurveCanvas.height;
+    const sp = speicher[aktName], W = kurveCanvas.width, H = kurveCanvas.height;
     kctx.clearRect(0, 0, W, H);
-    const daten = sp.kurve;
-    if (daten.length === 0) return;
-    // höchsten Wert finden (verirrt = maxSchritte), um die Balken zu skalieren
-    let hoch = sp.optimal;
-    for (const x of daten) hoch = Math.max(hoch, x > 0 ? x : maxSchritte);
-    const bw = W / Math.max(daten.length, 20);
-    for (let i = 0; i < daten.length; i++) {
-      const wert = daten[i] > 0 ? daten[i] : maxSchritte;
-      const h = Math.max(2, (wert / hoch) * (H - 4));
-      kctx.fillStyle = daten[i] > 0 ? '#28c840' : '#ff5f57';
-      kctx.fillRect(i * bw, H - h, Math.max(1, bw - 1), h);
+    if (!fokus) {
+      // Überblick: alle drei als Linien (Schritte pro Versuch)
+      let hoch = sp.optimal;
+      for (const m of METHODEN) for (const x of sp.methoden[m.id].kurve) hoch = Math.max(hoch, x > 0 ? x : maxSchritte);
+      for (const m of METHODEN) {
+        const k = sp.methoden[m.id].kurve; if (k.length < 2) continue;
+        kctx.strokeStyle = m.farbe; kctx.lineWidth = 1.5; kctx.beginPath();
+        for (let i = 0; i < k.length; i++) {
+          const wert = k[i] > 0 ? k[i] : maxSchritte, x = (i / (k.length - 1)) * W, y = H - (wert / hoch) * (H - 3) - 1;
+          i === 0 ? kctx.moveTo(x, y) : kctx.lineTo(x, y);
+        }
+        kctx.stroke();
+      }
+    } else {
+      // Detail: Balken der fokussierten Methode (grün geschafft / rot verirrt)
+      const k = sp.methoden[fokus].kurve; if (!k.length) return;
+      let hoch = sp.optimal; for (const x of k) hoch = Math.max(hoch, x > 0 ? x : maxSchritte);
+      const bw = W / Math.max(k.length, 20);
+      for (let i = 0; i < k.length; i++) {
+        const wert = k[i] > 0 ? k[i] : maxSchritte, h = Math.max(2, (wert / hoch) * (H - 4));
+        kctx.fillStyle = k[i] > 0 ? '#28c840' : '#ff5f57';
+        kctx.fillRect(i * bw, H - h, Math.max(1, bw - 1), h);
+      }
     }
   }
 
   function nachricht() {
     const sp = speicher[aktName];
-    if (hatGelernt(sp)) {
-      el('nachricht').innerHTML = '<span class="badge">✓ Gelernt!</span> Die KI schafft ' + aktMaze.name +
-        ' jetzt zuverlässig in ~' + sp.bester + ' Schritten (optimal wären ' + sp.optimal +
-        '). Am Anfang hat sie sich noch verirrt – Zufall bräuchte ~' + sp.zufall + '.';
+    const gelernt = METHODEN.filter(m => hatGelernt(sp.methoden[m.id], sp.optimal));
+    if (gelernt.length === METHODEN.length) {
+      const rang = rangliste();
+      el('nachricht').innerHTML = '<span class="badge">✓ Alle haben gelernt!</span> Kürzester Weg gefunden von <b style="color:' +
+        rang[0].m.farbe + '">' + rang[0].m.name + '</b> (' + rang[0].bester + ' Schritte, optimal ' + sp.optimal + '). Zufall bräuchte ~' + sp.zufall + '.';
     } else if (laeuft) {
-      el('nachricht').textContent = 'Die KI übt… schau, wie sich die Lernkurve nach unten bewegt!';
+      el('nachricht').textContent = 'Die drei Methoden üben gleichzeitig… wer lernt schneller?';
     }
   }
 
-  function zeichneUndZeige() { zeichneAlles(); aktualisiereTafel(); zeichneKurve(); }
+  function zeichneUndZeige() { allesZeichnen(); aktualisiereKarten(); aktualisiereDetail(); zeichneKurve(); nachricht(); }
 
-  // Der Herzschlag: pro Tick mehrere Lern-Schritte (Anzahl = Tempo-Regler).
-  let taktGeber = null;
+  /* ---- TEIL 7: Motor-Takt + Steuerung ---- */
   function tick() {
-    const proTick = parseInt(el('sl-tempo').value);
-    for (let i = 0; i < proTick; i++) { if (!laeuft) break; lernSchritt(); }
-    zeichneUndZeige(); nachricht();
+    const proTick = parseInt(el('sl-tempo').value), sp = speicher[aktName];
+    for (const m of METHODEN) { const st = sp.methoden[m.id]; for (let i = 0; i < proTick; i++) macheSchritt(st, m); }
+    zeichneUndZeige();
   }
-
-  function starteStoppLernen() {
+  function starteStopp() {
     laeuft = !laeuft;
-    el('btn-lernen').innerHTML = laeuft ? '⏸ Pause' : '▶ Lernen starten';
-    if (laeuft) {
-      if (!agent) neuerVersuch();
-      taktGeber = setInterval(tick, 40);
-    } else {
-      clearInterval(taktGeber); taktGeber = null;
-    }
+    el('btn-lernen').innerHTML = laeuft ? '⏸ Pause' : '▶ Wettkampf starten';
+    if (laeuft) taktGeber = setInterval(tick, 40);
+    else { clearInterval(taktGeber); taktGeber = null; }
   }
 
-  // ---------- Vorberechnung nur zur ANZEIGE (die KI benutzt das NICHT) ----------
+  /* ---- nur zur Anzeige (die KIs nutzen das NICHT) ---- */
   function bfsOptimal() {
-    const warteschlange = [{ zeile: START.zeile, spalte: START.spalte }];
-    const besucht = {}; besucht[schluessel(START.zeile, START.spalte)] = true; let tiefe = {};
-    tiefe[schluessel(START.zeile, START.spalte)] = 0;
-    while (warteschlange.length) {
-      const j = warteschlange.shift();
-      if (amZiel(j.zeile, j.spalte)) return tiefe[schluessel(j.zeile, j.spalte)];
-      for (const R of RICHTUNGEN) {
-        const nz = j.zeile + R.zeile, ns = j.spalte + R.spalte, k = schluessel(nz, ns);
-        if (!istWand(nz, ns) && !besucht[k]) { besucht[k] = true; tiefe[k] = tiefe[schluessel(j.zeile, j.spalte)] + 1; warteschlange.push({ zeile: nz, spalte: ns }); }
-      }
-    }
+    const w = [{ zeile: START.zeile, spalte: START.spalte }], t = {}; t[schluessel(START.zeile, START.spalte)] = 0;
+    const b = {}; b[schluessel(START.zeile, START.spalte)] = true;
+    while (w.length) { const j = w.shift(); if (amZiel(j.zeile, j.spalte)) return t[schluessel(j.zeile, j.spalte)];
+      for (const R of RICHTUNGEN) { const nz = j.zeile + R.zeile, ns = j.spalte + R.spalte, k = schluessel(nz, ns);
+        if (!istWand(nz, ns) && !b[k]) { b[k] = true; t[k] = t[schluessel(j.zeile, j.spalte)] + 1; w.push({ zeile: nz, spalte: ns }); } } }
     return -1;
   }
-  // Wie viele Schritte braucht reiner Zufall im Schnitt? (nur zum Vergleich)
   function zufallSchnitt() {
     let summe = 0, ok = 0, cap = ANZ_ZEILEN * ANZ_SPALTEN * 30;
-    for (let versuch = 0; versuch < 40; versuch++) {
-      let z = START.zeile, s = START.spalte, vz = null, vs = null, n = 0;
+    for (let v = 0; v < 40; v++) { let z = START.zeile, s = START.spalte, vz = null, vs = null, n = 0;
       while (!amZiel(z, s) && n < cap) {
         let nb = RICHTUNGEN.map(R => ({ zeile: z + R.zeile, spalte: s + R.spalte })).filter(p => !istWand(p.zeile, p.spalte));
-        if (nb.length > 1 && vz !== null) { const t = nb.filter(p => !(p.zeile === vz && p.spalte === vs)); if (t.length) nb = t; }
-        const w = nb[Math.random() * nb.length | 0]; vz = z; vs = s; z = w.zeile; s = w.spalte; n++;
+        if (nb.length > 1 && vz !== null) { const f = nb.filter(p => !(p.zeile === vz && p.spalte === vs)); if (f.length) nb = f; }
+        const wl = nb[Math.random() * nb.length | 0]; vz = z; vs = s; z = wl.zeile; s = wl.spalte; n++;
       }
-      if (amZiel(z, s)) { summe += n; ok++; }
-    }
+      if (amZiel(z, s)) { summe += n; ok++; } }
     return ok ? Math.round(summe / ok) : cap;
   }
 
+  function neuerMazeSpeicher() {
+    const methoden = {};
+    for (const m of METHODEN) methoden[m.id] = { Q: {}, kurve: [], episode: 0, bester: null, besterWeg: null, agent: null };
+    return { name: aktMazeName(), optimal: bfsOptimal(), zufall: zufallSchnitt(), methoden };
+  }
+  function aktMazeName() { return LABYRINTHE[aktName].name; }
+
   function waehleLabyrinth(name) {
-    // laufendes Lernen stoppen
-    if (laeuft) starteStoppLernen();
-    aktMaze = LABYRINTHE[name];
+    if (laeuft) starteStopp();
     aktName = name;
-    grid = aktMaze.grid; START = aktMaze.start; ZIEL = aktMaze.ziel;
+    const mz = LABYRINTHE[name];
+    grid = mz.grid; START = mz.start; ZIEL = mz.ziel;
     ANZ_ZEILEN = grid.length; ANZ_SPALTEN = grid[0].length;
     ZELLE = name === 'schwer' ? 30 : 34;
     canvas.width = ANZ_SPALTEN * ZELLE; canvas.height = ANZ_ZEILEN * ZELLE;
     maxSchritte = ANZ_ZEILEN * ANZ_SPALTEN * 4;
 
-    // Fortschritt für dieses Labyrinth anlegen (oder behalten, falls schon geübt).
-    if (!speicher[name]) {
-      speicher[name] = { Q: {}, kurve: [], episode: 0, bester: null, besterWeg: null, optimal: bfsOptimal(), zufall: zufallSchnitt() };
-    }
-    neuerVersuch();
+    if (!speicher[name]) speicher[name] = neuerMazeSpeicher();
+    for (const m of METHODEN) { const st = speicher[name].methoden[m.id]; if (!st.agent) neuerVersuch(st, m); }
 
-    // Knöpfe markieren
     document.querySelectorAll('.maze-btn').forEach(b => b.classList.toggle('aktiv', b.dataset.maze === name));
-    el('nachricht').textContent = 'Labyrinth „' + aktMaze.name + '“. Drück „Lernen starten“ und schau zu.';
+    el('nachricht').textContent = 'Labyrinth „' + mz.name + '“. Drück „Wettkampf starten“ und schau zu.';
     zeichneUndZeige();
   }
 
-  function vergessen() {
-    if (laeuft) starteStoppLernen();
-    delete speicher[aktName];
-    waehleLabyrinth(aktName);
-  }
+  function vergessen() { if (laeuft) starteStopp(); delete speicher[aktName]; waehleLabyrinth(aktName); }
 
-  // Knöpfe verbinden
   document.querySelectorAll('.maze-btn').forEach(b => b.addEventListener('click', () => waehleLabyrinth(b.dataset.maze)));
-  el('btn-lernen').addEventListener('click', starteStoppLernen);
+  el('btn-lernen').addEventListener('click', starteStopp);
   el('btn-vergessen').addEventListener('click', vergessen);
 
-  // Los geht's mit dem mittleren Labyrinth.
+  baueKarten();
   waehleLabyrinth('mittel');
   </script>
 </body>
