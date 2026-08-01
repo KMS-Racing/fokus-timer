@@ -18,118 +18,66 @@
       padding: 2rem 1rem;
     }
 
-    h1 {
-      font-size: 1.3rem;
-      letter-spacing: 0.3em;
-      text-transform: uppercase;
-      color: #888;
-      margin-bottom: 0.4rem;
-      text-align: center;
-    }
-
-    #untertitel {
-      font-size: 0.8rem;
-      color: #555;
-      margin-bottom: 1.5rem;
-      letter-spacing: 0.1em;
-      text-align: center;
-    }
+    h1 { font-size: 1.3rem; letter-spacing: 0.3em; text-transform: uppercase; color: #888; margin-bottom: 0.4rem; text-align: center; }
+    #untertitel { font-size: 0.8rem; color: #555; margin-bottom: 1.5rem; letter-spacing: 0.08em; text-align: center; max-width: 560px; line-height: 1.5; }
 
     /* Das Canvas ist die "Zeichenfläche", auf die wir das Labyrinth malen. */
-    canvas {
-      background: #111;
-      border: 1px solid #333;
-      border-radius: 4px;
-      margin-bottom: 1.5rem;
-      max-width: 100%;
-    }
+    canvas { background: #111; border: 1px solid #333; border-radius: 4px; margin-bottom: 1.5rem; max-width: 100%; }
 
-    .btn-row {
-      display: flex;
-      gap: 1rem;
-      margin-bottom: 1.5rem;
-    }
-
+    .btn-row { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
     button {
-      padding: 0.6rem 1.6rem;
-      border: 1px solid #444;
-      background: transparent;
-      color: #ccc;
-      font-family: 'Courier New', monospace;
-      font-size: 0.85rem;
-      letter-spacing: 0.15em;
-      cursor: pointer;
-      text-transform: uppercase;
-      transition: border-color 0.2s, color 0.2s;
+      padding: 0.6rem 1.6rem; border: 1px solid #444; background: transparent; color: #ccc;
+      font-family: 'Courier New', monospace; font-size: 0.85rem; letter-spacing: 0.15em;
+      cursor: pointer; text-transform: uppercase; transition: border-color 0.2s, color 0.2s;
     }
     button:hover:not(:disabled) { border-color: #58a6ff; color: #58a6ff; }
     button:disabled { opacity: 0.3; cursor: default; }
 
-    /* Die vier "Karten" mit den Werten der Agenten. */
-    #vergleich {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(210px, 1fr));
-      gap: 1rem;
-      max-width: 540px;
-      width: 100%;
-    }
-
-    .karte {
-      border: 1px solid #333;
-      border-radius: 6px;
-      padding: 0.9rem 1.1rem;
-    }
-    .karte h2 { font-size: 0.85rem; letter-spacing: 0.1em; margin-bottom: 0.6rem; }
-    .karte .zeile { display: flex; justify-content: space-between; margin: 0.35rem 0; font-size: 0.82rem; }
+    #vergleich { display: grid; grid-template-columns: repeat(2, minmax(210px, 1fr)); gap: 1rem; max-width: 540px; width: 100%; }
+    .karte { border: 1px solid #333; border-radius: 6px; padding: 0.9rem 1.1rem; }
+    .karte h2 { font-size: 0.85rem; letter-spacing: 0.08em; margin-bottom: 0.6rem; }
+    .karte .zeile { display: flex; justify-content: space-between; margin: 0.35rem 0; font-size: 0.8rem; }
     .karte .zeile span:first-child { color: #666; }
     .karte .wert { font-weight: bold; }
 
-    #nachricht {
-      margin-top: 1.5rem;
-      font-size: 0.95rem;
-      color: #aaa;
-      letter-spacing: 0.03em;
-      min-height: 1.4em;
-      text-align: center;
-      max-width: 560px;
-      line-height: 1.5;
-    }
+    #nachricht { margin-top: 1.5rem; font-size: 0.95rem; color: #aaa; letter-spacing: 0.03em; min-height: 1.4em; text-align: center; max-width: 580px; line-height: 1.6; }
   </style>
 </head>
 <body>
   <h1>KI-Ausbruch</h1>
-  <div id="untertitel">Vier KIs, vier Denkweisen &mdash; wer findet den Ausgang am besten?</div>
+  <div id="untertitel">Vier KIs suchen den Ausgang &mdash; <b>keine</b> kennt die Karte. Drei davon lernen den Weg durch Belohnungen (auf drei verschiedene Arten).</div>
 
   <!-- Auf dieses Canvas malen wir das Labyrinth und die Agenten. -->
   <canvas id="spielfeld"></canvas>
 
   <div class="btn-row">
     <button id="btn-start">&#9654; Los!</button>
-    <button id="btn-reset">&#8635; Neu</button>
+    <button id="btn-reset">&#8635; Neu lernen</button>
   </div>
 
-  <div id="vergleich">
-    <!-- Die vier Karten werden per JavaScript gefüllt (siehe unten). -->
-  </div>
+  <div id="vergleich"><!-- Karten werden per JavaScript gebaut --></div>
 
-  <div id="nachricht">Druck auf &bdquo;Los!&ldquo;, dann rennen alle vier KIs gleichzeitig los.</div>
+  <div id="nachricht">Bereit. Druck auf &bdquo;Los!&ldquo; f&uuml;r das Rennen.</div>
 
   <script>
   /* =========================================================================
-     KI-AUSBRUCH – LABYRINTH-SANDBOX  (Version 2: vier Agenten)
+     KI-AUSBRUCH – LABYRINTH-SANDBOX  (Version 3: keiner kennt die Karte)
      -------------------------------------------------------------------------
      TEIL 1: Das Labyrinth (als Zahlen-Gitter)
      TEIL 2: Das Labyrinth zeichnen
-     TEIL 3: Agent A  -> ZUFALL          (würfelt, kein Plan)
-     TEIL 4: Agent B  -> BFS             (kennt die Karte, kürzester Weg)
-     TEIL 5: Agent C  -> WANDVERFOLGER   (eine feste Regel: Hand an der Wand)
-     TEIL 6: Agent D  -> REINFORCEMENT LEARNING (lernt durch Belohnungen)
-     TEIL 7: Die Animation + der Vergleich
+     TEIL 3: Die "Welt" – was passiert bei einem Zug + Belohnungen
+     TEIL 4: Agent ZUFALL (lernt nichts – als Vergleich)
+     TEIL 5: Die LERNER – Grundidee, dann Q-Learning, SARSA, Monte-Carlo
+     TEIL 6: Animation + Vergleich
+
+     WICHTIG: KEIN Agent kennt die Karte! Keiner darf ins Gitter "reingucken".
+     Sie erfahren immer nur: "wenn ich mich bewege, war das gut oder schlecht?"
      ========================================================================= */
 
 
   /* ======================= TEIL 1: DAS LABYRINTH ==========================
-     1 = Wand, 0 = freier Weg. Oben-links ist [Zeile 0][Spalte 0].          */
+     1 = Wand, 0 = freier Weg. Oben-links ist [Zeile 0][Spalte 0].
+     (Das Gitter benutzt nur die WELT unten – die Agenten sehen es nie direkt.) */
 
   const LABYRINTH = [
     [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
@@ -150,16 +98,14 @@
 
   const ANZ_ZEILEN  = LABYRINTH.length;
   const ANZ_SPALTEN = LABYRINTH[0].length;
-  const ZELLE = 36; // Kachelgröße in Pixeln
+  const ZELLE = 36;
 
-  // Die vier Bewegungsrichtungen. Reihenfolge = im Uhrzeigersinn:
-  //   0 = oben, 1 = rechts, 2 = unten, 3 = links
-  // (Diese Reihenfolge braucht der Wandverfolger, damit "nach rechts drehen" = +1 ist.)
+  // Die vier Bewegungsrichtungen: 0=oben, 1=rechts, 2=unten, 3=links
   const RICHTUNGEN = [
-    { zeile: -1, spalte:  0 }, // 0 oben
-    { zeile:  0, spalte:  1 }, // 1 rechts
-    { zeile:  1, spalte:  0 }, // 2 unten
-    { zeile:  0, spalte: -1 }, // 3 links
+    { zeile: -1, spalte:  0 },
+    { zeile:  0, spalte:  1 },
+    { zeile:  1, spalte:  0 },
+    { zeile:  0, spalte: -1 },
   ];
 
 
@@ -176,14 +122,13 @@
   }
 
   function zeichneLabyrinth() {
-    for (let z = 0; z < ANZ_ZEILEN; z++) {
+    for (let z = 0; z < ANZ_ZEILEN; z++)
       for (let s = 0; s < ANZ_SPALTEN; s++) {
         ctx.fillStyle = istWand(z, s) ? '#2a2a33' : '#111';
         ctx.fillRect(s * ZELLE, z * ZELLE, ZELLE, ZELLE);
       }
-    }
-    maleKachel(START.zeile, START.spalte, '#28c840'); // Start = grün
-    maleKachel(ZIEL.zeile,  ZIEL.spalte,  '#ffd23f'); // Ausgang = gelb
+    maleKachel(START.zeile, START.spalte, '#28c840');
+    maleKachel(ZIEL.zeile,  ZIEL.spalte,  '#ffd23f');
   }
 
   function maleKachel(zeile, spalte, farbe) {
@@ -192,27 +137,49 @@
   }
 
   function maleSpur(zeile, spalte, farbe) {
-    ctx.fillStyle = farbe;
-    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = farbe; ctx.globalAlpha = 0.18;
     ctx.fillRect(spalte * ZELLE + 11, zeile * ZELLE + 11, ZELLE - 22, ZELLE - 22);
     ctx.globalAlpha = 1;
   }
 
-  // Malt einen Agenten als kleinen Kreis. Damit sich vier Agenten auf demselben
-  // Feld nicht komplett verdecken, sitzt jeder in einer anderen Ecke der Kachel.
+  // Damit sich vier Agenten auf einem Feld nicht verdecken, sitzt jeder in einer Ecke.
   function maleAgent(zeile, spalte, farbe, eckeX, eckeY) {
     const x = spalte * ZELLE + ZELLE / 2 + eckeX * (ZELLE / 4);
     const y = zeile  * ZELLE + ZELLE / 2 + eckeY * (ZELLE / 4);
     ctx.beginPath();
     ctx.arc(x, y, ZELLE / 4 - 1, 0, Math.PI * 2);
-    ctx.fillStyle = farbe;
-    ctx.fill();
+    ctx.fillStyle = farbe; ctx.fill();
   }
 
 
-  /* ==================== TEIL 3: AGENT A (ZUFALL) ==========================
-     Kennt den Ausgang NICHT. Würfelt jede Runde eine erlaubte Richtung aus.
-     Kleiner Trick: geht möglichst nicht sofort zurück, wo er herkam.        */
+  /* =============== TEIL 3: DIE "WELT" + BELOHNUNGEN =======================
+     Das ist das Einzige, was die Lerner von der Umgebung erfahren. Sie sagen
+     "ich will in Richtung a" und bekommen zurück: wo sie landen und wie viele
+     Punkte (Belohnung) es gab. Die Karte selbst sehen sie NIE.
+
+        +100  Ausgang erreicht      (super!)
+          -5  gegen eine Wand       (bleib stehen, schlecht)
+          -1  normaler Schritt      (kleine Strafe -> kurze Wege lohnen sich)   */
+
+  const schluessel = (z, s) => z + ',' + s;
+
+  function fuehreAus(zeile, spalte, aktion) {
+    let nz = zeile + RICHTUNGEN[aktion].zeile;
+    let ns = spalte + RICHTUNGEN[aktion].spalte;
+    let belohnung;
+    if (istWand(nz, ns)) { belohnung = -5; nz = zeile; ns = spalte; }       // Wand: stehen bleiben
+    else if (nz === ZIEL.zeile && ns === ZIEL.spalte) belohnung = 100;      // Ausgang!
+    else belohnung = -1;                                                    // normaler Schritt
+    return { zeile: nz, spalte: ns, belohnung };
+  }
+
+  const amZielFeld = (z, s) => z === ZIEL.zeile && s === ZIEL.spalte;
+  const besteRichtung = q => q.indexOf(Math.max(...q)); // Index der höchsten Zahl
+
+
+  /* ================= TEIL 4: AGENT ZUFALL (kein Lernen) ===================
+     Würfelt jede Runde eine erlaubte Richtung. Kennt weder Karte noch Ziel
+     und lernt auch nichts. Nur damit man sieht: Lernen ist viel besser als Glück. */
 
   function freieNachbarn(zeile, spalte) {
     return RICHTUNGEN
@@ -223,220 +190,215 @@
   function naechsterZufallsSchritt(agent) {
     let moeglich = freieNachbarn(agent.zeile, agent.spalte);
     if (moeglich.length > 1 && agent.vorherZeile !== null) {
-      const ohneRueckweg = moeglich.filter(
-        n => !(n.zeile === agent.vorherZeile && n.spalte === agent.vorherSpalte)
-      );
+      const ohneRueckweg = moeglich.filter(n => !(n.zeile === agent.vorherZeile && n.spalte === agent.vorherSpalte));
       if (ohneRueckweg.length > 0) moeglich = ohneRueckweg;
     }
     return moeglich[Math.floor(Math.random() * moeglich.length)];
   }
 
 
-  /* ==================== TEIL 4: AGENT B (BFS) =============================
-     BFS = Breitensuche. Breitet sich vom Start in "Wellen" aus. Die erste
-     Welle, die den Ausgang berührt, ist der kürzeste Weg. Wird EINMAL vorher
-     komplett berechnet.                                                     */
+  /* ==================== TEIL 5: DIE LERNER ================================
+     GRUNDIDEE (gilt für alle drei):
+     Jeder Lerner führt eine Tabelle "Q": für jedes Feld merkt er sich, wie GUT
+     jede der 4 Richtungen bisher war (4 Zahlen pro Feld). Er probiert viele
+     Runden ("Episoden"). Am Anfang macht er viel zufällig ("Neugier" = epsilon),
+     mit der Zeit vertraut er dem Gelernten. Der Unterschied liegt darin, WANN
+     und WOMIT er die Q-Tabelle aktualisiert:
 
-  function findeKuerzestenWeg() {
-    const schluessel = (z, s) => z + ',' + s;
-    const warteschlange = [ { zeile: START.zeile, spalte: START.spalte } ];
-    const besucht = {}; const vorher = {};
-    besucht[schluessel(START.zeile, START.spalte)] = true;
+        Q-Learning : lernt sofort nach jedem Schritt, optimistisch
+                     (nimmt an, dass es danach die BESTE Richtung wählt).
+        SARSA      : lernt sofort nach jedem Schritt, aber realistisch
+                     (mit der Richtung, die es WIRKLICH als nächstes nimmt).
+        Monte-Carlo: lernt erst AM ENDE der ganzen Runde, aus dem Gesamt-Gewinn. */
 
-    while (warteschlange.length > 0) {
-      const jetzt = warteschlange.shift();
-      if (jetzt.zeile === ZIEL.zeile && jetzt.spalte === ZIEL.spalte) break;
-      for (const n of freieNachbarn(jetzt.zeile, jetzt.spalte)) {
-        const k = schluessel(n.zeile, n.spalte);
-        if (!besucht[k]) { besucht[k] = true; vorher[k] = jetzt; warteschlange.push(n); }
-      }
-    }
-
-    const weg = [];
-    let schritt = { zeile: ZIEL.zeile, spalte: ZIEL.spalte };
-    while (schritt) { weg.push(schritt); schritt = vorher[schluessel(schritt.zeile, schritt.spalte)]; }
-    weg.reverse();
-    return weg;
+  // Kleiner Helfer: baut die Q-Tabelle als Objekt "Feld -> [4 Zahlen]".
+  function neueQ() {
+    const Q = {};
+    return { hole: (z, s) => { const k = schluessel(z, s); if (!Q[k]) Q[k] = [0, 0, 0, 0]; return Q[k]; }, roh: Q };
   }
 
-
-  /* ================= TEIL 5: AGENT C (WANDVERFOLGER) ======================
-     Uralter Labyrinth-Trick: Halte die rechte Hand IMMER an der Wand und
-     folge ihr. So findet man in vielen Labyrinthen den Ausgang, OHNE die
-     Karte zu kennen und OHNE zu rechnen - nur mit einer festen Regel.
-     Regel pro Schritt: versuche erst rechts abzubiegen, dann geradeaus,
-     dann links, zuletzt umdrehen. Nimm die erste Richtung ohne Wand.        */
-
-  function naechsterWandSchritt(agent) {
-    const d = agent.blick; // in welche Richtung schaut der Agent gerade?
-    const reihenfolge = [ (d + 1) % 4, d, (d + 3) % 4, (d + 2) % 4 ]; // rechts, gerade, links, zurück
-    for (const richtung of reihenfolge) {
-      const nz = agent.zeile  + RICHTUNGEN[richtung].zeile;
-      const ns = agent.spalte + RICHTUNGEN[richtung].spalte;
-      if (!istWand(nz, ns)) {
-        agent.blick = richtung;              // in diese Richtung schauen wir jetzt
-        return { zeile: nz, spalte: ns };
-      }
-    }
-    return { zeile: agent.zeile, spalte: agent.spalte }; // Sackgasse (kommt hier nicht vor)
-  }
-
-
-  /* ============ TEIL 6: AGENT D (REINFORCEMENT LEARNING) ==================
-     Das ist "Lernen durch Belohnung". Der Agent kennt weder Karte noch
-     Ausgang. Er probiert VIELE Versuche ("Episoden") und bekommt Punkte:
-        +100  wenn er den Ausgang erreicht   (tolle Belohnung!)
-          -1  für jeden normalen Schritt      (kleine Strafe -> kurze Wege lohnen sich)
-          -5  wenn er gegen eine Wand läuft   (bleib lieber weg von Wänden)
-
-     Er führt eine Tabelle ("Q-Tabelle"): für JEDES Feld merkt er sich, wie
-     GUT jede der vier Richtungen war. Nach jedem Schritt aktualisiert er den
-     Wert mit dieser Lern-Formel (Q-Learning):
-
-        neu = alt + alpha * ( belohnung + gamma * beste_Zukunft - alt )
-
-        alpha (0.5) = wie schnell er dazulernt
-        gamma (0.9) = wie wichtig ihm spätere Belohnungen sind
-
-     Am Anfang probiert er viel zufällig herum (Neugier = "epsilon"). Mit der
-     Zeit wird er weniger neugierig und vertraut dem Gelernten. Ganz am Ende
-     läuft er einmal den besten gelernten Weg ab - der ist hier meist optimal. */
-
-  const RL_ALPHA = 0.5, RL_GAMMA = 0.9, RL_EPISODEN = 400, RL_MAX_SCHRITT = 600;
-
-  function trainiereRL() {
-    const schluessel = (z, s) => z + ',' + s;
-    const Q = {}; // "Feld" -> [Wert oben, Wert rechts, Wert unten, Wert links]
-    const holeQ = (z, s) => { const k = schluessel(z, s); if (!Q[k]) Q[k] = [0, 0, 0, 0]; return Q[k]; };
-    const besteRichtung = q => q.indexOf(Math.max(...q));
-
-    let ersterVersuchSchritte = 0, ersterVersuchGeschafft = false;
-
-    for (let episode = 0; episode < RL_EPISODEN; episode++) {
-      let z = START.zeile, s = START.spalte;
-      const neugier = Math.max(0.05, 1 - episode / RL_EPISODEN); // sinkt von 1 auf 0.05
-      let n = 0, geschafft = false;
-
-      while (n < RL_MAX_SCHRITT) {
-        const q = holeQ(z, s);
-        // Neugier: manchmal zufällig, sonst die bisher beste Richtung.
-        const a = (Math.random() < neugier) ? Math.floor(Math.random() * 4) : besteRichtung(q);
-
-        let nz = z + RICHTUNGEN[a].zeile;
-        let ns = s + RICHTUNGEN[a].spalte;
-        let belohnung;
-        if (istWand(nz, ns)) { belohnung = -5; nz = z; ns = s; }          // gegen Wand -> stehen bleiben
-        else if (nz === ZIEL.zeile && ns === ZIEL.spalte) belohnung = 100; // Ausgang!
-        else belohnung = -1;                                              // normaler Schritt
-
-        // ---- die Lern-Formel ----
-        const qNext = holeQ(nz, ns);
-        q[a] = q[a] + RL_ALPHA * (belohnung + RL_GAMMA * Math.max(...qNext) - q[a]);
-
-        z = nz; s = ns; n++;
-        if (z === ZIEL.zeile && s === ZIEL.spalte) { geschafft = true; break; }
-      }
-      if (episode === 0) { ersterVersuchSchritte = n; ersterVersuchGeschafft = geschafft; }
-    }
-
-    // Gelernten Weg ablaufen: immer die beste Richtung nehmen (keine Neugier mehr).
+  // Läuft den gelernten Weg ab (immer beste Richtung). Gibt den Weg zurück –
+  // oder null, wenn der Agent sich im Kreis dreht / stecken bleibt.
+  function gelernterWeg(Q) {
     const weg = [ { zeile: START.zeile, spalte: START.spalte } ];
-    let z = START.zeile, s = START.spalte, sicherung = 0;
-    while (!(z === ZIEL.zeile && s === ZIEL.spalte) && sicherung < 200) {
-      const a = besteRichtung(holeQ(z, s));
+    let z = START.zeile, s = START.spalte;
+    const gesehen = new Set([schluessel(z, s)]);
+    while (!amZielFeld(z, s) && weg.length < 200) {
+      const feld = Q.roh[schluessel(z, s)];
+      if (!feld) return null;                         // dieses Feld nie gelernt
+      const a = besteRichtung(feld);
       const nz = z + RICHTUNGEN[a].zeile, ns = s + RICHTUNGEN[a].spalte;
-      if (istWand(nz, ns)) break;
-      z = nz; s = ns; weg.push({ zeile: z, spalte: s }); sicherung++;
+      if (istWand(nz, ns)) return null;
+      z = nz; s = ns;
+      if (gesehen.has(schluessel(z, s))) return null; // dreht sich im Kreis
+      gesehen.add(schluessel(z, s));
+      weg.push({ zeile: z, spalte: s });
     }
-    return { weg, ersterVersuchSchritte, ersterVersuchGeschafft };
+    return amZielFeld(z, s) ? weg : null;
+  }
+
+  // ----- Q-LEARNING -----
+  function trainiereQLearning() {
+    const EP = 400, ALPHA = 0.5, GAMMA = 0.9, MAX = 600;
+    let erster = 0, ersterOk = false;
+    const Q = neueQ();
+    for (let e = 0; e < EP; e++) {
+      let z = START.zeile, s = START.spalte;
+      const neugier = Math.max(0.05, 1 - e / EP);
+      let n = 0, geschafft = false;
+      while (!amZielFeld(z, s) && n < MAX) {
+        const q = Q.hole(z, s);
+        const a = (Math.random() < neugier) ? (Math.random() * 4 | 0) : besteRichtung(q);
+        const r = fuehreAus(z, s, a);
+        const qNext = Q.hole(r.zeile, r.spalte);
+        // Q-Learning: rechnet mit der BESTEN möglichen nächsten Richtung (Math.max).
+        q[a] += ALPHA * (r.belohnung + GAMMA * Math.max(...qNext) - q[a]);
+        z = r.zeile; s = r.spalte; n++;
+        if (amZielFeld(z, s)) geschafft = true;
+      }
+      if (e === 0) { erster = n; ersterOk = geschafft; }
+    }
+    return { weg: gelernterWeg(Q) || [START], episoden: EP, erster, ersterOk };
+  }
+
+  // ----- SARSA -----
+  function trainiereSarsa() {
+    const EP = 700, ALPHA = 0.5, GAMMA = 0.9, MAX = 600;
+    let erster = 0, ersterOk = false;
+    const Q = neueQ();
+    for (let e = 0; e < EP; e++) {
+      let z = START.zeile, s = START.spalte;
+      const neugier = Math.max(0.05, 1 - e / EP);
+      let a = (Math.random() < neugier) ? (Math.random() * 4 | 0) : besteRichtung(Q.hole(z, s));
+      let n = 0, geschafft = false;
+      while (!amZielFeld(z, s) && n < MAX) {
+        const r = fuehreAus(z, s, a);
+        const qNext = Q.hole(r.zeile, r.spalte);
+        // SARSA wählt schon jetzt die WIRKLICH nächste Richtung...
+        const aNext = (Math.random() < neugier) ? (Math.random() * 4 | 0) : besteRichtung(qNext);
+        const q = Q.hole(z, s);
+        // ...und lernt genau mit dieser (nicht mit dem Maximum).
+        q[a] += ALPHA * (r.belohnung + GAMMA * qNext[aNext] - q[a]);
+        z = r.zeile; s = r.spalte; a = aNext; n++;
+        if (amZielFeld(z, s)) geschafft = true;
+      }
+      if (e === 0) { erster = n; ersterOk = geschafft; }
+    }
+    return { weg: gelernterWeg(Q) || [START], episoden: EP, erster, ersterOk };
+  }
+
+  // ----- MONTE-CARLO -----
+  // Übt in Blöcken weiter, bis der gelernte Weg wirklich zum Ausgang führt.
+  function trainiereMonteCarlo() {
+    const ALPHA = 0.1, GAMMA = 0.99, MAX = 500, MAX_EP = 6000;
+    const Q = neueQ();
+    let episoden = 0, erster = 0, ersterOk = false;
+
+    function block(anzahl) {
+      for (let e = 0; e < anzahl; e++) {
+        let z = START.zeile, s = START.spalte;
+        const neugier = Math.max(0.1, 1 - episoden / 2000);
+        let n = 0, geschafft = false;
+        const verlauf = []; // (Feld, Aktion, Belohnung) der ganzen Runde
+        while (!amZielFeld(z, s) && n < MAX) {
+          const a = (Math.random() < neugier) ? (Math.random() * 4 | 0) : besteRichtung(Q.hole(z, s));
+          const r = fuehreAus(z, s, a);
+          verlauf.push({ z, s, a, belohnung: r.belohnung });
+          z = r.zeile; s = r.spalte; n++;
+          if (amZielFeld(z, s)) geschafft = true;
+        }
+        // Erst JETZT (am Ende) lernen: rückwärts den Gesamt-Gewinn G aufsummieren.
+        let G = 0;
+        for (let i = verlauf.length - 1; i >= 0; i--) {
+          const t = verlauf[i];
+          G = t.belohnung + GAMMA * G;
+          const q = Q.hole(t.z, t.s);
+          q[t.a] += ALPHA * (G - q[t.a]);
+        }
+        if (episoden === 0) { erster = n; ersterOk = geschafft; }
+        episoden++;
+      }
+    }
+
+    block(2000);
+    while (gelernterWeg(Q) === null && episoden < MAX_EP) block(500);
+    return { weg: gelernterWeg(Q) || [START], episoden, erster, ersterOk };
   }
 
 
-  /* ================= TEIL 7: ANIMATION + VERGLEICH ======================== */
+  /* ================= TEIL 6: ANIMATION + VERGLEICH ======================== */
 
-  const TAKT = 100; // Millisekunden pro Schritt (kleiner = schneller)
+  const TAKT = 100; // Millisekunden pro Schritt
 
-  // Steckbrief für jeden Agenten: Name, Farbe, Ecke der Kachel, Erklärung.
   const AGENTEN_INFO = [
-    { id: 'a', name: 'Agent A — Zufall',        farbe: '#ff5f57', eckeX: -1, eckeY: -1 },
-    { id: 'b', name: 'Agent B — BFS',           farbe: '#58a6ff', eckeX:  1, eckeY: -1 },
-    { id: 'c', name: 'Agent C — Wandverfolger', farbe: '#ff9f0a', eckeX: -1, eckeY:  1 },
-    { id: 'd', name: 'Agent D — Lernen (RL)',   farbe: '#bc7cff', eckeX:  1, eckeY:  1 },
+    { id: 'a', name: 'Zufall',      farbe: '#ff5f57', eckeX: -1, eckeY: -1, lerner: false },
+    { id: 'q', name: 'Q-Learning',  farbe: '#bc7cff', eckeX:  1, eckeY: -1, lerner: true, train: trainiereQLearning },
+    { id: 's', name: 'SARSA',       farbe: '#58a6ff', eckeX: -1, eckeY:  1, lerner: true, train: trainiereSarsa },
+    { id: 'm', name: 'Monte-Carlo', farbe: '#ff9f0a', eckeX:  1, eckeY:  1, lerner: true, train: trainiereMonteCarlo },
   ];
 
-  let agenten = {};     // id -> Agent-Objekt
+  let agenten = {};
   let taktGeber = null;
   let startZeit = 0;
-  let rlInfo = null;    // Ergebnis des RL-Trainings
 
   const vergleichEl = document.getElementById('vergleich');
   const nachEl      = document.getElementById('nachricht');
   const btnStart    = document.getElementById('btn-start');
   const btnReset    = document.getElementById('btn-reset');
 
-  // Baut die vier Info-Karten einmal auf.
   function baueKarten() {
     vergleichEl.innerHTML = '';
     for (const info of AGENTEN_INFO) {
       const karte = document.createElement('div');
       karte.className = 'karte';
       karte.style.borderColor = info.farbe;
-      const extra = info.id === 'd'
-        ? '<div class="zeile"><span>1. Versuch</span><span id="d-erster">–</span></div>'
+      const lernZeilen = info.lerner
+        ? '<div class="zeile"><span>Übungsrunden</span><span id="' + info.id + '-ep">–</span></div>' +
+          '<div class="zeile"><span>1. Versuch</span><span id="' + info.id + '-erster">–</span></div>'
         : '';
       karte.innerHTML =
-        '<h2 style="color:' + info.farbe + '">' + info.name + '</h2>' +
+        '<h2 style="color:' + info.farbe + '">' + info.name + (info.lerner ? ' 🧠' : ' 🎲') + '</h2>' +
         '<div class="zeile"><span>Schritte</span><span class="wert" id="' + info.id + '-schritte">0</span></div>' +
         '<div class="zeile"><span>Zeit</span><span id="' + info.id + '-zeit">0.0 s</span></div>' +
-        extra +
+        lernZeilen +
         '<div class="zeile"><span>Status</span><span id="' + info.id + '-status">wartet</span></div>';
       vergleichEl.appendChild(karte);
     }
   }
 
-  function txt(id, wert) { document.getElementById(id).textContent = wert; }
+  const txt = (id, wert) => { document.getElementById(id).textContent = wert; };
+
+  function neuerAgent() {
+    return { zeile: START.zeile, spalte: START.spalte, vorherZeile: null, vorherSpalte: null,
+             wegIndex: 0, schritte: 0, spur: [], fertig: false, zeit: 0 };
+  }
 
   function reset() {
     if (taktGeber) clearInterval(taktGeber);
     taktGeber = null;
+    nachEl.textContent = 'Die Lerner üben… (das dauert einen Moment)';
 
-    // Agent D trainiert (viele Versuche). Geht so schnell, dass man's kaum merkt.
-    rlInfo = trainiereRL();
-
-    // Alle Agenten auf den Start setzen.
-    agenten = {
-      a: neuerAgent(),
-      b: neuerAgent(),
-      c: neuerAgent(),
-      d: neuerAgent(),
-    };
-    agenten.a.strategie = 'zufall';
-    agenten.b.strategie = 'weg'; agenten.b.weg = findeKuerzestenWeg();
-    agenten.c.strategie = 'wand'; agenten.c.blick = 2; // schaut nach unten
-    agenten.d.strategie = 'weg'; agenten.d.weg = rlInfo.weg;
-
+    agenten = {};
     for (const info of AGENTEN_INFO) {
+      const a = neuerAgent();
+      if (info.lerner) {
+        const ergebnis = info.train();           // <- hier wird trainiert!
+        a.strategie = 'weg';
+        a.weg = ergebnis.weg;
+        txt(info.id + '-ep', ergebnis.episoden);
+        txt(info.id + '-erster', ergebnis.ersterOk ? ergebnis.erster + ' Schritte' : ergebnis.erster + '+ (verirrt)');
+      } else {
+        a.strategie = 'zufall';
+      }
+      agenten[info.id] = a;
       txt(info.id + '-schritte', '0');
       txt(info.id + '-zeit', '0.0 s');
       txt(info.id + '-status', 'wartet');
     }
-    const ersterText = rlInfo.ersterVersuchGeschafft
-      ? rlInfo.ersterVersuchSchritte + ' Schritte'
-      : rlInfo.ersterVersuchSchritte + '+ (aufgegeben)';
-    txt('d-erster', ersterText);
 
     btnStart.disabled = false;
-    nachEl.textContent = 'Agent D hat schon ' + RL_EPISODEN + '-mal geübt. Druck auf „Los!“ für das Rennen.';
+    nachEl.textContent = 'Fertig geübt! Keiner kennt die Karte. Druck auf „Los!“ für das Rennen.';
     allesZeichnen();
-  }
-
-  function neuerAgent() {
-    return {
-      zeile: START.zeile, spalte: START.spalte,
-      vorherZeile: null, vorherSpalte: null,
-      blick: 2, wegIndex: 0,
-      schritte: 0, spur: [], fertig: false, zeit: 0,
-    };
   }
 
   function allesZeichnen() {
@@ -451,79 +413,58 @@
     }
   }
 
-  function amZiel(a) { return a.zeile === ZIEL.zeile && a.spalte === ZIEL.spalte; }
-
-  // Bewegt EINEN Agenten um einen Schritt weiter (je nach Strategie).
   function beweg(agent) {
     if (agent.fertig) return;
     let naechster;
     if (agent.strategie === 'zufall') {
       naechster = naechsterZufallsSchritt(agent);
-    } else if (agent.strategie === 'wand') {
-      naechster = naechsterWandSchritt(agent);
-    } else { // 'weg' = einen vorher berechneten Weg ablaufen (B und D)
+    } else { // 'weg' = gelernten Weg ablaufen
       agent.wegIndex++;
       naechster = agent.weg[agent.wegIndex] || { zeile: agent.zeile, spalte: agent.spalte };
     }
-    agent.vorherZeile = agent.zeile;
-    agent.vorherSpalte = agent.spalte;
-    agent.zeile = naechster.zeile;
-    agent.spalte = naechster.spalte;
+    agent.vorherZeile = agent.zeile; agent.vorherSpalte = agent.spalte;
+    agent.zeile = naechster.zeile; agent.spalte = naechster.spalte;
     agent.schritte++;
     agent.spur.push({ zeile: agent.zeile, spalte: agent.spalte });
   }
 
   function einTakt() {
     const vergangen = (performance.now() - startZeit) / 1000;
-
     for (const info of AGENTEN_INFO) {
       const a = agenten[info.id];
       if (a.fertig) continue;
       beweg(a);
       txt(info.id + '-schritte', a.schritte);
       txt(info.id + '-zeit', vergangen.toFixed(1) + ' s');
-      if (amZiel(a)) {
-        a.fertig = true;
-        a.zeit = vergangen;
-        txt(info.id + '-status', 'am Ziel!');
-      }
+      if (amZielFeld(a.zeile, a.spalte)) { a.fertig = true; a.zeit = vergangen; txt(info.id + '-status', 'am Ziel!'); }
     }
-
     allesZeichnen();
-
-    const alleFertig = AGENTEN_INFO.every(info => agenten[info.id].fertig);
-    if (alleFertig) {
-      clearInterval(taktGeber);
-      taktGeber = null;
-      zeigeVergleich();
+    if (AGENTEN_INFO.every(info => agenten[info.id].fertig)) {
+      clearInterval(taktGeber); taktGeber = null; zeigeVergleich();
     }
   }
 
   function zeigeVergleich() {
-    // Nach Schritten sortieren (wenigste zuerst) -> Rangliste.
     const rang = AGENTEN_INFO
       .map(info => ({ name: info.name, farbe: info.farbe, schritte: agenten[info.id].schritte }))
       .sort((x, y) => x.schritte - y.schritte);
-
     const medaillen = ['🥇', '🥈', '🥉', '4.'];
-    let liste = rang.map((r, i) =>
-      medaillen[i] + ' <b style="color:' + r.farbe + '">' + r.name.replace('Agent ', '') +
-      '</b> (' + r.schritte + ' Schritte)'
+    const liste = rang.map((r, i) =>
+      medaillen[i] + ' <b style="color:' + r.farbe + '">' + r.name + '</b> (' + r.schritte + ')'
     ).join(' &nbsp; ');
 
-    const d = agenten.d.schritte;
     nachEl.innerHTML =
       liste + '<br><br>' +
-      'Agent D kannte den Weg nicht &mdash; er hat ihn durch <b>' + RL_EPISODEN +
-      ' Versuche mit Belohnungen</b> gelernt: vom Chaos beim 1. Versuch bis zu ' +
-      d + ' Schritten. 🏆';
+      'Alle drei Lerner kannten die Karte nicht &mdash; sie haben den Weg nur durch <b>Belohnungen</b> ' +
+      'herausgefunden. Q-Learning &amp; SARSA lernen nach <i>jedem Schritt</i>, Monte-Carlo erst <i>am Ende</i> ' +
+      'jeder Runde. Und alle drei schlagen den reinen Zufall deutlich. 🧠 &gt; 🎲';
   }
 
   function start() {
     if (taktGeber) return;
     btnStart.disabled = true;
     for (const info of AGENTEN_INFO) txt(info.id + '-status', 'läuft…');
-    nachEl.textContent = 'Alle vier KIs suchen den Ausgang…';
+    nachEl.textContent = 'Alle vier suchen den Ausgang…';
     startZeit = performance.now();
     taktGeber = setInterval(einTakt, TAKT);
   }
