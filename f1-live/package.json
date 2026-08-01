@@ -1,0 +1,11 @@
+{
+  "name": "f1-live-dashboard",
+  "version": "1.0.0",
+  "description": "Live-Dashboard fuer F1 25: liest die UDP-Telemetrie und zeigt Rundenzeiten, Reifen, Abnutzung und Sprit im Browser an.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "debug": "node server.js --debug"
+  },
+  "license": "MIT"
+}
