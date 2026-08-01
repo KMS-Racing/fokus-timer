@@ -1,28 +1,51 @@
 'use strict';
 
 // =====================================================================
-//  F1 24 / F1 25 UDP-Telemetrie – Parser
+//  F1 25 / F1 26 UDP-Telemetrie – Parser
 // ---------------------------------------------------------------------
-//  F1 25 verschickt laufend kleine Daten-Pakete ("Packets") per UDP.
+//  F1 verschickt laufend kleine Daten-Pakete ("Packets") per UDP.
 //  Jedes Paket hat einen 29 Byte langen Kopf (Header) und danach die
 //  eigentlichen Daten – meistens für ALLE 22 Autos hintereinander.
 //
 //  Wir lesen nur die Daten DEINES Autos. Welches das ist, steht im
 //  Header (playerCarIndex). Damit springen wir an die richtige Stelle.
 //
-//  Die Byte-Positionen (Offsets) stammen aus der offiziellen
-//  F1-24-Spezifikation; F1 25 ist nahezu identisch. Falls ein Wert mal
-//  unsinnig aussieht, muss evtl. eine der Größen unten minimal angepasst
-//  werden – dabei hilft der Debug-Modus (siehe server.js).
+//  WICHTIG – mehrere Spiel-Jahre:
+//  Jedes F1-Spiel schreibt im Header sein "packetFormat" (z.B. 2025 oder
+//  2026). Die Byte-Positionen können sich zwischen den Jahren leicht
+//  unterscheiden. Deshalb hat unten JEDES Jahr seine eigene Tabelle
+//  (LAYOUTS). Für F1 26 nehmen wir bis auf Weiteres dieselbe Tabelle wie
+//  F1 25 – sollte ein Wert unsinnig sein, wird NUR die 2026-Tabelle
+//  angepasst (siehe Debug-Modus in server.js).
 // =====================================================================
 
 const HEADER_SIZE = 29;
 
-// Größe eines einzelnen Auto-Blocks je Paket-Art (in Bytes):
-const LAP_DATA_SIZE      = 57;  // Lap-Data-Paket   (ID 2)
-const CAR_TELEMETRY_SIZE = 60;  // Telemetrie-Paket (ID 6)
-const CAR_STATUS_SIZE    = 55;  // Status-Paket     (ID 7)
-const CAR_DAMAGE_SIZE    = 42;  // Schaden-Paket    (ID 10)
+// ---- Positions-Tabellen je Spiel-Jahr -------------------------------
+// size            = Größe eines Auto-Blocks in diesem Paket (Bytes)
+// die übrigen Zahlen sind Offsets INNERHALB eines Auto-Blocks
+// (session-Offsets sind relativ zum Header-Ende).
+const LAYOUT_25 = {
+  lapData:   { size: 57, lastLapMs: 0, currentLapMs: 4, position: 32, lapNum: 33 },
+  telemetry: { size: 60, speed: 0, surfaceTempStart: 30 },
+  status:    { size: 55, fuelInTank: 5, fuelRemainingLaps: 13, visualCompound: 26, tyresAge: 27 },
+  damage:    { size: 42, tyresWearStart: 0 },
+  session:   { trackTemp: 1, airTemp: 2, totalLaps: 3 },
+};
+
+// F1 26: vorerst identisch zu F1 25 (Basis-Annahme, bei Bedarf hier anpassen)
+const LAYOUT_26 = JSON.parse(JSON.stringify(LAYOUT_25));
+
+const LAYOUTS = {
+  2024: LAYOUT_25,   // F1 24 nutzt (fast) dasselbe Layout
+  2025: LAYOUT_25,
+  2026: LAYOUT_26,
+};
+
+// Wählt die passende Tabelle; unbekannte Formate -> F1-25-Basis
+function layoutFuer(packetFormat) {
+  return LAYOUTS[packetFormat] || LAYOUT_25;
+}
 
 // Reifen-Mischung (visualTyreCompound) -> lesbarer Name + Farbe
 const REIFEN = {
@@ -36,9 +59,10 @@ const REIFEN = {
 // Liest den Kopf (Header) eines jeden Pakets
 function parseHeader(buf) {
   return {
-    packetFormat:   buf.readUInt16LE(0),  // z.B. 2024 oder 2025
-    packetId:       buf.readUInt8(6),     // welche Art Paket
-    playerCarIndex: buf.readUInt8(27),    // welches Auto ist deins
+    packetFormat:   buf.readUInt16LE(0),  // z.B. 2025 oder 2026
+    gameYear:       buf.readUInt8(2),      // letzte zwei Ziffern, z.B. 25 oder 26
+    packetId:       buf.readUInt8(6),      // welche Art Paket
+    playerCarIndex: buf.readUInt8(27),     // welches Auto ist deins
   };
 }
 
@@ -54,8 +78,10 @@ function parse(buf, zustand) {
   if (buf.length < HEADER_SIZE) return zustand;
 
   const h = parseHeader(buf);
+  const L = layoutFuer(h.packetFormat);
   const idx = h.playerCarIndex;
   zustand.packetFormat = h.packetFormat;
+  zustand.gameYear = h.gameYear;
 
   // Startposition der Daten deines Autos im jeweiligen Paket
   const start = (stride) => HEADER_SIZE + idx * stride;
@@ -63,48 +89,53 @@ function parse(buf, zustand) {
   switch (h.packetId) {
 
     case 2: { // ---- Lap Data: Rundenzeiten & Position ----
-      const o = start(LAP_DATA_SIZE);
-      if (buf.length < o + LAP_DATA_SIZE) break;
-      zustand.lastLapMs    = buf.readUInt32LE(o + 0);  // letzte fertige Runde (ms)
-      zustand.currentLapMs = buf.readUInt32LE(o + 4);  // laufende Runde (ms)
-      zustand.position     = buf.readUInt8(o + 32);
-      zustand.lapNum       = buf.readUInt8(o + 33);
+      const f = L.lapData;
+      const o = start(f.size);
+      if (buf.length < o + f.size) break;
+      zustand.lastLapMs    = buf.readUInt32LE(o + f.lastLapMs);
+      zustand.currentLapMs = buf.readUInt32LE(o + f.currentLapMs);
+      zustand.position     = buf.readUInt8(o + f.position);
+      zustand.lapNum       = buf.readUInt8(o + f.lapNum);
       break;
     }
 
     case 6: { // ---- Car Telemetry: Tempo & Reifen-Temperaturen ----
-      const o = start(CAR_TELEMETRY_SIZE);
-      if (buf.length < o + CAR_TELEMETRY_SIZE) break;
-      zustand.speed = buf.readUInt16LE(o + 0); // km/h
-      const oberflaeche = [0, 1, 2, 3].map(i => buf.readUInt8(o + 30 + i));
+      const f = L.telemetry;
+      const o = start(f.size);
+      if (buf.length < o + f.size) break;
+      zustand.speed = buf.readUInt16LE(o + f.speed); // km/h
+      const oberflaeche = [0, 1, 2, 3].map(i => buf.readUInt8(o + f.surfaceTempStart + i));
       zustand.reifenTemp = vierRaeder(oberflaeche); // °C an der Reifenoberfläche
       break;
     }
 
     case 7: { // ---- Car Status: Reifen-Mischung, Alter, Sprit ----
-      const o = start(CAR_STATUS_SIZE);
-      if (buf.length < o + CAR_STATUS_SIZE) break;
-      zustand.fuelInTank        = buf.readFloatLE(o + 5);   // kg Sprit im Tank
-      zustand.fuelRemainingLaps = buf.readFloatLE(o + 13);  // Reichweite in Runden
-      const visual = buf.readUInt8(o + 26);                 // Reifen-Mischung
+      const f = L.status;
+      const o = start(f.size);
+      if (buf.length < o + f.size) break;
+      zustand.fuelInTank        = buf.readFloatLE(o + f.fuelInTank);        // kg Sprit im Tank
+      zustand.fuelRemainingLaps = buf.readFloatLE(o + f.fuelRemainingLaps); // Reichweite in Runden
+      const visual = buf.readUInt8(o + f.visualCompound);                   // Reifen-Mischung
       zustand.reifen      = REIFEN[visual] || { name: '—', farbe: '#888' };
-      zustand.reifenAlter = buf.readUInt8(o + 27);          // Runden auf dem Reifen
+      zustand.reifenAlter = buf.readUInt8(o + f.tyresAge);                  // Runden auf dem Reifen
       break;
     }
 
     case 10: { // ---- Car Damage: Reifen-Abnutzung in Prozent ----
-      const o = start(CAR_DAMAGE_SIZE);
-      if (buf.length < o + CAR_DAMAGE_SIZE) break;
-      const wear = [0, 1, 2, 3].map(i => buf.readFloatLE(o + i * 4)); // % pro Reifen
+      const f = L.damage;
+      const o = start(f.size);
+      if (buf.length < o + f.size) break;
+      const wear = [0, 1, 2, 3].map(i => buf.readFloatLE(o + f.tyresWearStart + i * 4)); // % pro Reifen
       zustand.reifenAbnutzung = vierRaeder(wear);
       break;
     }
 
     case 1: { // ---- Session: Strecken- & Lufttemperatur ----
+      const f = L.session;
       if (buf.length < HEADER_SIZE + 4) break;
-      zustand.trackTemp = buf.readInt8(HEADER_SIZE + 1); // °C Asphalt
-      zustand.airTemp   = buf.readInt8(HEADER_SIZE + 2); // °C Luft
-      zustand.totalLaps = buf.readUInt8(HEADER_SIZE + 3);
+      zustand.trackTemp = buf.readInt8(HEADER_SIZE + f.trackTemp); // °C Asphalt
+      zustand.airTemp   = buf.readInt8(HEADER_SIZE + f.airTemp);   // °C Luft
+      zustand.totalLaps = buf.readUInt8(HEADER_SIZE + f.totalLaps);
       break;
     }
   }
@@ -112,4 +143,4 @@ function parse(buf, zustand) {
   return zustand;
 }
 
-module.exports = { parse, HEADER_SIZE };
+module.exports = { parse, HEADER_SIZE, LAYOUTS };

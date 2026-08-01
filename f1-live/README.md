@@ -1,4 +1,7 @@
-# F1 25 – Live-Dashboard 🏁
+# F1 25 & F1 26 – Live-Dashboard 🏁
+
+Funktioniert mit **F1 25 und F1 26** – das Programm erkennt automatisch,
+welches Spiel gerade sendet, und zeigt es oben an ("F1 25" / "F1 26").
 
 Zeigt dir **während des Fahrens** live im Browser an: aktuelle Rundenzeit,
 letzte/beste Runde, welche Reifen du hast, die **Abnutzung pro Reifen in %**,
@@ -21,19 +24,22 @@ Wenn eine Versionsnummer kommt (z.B. `v20.x`), passt alles.
 
 ---
 
-## 2. Telemetrie in F1 25 einschalten
+## 2. Telemetrie in F1 25 / F1 26 einschalten
 Im Spiel:
 
 **Einstellungen → Telemetrie-Einstellungen** und dort:
 
-| Einstellung            | Wert                     |
-|------------------------|--------------------------|
-| UDP-Telemetrie         | **AN**                   |
-| UDP-Broadcast-Modus    | AUS                      |
-| UDP-IP-Adresse         | **127.0.0.1**            |
-| UDP-Port               | **20777**                |
-| UDP-Senderate          | 20 oder 30 Hz            |
-| UDP-Format             | **2025** (falls es nicht geht: 2024) |
+| Einstellung            | Wert                                    |
+|------------------------|-----------------------------------------|
+| UDP-Telemetrie         | **AN**                                  |
+| UDP-Broadcast-Modus    | AUS                                     |
+| UDP-IP-Adresse         | **127.0.0.1**                           |
+| UDP-Port               | **20777**                               |
+| UDP-Senderate          | 20 oder 30 Hz                           |
+| UDP-Format             | **passend zum Spiel** (F1 26 → 2026, F1 25 → 2025) |
+
+> Das Programm versteht beide Formate automatisch. Stell das UDP-Format am
+> besten auf dein Spiel-Jahr; falls eine Auswahl fehlt, nimm das nächsthöhere.
 
 > `127.0.0.1` bedeutet „dieser PC" – das Spiel schickt die Daten an dein
 > eigenes Gerät, wo dieses Programm läuft.

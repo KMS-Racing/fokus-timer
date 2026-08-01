@@ -86,7 +86,7 @@ if (DEBUG) {
     }
     const r = zustand.reifenAbnutzung || {};
     console.log(
-      `Format ${zustand.packetFormat} | Reifen ${zustand.reifen ? zustand.reifen.name : '?'} ` +
+      `F1 ${zustand.gameYear ?? '?'} (Format ${zustand.packetFormat}) | Reifen ${zustand.reifen ? zustand.reifen.name : '?'} ` +
       `(Alter ${zustand.reifenAlter ?? '?'}) | Abnutzung FL ${fmt(r.FL)} FR ${fmt(r.FR)} RL ${fmt(r.RL)} RR ${fmt(r.RR)} | ` +
       `Sprit ${zustand.fuelInTank != null ? zustand.fuelInTank.toFixed(1) + 'kg' : '?'} | ` +
       `letzte Runde ${zustand.lastLapMs ? (zustand.lastLapMs / 1000).toFixed(3) + 's' : '?'}`
