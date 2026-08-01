@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Renn-Tagebuch – iRacing</title>
+  <title>Renn-Tagebuch – Sim Racing</title>
 
   <!-- ============================================================
        STYLE (CSS) – hier legen wir fest, WIE alles aussieht.
@@ -156,6 +156,16 @@
     .rennen-kopf { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
     .rennen-kopf .titel { font-size: 1.05rem; color: var(--text); }
     .rennen-kopf .datum { font-size: 0.75rem; color: var(--grau); margin-top: 0.2rem; }
+    .spiel-tag {
+      display: inline-block;
+      background: rgba(255,95,87,0.12);
+      color: var(--rot);
+      border-radius: 4px;
+      padding: 0.1rem 0.45rem;
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.35rem;
+    }
     .rennen-notiz { font-size: 0.85rem; color: #bbb; font-style: italic; margin: 0.5rem 0; }
 
     .loeschen { background: none; color: var(--grau); font-size: 0.75rem; padding: 0.2rem; }
@@ -169,7 +179,7 @@
 </head>
 <body>
   <h1>🏁 Renn-Tagebuch</h1>
-  <div class="untertitel">iRacing · Version 1</div>
+  <div class="untertitel">Sim Racing · Version 1</div>
 
   <div class="spalte">
 
@@ -179,17 +189,34 @@
 
       <div class="reihe">
         <div>
-          <label for="strecke">Strecke</label>
-          <input id="strecke" type="text" placeholder="z.B. Spa-Francorchamps" />
+          <label for="spiel">Spiel</label>
+          <input id="spiel" type="text" list="spiel-vorschlaege" placeholder="z.B. F1 25" />
+          <!-- Vorschläge, die beim Tippen aufklappen (frei überschreibbar) -->
+          <datalist id="spiel-vorschlaege">
+            <option value="F1 25"></option>
+            <option value="iRacing"></option>
+            <option value="Assetto Corsa Competizione"></option>
+            <option value="Gran Turismo 7"></option>
+            <option value="Le Mans Ultimate"></option>
+            <option value="Automobilista 2"></option>
+          </datalist>
         </div>
         <div>
-          <label for="auto">Auto</label>
-          <input id="auto" type="text" placeholder="z.B. Ferrari 296 GT3" />
+          <label for="datum">Datum</label>
+          <input id="datum" type="date" />
         </div>
       </div>
 
-      <label for="datum">Datum</label>
-      <input id="datum" type="date" />
+      <div class="reihe">
+        <div>
+          <label for="strecke">Strecke</label>
+          <input id="strecke" type="text" placeholder="z.B. Monza" />
+        </div>
+        <div>
+          <label for="auto">Auto / Team</label>
+          <input id="auto" type="text" placeholder="z.B. Ferrari" />
+        </div>
+      </div>
 
       <label for="notiz">Notiz zum Gefühl</label>
       <textarea id="notiz" placeholder="z.B. Heck kam raus in Kurve 3, Reifen wurden spät heiß"></textarea>
@@ -365,12 +392,22 @@
     // ==========================================================
 
     function ladeRennen() {
-      const roh = localStorage.getItem(SPEICHER_SCHLUESSEL);
-      return roh ? JSON.parse(roh) : [];
+      // try/catch: manche Browser blockieren den Speicher – dann keine Fehler,
+      // die App läuft einfach ohne dauerhaftes Speichern weiter.
+      try {
+        const roh = localStorage.getItem(SPEICHER_SCHLUESSEL);
+        return roh ? JSON.parse(roh) : [];
+      } catch (e) {
+        return [];
+      }
     }
 
     function speichereRennen(liste) {
-      localStorage.setItem(SPEICHER_SCHLUESSEL, JSON.stringify(liste));
+      try {
+        localStorage.setItem(SPEICHER_SCHLUESSEL, JSON.stringify(liste));
+      } catch (e) {
+        alert('Speichern im Browser ist gerade nicht möglich – deine Eingaben bleiben nur bis zum Neuladen erhalten.');
+      }
     }
 
     // ==========================================================
@@ -378,6 +415,7 @@
     // ==========================================================
 
     function rennenSpeichern() {
+      const spiel   = $('spiel').value.trim();
       const strecke = $('strecke').value.trim();
       const auto    = $('auto').value.trim();
       const datum   = $('datum').value;
@@ -388,7 +426,7 @@
 
       const rennen = {
         id: Date.now(), // eindeutige Nummer über die Zeit
-        strecke, auto, datum, notiz,
+        spiel, strecke, auto, datum, notiz,
         runden: aktuelleRunden.slice() // Kopie der Runden-Liste
       };
 
@@ -397,6 +435,7 @@
       speichereRennen(alle);
 
       // Formular zurücksetzen
+      $('spiel').value = '';
       $('strecke').value = '';
       $('auto').value = '';
       $('notiz').value = '';
@@ -432,6 +471,7 @@
         karte.innerHTML =
           '<div class="rennen-kopf">' +
             '<div>' +
+              (rennen.spiel ? '<div class="spiel-tag">' + escape(rennen.spiel) + '</div>' : '') +
               '<div class="titel">' + escape(rennen.strecke) + (rennen.auto ? ' · ' + escape(rennen.auto) : '') + '</div>' +
               '<div class="datum">' + (rennen.datum || '') + ' · ' + rennen.runden.length + ' Runden</div>' +
             '</div>' +
