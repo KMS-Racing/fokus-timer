@@ -54,6 +54,23 @@
     /* Alles bleibt schön mittig und wird auf großen Screens nicht zu breit */
     .spalte { width: 100%; max-width: 640px; }
 
+    /* Link-Karte zum F1 Live-Dashboard */
+    .dashboard-karte { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .dashboard-titel { font-size: 0.95rem; color: var(--text); }
+    .dashboard-sub { font-size: 0.78rem; color: var(--grau); margin-top: 0.25rem; line-height: 1.4; }
+    .dashboard-link {
+      text-decoration: none;
+      background: var(--rot);
+      color: #0d0d0d;
+      font-weight: bold;
+      font-size: 0.85rem;
+      padding: 0.6rem 1.1rem;
+      border-radius: 6px;
+      white-space: nowrap;
+      transition: filter 0.15s;
+    }
+    .dashboard-link:hover { filter: brightness(1.15); }
+
     /* Eine "Karte" ist ein umrandeter Block (Formular oder ein Rennen) */
     .karte {
       background: var(--karte);
@@ -182,6 +199,15 @@
   <div class="untertitel">Sim Racing · Version 1</div>
 
   <div class="spalte">
+
+    <!-- ========== LINK: F1 Live-Dashboard ========== -->
+    <div class="karte dashboard-karte">
+      <div class="dashboard-text">
+        <div class="dashboard-titel">🏎️ Live-Dashboard für F1 25 &amp; 26</div>
+        <div class="dashboard-sub">Rundenzeiten, Reifen-Abnutzung &amp; Sprit live beim Fahren.<br>Vorher lokal starten: <code>node server.js</code></div>
+      </div>
+      <a class="dashboard-link" href="http://localhost:3000" target="_blank" rel="noopener">Öffnen ↗</a>
+    </div>
 
     <!-- ========== FORMULAR: Neues Rennen ========== -->
     <div class="karte">
