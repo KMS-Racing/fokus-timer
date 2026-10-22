@@ -1,0 +1,17 @@
+{
+  "bind": "127.0.0.1",
+  "port": 8765,
+  "publicUrl": "https://planer.example.de/",
+  "allowedOrigin": "",
+  "liveMapUrl": "https://planer.example.de/karte/",
+  "seedMapUrl": "",
+  "blueMapIds": {},
+  "maxChunksPerPlayer": 64,
+  "maxMarkersPerPlayer": 100,
+  "claimOnlyDiscovered": true,
+  "discoverRadiusChunks": 6,
+  "sessionDays": 30,
+  "showSeed": true,
+  "showOnlinePlayers": true,
+  "blueMapIntegration": true
+}

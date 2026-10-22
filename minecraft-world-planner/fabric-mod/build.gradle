@@ -1,0 +1,50 @@
+plugins {
+    // Seit Minecraft 26.1 ist der Spielcode nicht mehr verschleiert. Dieses Loom-Plugin
+    // braucht deshalb keine "mappings"-Zeile mehr, und statt "modImplementation"
+    // schreibt man einfach "implementation".
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    mavenCentral()
+    maven { url = "https://maven.fabricmc.net/" }
+    // BlueMap-API (nur zum Kompilieren, BlueMap selbst bringt sie zur Laufzeit mit)
+    maven { url = "https://repo.bluecolored.de/releases" }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    compileOnly "de.bluecolored:bluemap-api:${project.bluemap_api_version}"
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+    // Die Webseite wird mit in die Mod gepackt, damit der Server sie direkt ausliefern kann.
+    from("../web") {
+        into "world_planner_web"
+    }
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+    withSourcesJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 25
+    options.encoding = "UTF-8"
+}
