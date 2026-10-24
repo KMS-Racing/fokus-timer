@@ -16,6 +16,7 @@ import java.nio.file.Path;
 import java.net.URISyntaxException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -156,7 +157,7 @@ final class ApiServer {
 
         // --- ohne Login
         if (get && first.equals("info") && p.size() == 1) return info();
-        if (post && first.equals("login") && p.size() == 1) return login(body(ex));
+        if (post && first.equals("login") && p.size() == 1) return login(body(ex), clientAddress(ex));
 
         // --- ab hier nur mit Login
         String token = bearer(ex);
@@ -195,8 +196,8 @@ final class ApiServer {
         return o;
     }
 
-    private JsonObject login(JsonObject body) {
-        SessionStore.LoginResult result = s.sessions().redeem(string(body, "code"), s.config().sessionDays());
+    private JsonObject login(JsonObject body, String client) {
+        SessionStore.LoginResult result = s.sessions().redeem(string(body, "code"), s.config().sessionDays(), client);
         JsonObject o = new JsonObject();
         o.addProperty("token", result.token());
         o.addProperty("uuid", result.uuid().toString());
@@ -408,6 +409,20 @@ final class ApiServer {
             h.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
             h.set("Access-Control-Max-Age", "600");
         }
+    }
+
+    /**
+     * Wer fragt? Hinter einem Reverse-Proxy (nginx auf demselben Rechner) kommt jede Anfrage von 127.0.0.1 –
+     * dann zählt die Adresse aus X-Forwarded-For. Von außen wird der Kopf ignoriert, sonst könnte man ihn fälschen.
+     */
+    static String clientAddress(HttpExchange ex) {
+        InetAddress remote = ex.getRemoteAddress().getAddress();
+        String forwarded = ex.getRequestHeaders().getFirst("X-Forwarded-For");
+        if (remote.isLoopbackAddress() && forwarded != null && !forwarded.isBlank()) {
+            String first = forwarded.split(",")[0].trim();
+            return first.length() > 64 ? first.substring(0, 64) : first;
+        }
+        return remote.getHostAddress();
     }
 
     private static String bearer(HttpExchange ex) {

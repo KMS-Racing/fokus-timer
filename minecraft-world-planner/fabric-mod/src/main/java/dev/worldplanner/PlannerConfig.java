@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * Einstellungen aus config/world-planner.json.
@@ -14,23 +15,46 @@ import java.util.Map;
  * damit neue Optionen nach einem Update in der Datei auftauchen.
  */
 record PlannerConfig(
+        // Webserver
         String bind,
         int port,
         String publicUrl,
         String allowedOrigin,
+        String webOverrideDir,
+        int sessionDays,
+        // Karten
         String liveMapUrl,
         String seedMapUrl,
         Map<String, String> blueMapIds,
-        int maxChunksPerPlayer,
-        int maxMarkersPerPlayer,
-        boolean claimOnlyDiscovered,
-        int discoverRadiusChunks,
-        int sessionDays,
+        boolean blueMapIntegration,
         boolean showSeed,
         boolean showOnlinePlayers,
-        boolean blueMapIntegration,
-        String webOverrideDir
+        int discoverRadiusChunks,
+        // Länder und Marker
+        int maxChunksPerPlayer,
+        boolean claimOnlyDiscovered,
+        int maxMarkersPerPlayer,
+        Map<String, String> extraMarkerTypes,
+        // Projekte und Teams
+        int maxProjectsPerPlayer,
+        int maxTeamsPerPlayer,
+        int teamInviteDays,
+        // Handel (Web-Auktionshaus – überträgt keine Items, siehe README)
+        String tradeUnit,
+        int tradeMinIncrement,
+        int maxActiveListingsPerPlayer,
+        int maxListingDays,
+        int tradeActionsPerMinute,
+        Map<String, String> extraTradeCategories,
+        // Aktivitäts-Übersicht
+        int activityLimit
 ) {
+    private static final Pattern EXTRA_ID = Pattern.compile("[a-z0-9_]{2,24}");
+
+    static PlannerConfig defaults() {
+        return fromJson(new JsonObject());
+    }
+
     static PlannerConfig load(Path path, Logger logger) {
         JsonObject json = new JsonObject();
         boolean readable = true;
@@ -41,35 +65,10 @@ record PlannerConfig(
             readable = false;
             logger.error("[World Planner] {} ist kaputt ({}). Ich benutze die Standardwerte, bis du die Datei reparierst.", path, e.getMessage());
         }
-
-        Map<String, String> mapIds = new LinkedHashMap<>();
-        if (json.has("blueMapIds") && json.get("blueMapIds").isJsonObject()) {
-            json.getAsJsonObject("blueMapIds").entrySet().forEach(e -> mapIds.put(e.getKey(), e.getValue().getAsString()));
-        }
-        // Leer = automatisch: Die Mod fragt BlueMap, welche Karte zu welcher Dimension gehört.
-
-        PlannerConfig config = new PlannerConfig(
-                str(json, "bind", "127.0.0.1"),
-                clamp(integer(json, "port", 8765), 1, 65535),
-                str(json, "publicUrl", ""),
-                str(json, "allowedOrigin", ""),
-                str(json, "liveMapUrl", ""),
-                str(json, "seedMapUrl", ""),
-                Map.copyOf(mapIds),
-                clamp(integer(json, "maxChunksPerPlayer", 64), 0, 100_000),
-                clamp(integer(json, "maxMarkersPerPlayer", 100), 0, 10_000),
-                bool(json, "claimOnlyDiscovered", true),
-                clamp(integer(json, "discoverRadiusChunks", 6), 0, 32),
-                clamp(integer(json, "sessionDays", 30), 1, 365),
-                bool(json, "showSeed", true),
-                bool(json, "showOnlinePlayers", true),
-                bool(json, "blueMapIntegration", true),
-                str(json, "webOverrideDir", "")
-        );
-
+        PlannerConfig config = fromJson(json);
         if (readable) {
             try {
-                JsonFiles.write(path, config.toJson(mapIds), true);
+                JsonFiles.write(path, config.toJson(), true);
             } catch (Exception e) {
                 logger.warn("[World Planner] Konnte {} nicht schreiben: {}", path, e.getMessage());
             }
@@ -77,27 +76,97 @@ record PlannerConfig(
         return config;
     }
 
-    private JsonObject toJson(Map<String, String> orderedMapIds) {
+    /** Liest die Einstellungen aus JSON. Fehlende oder ungültige Werte werden durch sichere Standardwerte ersetzt. */
+    static PlannerConfig fromJson(JsonObject json) {
+        return new PlannerConfig(
+                str(json, "bind", "127.0.0.1"),
+                clamp(integer(json, "port", 8765), 1, 65535),
+                str(json, "publicUrl", ""),
+                str(json, "allowedOrigin", ""),
+                str(json, "webOverrideDir", ""),
+                clamp(integer(json, "sessionDays", 30), 1, 365),
+                str(json, "liveMapUrl", ""),
+                str(json, "seedMapUrl", ""),
+                // Leer = automatisch: Die Mod fragt BlueMap, welche Karte zu welcher Dimension gehört.
+                stringMap(json, "blueMapIds", null),
+                bool(json, "blueMapIntegration", true),
+                bool(json, "showSeed", true),
+                bool(json, "showOnlinePlayers", true),
+                clamp(integer(json, "discoverRadiusChunks", 6), 0, 32),
+                clamp(integer(json, "maxChunksPerPlayer", 64), 0, 100_000),
+                bool(json, "claimOnlyDiscovered", true),
+                clamp(integer(json, "maxMarkersPerPlayer", 100), 0, 10_000),
+                stringMap(json, "extraMarkerTypes", EXTRA_ID),
+                clamp(integer(json, "maxProjectsPerPlayer", 50), 0, 10_000),
+                clamp(integer(json, "maxTeamsPerPlayer", 1), 1, 20),
+                clamp(integer(json, "teamInviteDays", 7), 1, 90),
+                limitText(str(json, "tradeUnit", "Diamanten"), 24, "Diamanten"),
+                clamp(integer(json, "tradeMinIncrement", 1), 1, 1_000_000),
+                clamp(integer(json, "maxActiveListingsPerPlayer", 20), 0, 1000),
+                clamp(integer(json, "maxListingDays", 14), 1, 90),
+                clamp(integer(json, "tradeActionsPerMinute", 30), 1, 1000),
+                stringMap(json, "extraTradeCategories", EXTRA_ID),
+                clamp(integer(json, "activityLimit", 1000), 50, 100_000)
+        );
+    }
+
+    JsonObject toJson() {
         JsonObject o = new JsonObject();
         o.addProperty("bind", bind);
         o.addProperty("port", port);
         o.addProperty("publicUrl", publicUrl);
         o.addProperty("allowedOrigin", allowedOrigin);
+        o.addProperty("webOverrideDir", webOverrideDir);
+        o.addProperty("sessionDays", sessionDays);
         o.addProperty("liveMapUrl", liveMapUrl);
         o.addProperty("seedMapUrl", seedMapUrl);
-        JsonObject ids = new JsonObject();
-        orderedMapIds.forEach(ids::addProperty);
-        o.add("blueMapIds", ids);
-        o.addProperty("maxChunksPerPlayer", maxChunksPerPlayer);
-        o.addProperty("maxMarkersPerPlayer", maxMarkersPerPlayer);
-        o.addProperty("claimOnlyDiscovered", claimOnlyDiscovered);
-        o.addProperty("discoverRadiusChunks", discoverRadiusChunks);
-        o.addProperty("sessionDays", sessionDays);
+        o.add("blueMapIds", mapJson(blueMapIds));
+        o.addProperty("blueMapIntegration", blueMapIntegration);
         o.addProperty("showSeed", showSeed);
         o.addProperty("showOnlinePlayers", showOnlinePlayers);
-        o.addProperty("blueMapIntegration", blueMapIntegration);
-        o.addProperty("webOverrideDir", webOverrideDir);
+        o.addProperty("discoverRadiusChunks", discoverRadiusChunks);
+        o.addProperty("maxChunksPerPlayer", maxChunksPerPlayer);
+        o.addProperty("claimOnlyDiscovered", claimOnlyDiscovered);
+        o.addProperty("maxMarkersPerPlayer", maxMarkersPerPlayer);
+        o.add("extraMarkerTypes", mapJson(extraMarkerTypes));
+        o.addProperty("maxProjectsPerPlayer", maxProjectsPerPlayer);
+        o.addProperty("maxTeamsPerPlayer", maxTeamsPerPlayer);
+        o.addProperty("teamInviteDays", teamInviteDays);
+        o.addProperty("tradeUnit", tradeUnit);
+        o.addProperty("tradeMinIncrement", tradeMinIncrement);
+        o.addProperty("maxActiveListingsPerPlayer", maxActiveListingsPerPlayer);
+        o.addProperty("maxListingDays", maxListingDays);
+        o.addProperty("tradeActionsPerMinute", tradeActionsPerMinute);
+        o.add("extraTradeCategories", mapJson(extraTradeCategories));
+        o.addProperty("activityLimit", activityLimit);
         return o;
+    }
+
+    private static JsonObject mapJson(Map<String, String> map) {
+        JsonObject o = new JsonObject();
+        map.forEach(o::addProperty);
+        return o;
+    }
+
+    /** Liest {"id": "Text", ...}. Mit idPattern werden ungültige Schlüssel übersprungen. */
+    private static Map<String, String> stringMap(JsonObject json, String key, Pattern idPattern) {
+        Map<String, String> out = new LinkedHashMap<>();
+        if (json.has(key) && json.get(key).isJsonObject()) {
+            for (Map.Entry<String, JsonElement> e : json.getAsJsonObject(key).entrySet()) {
+                try {
+                    String value = e.getValue().getAsString().trim();
+                    if (idPattern != null && (!idPattern.matcher(e.getKey()).matches() || value.isEmpty() || value.length() > 32)) continue;
+                    out.put(e.getKey(), value);
+                } catch (Exception ignored) {
+                    // ungültiger Eintrag
+                }
+            }
+        }
+        return java.util.Collections.unmodifiableMap(out);
+    }
+
+    private static String limitText(String value, int max, String fallback) {
+        return value.isBlank() || value.length() > max ? fallback : value;
     }
 
     private static String str(JsonObject json, String key, String fallback) {

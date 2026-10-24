@@ -1,0 +1,3 @@
+[22:48:46] [Test worker/ERROR]: [World Planner] /tmp/junit-1685553754587338096/world-planner.json ist kaputt (java.io.EOFException: End of input at line 1 column 9 path $.kaputt). Ich benutze die Standardwerte, bis du die Datei reparierst.
+[22:48:46] [Test worker/ERROR]: [World Planner] /tmp/junit-15561800334440499544/lands.json konnte nicht gelesen werden (com.google.gson.stream.MalformedJsonException: Expected ':' at line 1 column 8 path $.das
+See https://github.com/google/gson/blob/main/Troubleshooting.md#malformed-json). Sicherung: /tmp/junit-15561800334440499544/lands.json.kaputt-1792882126767

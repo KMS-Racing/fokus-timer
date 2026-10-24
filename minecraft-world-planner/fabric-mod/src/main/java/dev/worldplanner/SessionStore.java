@@ -28,7 +28,10 @@ import java.util.UUID;
 final class SessionStore extends JsonStore {
     private static final String CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"; // ohne 0/O und 1/I
     private static final long CODE_VALID_MS = 5 * 60 * 1000;
-    private static final int MAX_FAILURES_PER_MINUTE = 30;
+    /** Falsche Codes pro Absender und Minute. Pro Absender, damit ein Störenfried nicht alle aussperren kann. */
+    private static final int MAX_FAILURES_PER_CLIENT = 30;
+    /** Sicherheitsnetz für alle zusammen (Codes haben 40 Bit – Raten ist ohnehin aussichtslos). */
+    private static final int MAX_FAILURES_TOTAL = 300;
     private static final long LAST_USED_SAVE_INTERVAL_MS = 60 * 60 * 1000;
 
     private record Session(UUID uuid, long created, long expires, long lastUsed) {}
@@ -38,8 +41,8 @@ final class SessionStore extends JsonStore {
     private final SecureRandom random = new SecureRandom();
     private final Map<String, Session> sessionsByHash = new HashMap<>();
     private final Map<String, PendingCode> codes = new HashMap<>(); // nur im Speicher
-    private long failureWindowStart;
-    private int failuresInWindow;
+    private final RateLimiter clientFailures = new RateLimiter(MAX_FAILURES_PER_CLIENT, 60_000);
+    private final RateLimiter totalFailures = new RateLimiter(MAX_FAILURES_TOTAL, 60_000);
 
     SessionStore(Path path, Logger logger) {
         super(path);
@@ -72,19 +75,17 @@ final class SessionStore extends JsonStore {
 
     record LoginResult(String token, UUID uuid) {}
 
-    synchronized LoginResult redeem(String rawCode, int sessionDays) {
+    /** @param client Absender (IP-Adresse), für die Bremse gegen Durchprobieren */
+    synchronized LoginResult redeem(String rawCode, int sessionDays, String client) {
         long now = System.currentTimeMillis();
-        if (now - failureWindowStart > 60_000) {
-            failureWindowStart = now;
-            failuresInWindow = 0;
-        }
-        if (failuresInWindow >= MAX_FAILURES_PER_MINUTE) {
+        if (clientFailures.isBlocked(client, now) || totalFailures.isBlocked("*", now)) {
             throw new PlannerException(429, "Zu viele falsche Codes. Warte eine Minute.");
         }
         String code = rawCode == null ? "" : rawCode.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "");
         PendingCode pending = codes.remove(code);
         if (pending == null || pending.expires < now) {
-            failuresInWindow++;
+            clientFailures.record(client, now);
+            totalFailures.record("*", now);
             throw new PlannerException(401, "Code falsch oder abgelaufen. Tippe im Spiel /planer login für einen neuen Code.");
         }
         byte[] bytes = new byte[32];

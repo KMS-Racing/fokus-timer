@@ -2,6 +2,7 @@
 
 | Art | Wo | Braucht | Aufruf |
 |---|---|---|---|
+| **Java-Unit-Tests** (Regeln, Umrechnungen, Speichern, Login-Bremse) | `fabric-mod/src/test/java` | nur Java 25 | `cd fabric-mod && ./gradlew test` |
 | **Integrationstests** (echter Server, echte API, echter Browser) | `tests/integration` | Testserver + Python 3 + Playwright | siehe unten |
 
 Die Integrationstests prüfen nicht nur, ob Knöpfe da sind. Sie schauen auch nach, was der Server wirklich gespeichert hat und wo die BlueMap-Kamera wirklich steht.
