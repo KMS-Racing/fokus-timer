@@ -15,8 +15,16 @@ record PlannerServices(
         MarkerStore markers,
         AtomicReference<JsonObject> worldSnapshot,
         AtomicReference<JsonObject> playersSnapshot,
-        AtomicReference<Map<String, String>> detectedBlueMapIds
+        AtomicReference<Map<String, String>> detectedBlueMapIds,
+        AtomicReference<JsonObject> blueMapStatus
 ) {
+    /** Steht hier und nicht in BlueMapBridge, damit ohne installiertes BlueMap keine BlueMap-Klasse geladen wird. */
+    static JsonObject blueMapUnavailable() {
+        JsonObject o = new JsonObject();
+        o.addProperty("available", false);
+        return o;
+    }
+
     JsonStore[] stores() {
         return new JsonStore[]{players, sessions, discovery, lands, markers};
     }

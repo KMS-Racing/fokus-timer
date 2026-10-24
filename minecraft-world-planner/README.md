@@ -114,6 +114,7 @@ Datei: `config/world-planner.json` (Server neu starten nach Änderungen)
 | `showSeed` | `true` | Seed auf der Webseite anzeigen. Auf `false` stellen, wenn der Seed geheim sein soll! |
 | `showOnlinePlayers` | `true` | Positionen der Online-Spieler auf der Webseite anzeigen |
 | `blueMapIntegration` | `true` | Länder und öffentliche Marker in BlueMap einzeichnen |
+| `webOverrideDir` | `""` | Nur für Entwickler/Anpassungen: Webseite aus diesem Ordner statt aus der Mod laden (z. B. `/pfad/zum/repo/web`). Leer lassen! |
 
 ---
 
@@ -129,6 +130,14 @@ Datei: `config/world-planner.json` (Server neu starten nach Änderungen)
    Ehrlicher Hinweis: Das zählt für den **ganzen Server**. „Jeder sieht nur, wo er selbst war“ kann BlueMap nicht.
 4. `/bluemap reload`. Die Karte ist dann unter `http://<server>:8100/` erreichbar.
 5. Länder erscheinen in BlueMap als Ebene **„Länder“**, öffentliche Marker als **„Bau-Planer“** (oben links im Menü ein-/ausblendbar).
+
+**So arbeiten Planer und BlueMap zusammen** (geprüft mit BlueMap 5.29):
+- Der Tab „Live-Welt 3D“ öffnet BlueMap **an der Stelle und mit dem Ausschnitt der Claim-Karte**. Hast du dich in BlueMap selbst bewegt und die Claim-Karte nicht angefasst, bleibt BlueMap, wo du warst.
+- „In 3D zeigen“ (Chunk-Infokarte) fährt nah an den Punkt (150 Blöcke Abstand).
+- Eine Hinweis-Leiste erklärt schwarze Flächen: noch nicht entdeckt, BlueMap rendert gerade, oder einfach noch nicht gerendert.
+- Ist BlueMap nicht erreichbar, steht das groß da (mit „Erneut versuchen“). Die Claim-Karte und alles andere funktionieren trotzdem.
+- Technisch nutzt der Planer nur BlueMaps eigene Adress-Schreibweise `#karte:x:y:z:abstand:…`. BlueMap übernimmt sie ohne Neuladen.
+- BlueMap zeigt den **gerenderten** Stand der Welt. Ganz frisch gebaute Blöcke erscheinen erst, wenn BlueMap den Bereich neu gerendert hat.
 
 > Achtung: BlueMaps eigener Webserver ist standardmäßig **von allen Rechnern im Netzwerk** auf Port 8100 erreichbar und zeigt alles, was gerendert wurde.
 
@@ -172,7 +181,7 @@ Alles liegt im Weltordner unter `world/world-planner/`:
 | `players.json` | Bekannte Spieler (Name ↔ UUID, OP-Status) |
 | `sessions.json` | Web-Logins (nur als Hash gespeichert, nicht das echte Token) |
 
-Gespeichert wird alle paar Sekunden im Hintergrund und beim Stoppen. Ist eine Datei kaputt, benennt die Mod sie in `...kaputt-<Zeit>` um, statt sie zu überschreiben.
+Gespeichert wird alle 5 Sekunden im Hintergrund (entdeckte Chunks jede Minute) und beim Stoppen. Das passiert auch, wenn der Server pausiert, weil niemand online ist. Ist eine Datei kaputt, benennt die Mod sie in `...kaputt-<Zeit>` um, statt sie zu überschreiben.
 
 ---
 

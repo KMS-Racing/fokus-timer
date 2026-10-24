@@ -28,7 +28,8 @@ record PlannerConfig(
         int sessionDays,
         boolean showSeed,
         boolean showOnlinePlayers,
-        boolean blueMapIntegration
+        boolean blueMapIntegration,
+        String webOverrideDir
 ) {
     static PlannerConfig load(Path path, Logger logger) {
         JsonObject json = new JsonObject();
@@ -62,7 +63,8 @@ record PlannerConfig(
                 clamp(integer(json, "sessionDays", 30), 1, 365),
                 bool(json, "showSeed", true),
                 bool(json, "showOnlinePlayers", true),
-                bool(json, "blueMapIntegration", true)
+                bool(json, "blueMapIntegration", true),
+                str(json, "webOverrideDir", "")
         );
 
         if (readable) {
@@ -94,6 +96,7 @@ record PlannerConfig(
         o.addProperty("showSeed", showSeed);
         o.addProperty("showOnlinePlayers", showOnlinePlayers);
         o.addProperty("blueMapIntegration", blueMapIntegration);
+        o.addProperty("webOverrideDir", webOverrideDir);
         return o;
     }
 

@@ -130,6 +130,8 @@ const state = {
   landRender: [], chunkOwner: new Map(),
   selection: new Set(), selecting: false,
   tab: 'claim', framesLoaded: {},
+  blueMapSent: {}, mapTarget: {}, mapStatusClosed: {}, blueMapStatus: null,
+  mapReach: {}, pendingHash: {}, loadingTimer: {},
   layers: { lands: true, markers: true, players: true, grid: true },
   view: { x: 0, z: 0, zoom: 0.5 }, viewRestored: false,
   hover: null,
@@ -218,7 +220,7 @@ async function startApp() {
   restoreView();
   await Promise.all([loadWorld(), loadLands(), loadMarkers(), loadPlayers(), loadKnownPlayers()]);
   await loadDiscovered();
-  if (!state.viewRestored) centerOnMe(false);
+  if (!state.viewRestored && !centerOnMe(false)) await centerOnSpawn();
   resizeCanvas();
   startPolling();
 }
@@ -304,6 +306,7 @@ function startPolling() {
     if (!document.hidden && state.me) fn().catch(() => { /* nächster Versuch */ });
   }, ms));
   every(5000, loadPlayers);
+  every(5000, () => (state.tab === 'live' ? loadBlueMapStatus() : Promise.resolve()));
   every(15000, () => Promise.all([loadLands(), loadMarkers()]));
   every(60000, () => Promise.all([loadDiscovered(), loadMe(), loadKnownPlayers()]));
 }
@@ -633,7 +636,7 @@ function showChunkCard(c) {
     el('div', { class: 'row' },
       canClaim ? el('button', { class: 'primary small', onclick: () => { setSelecting(true); paintChunk(c, true, true); hideChunkCard(); } }, 'Claimen') : null,
       el('button', { class: 'small', onclick: () => { prefillMarker(bx + 8, 64, bz + 8, state.dim); hideChunkCard(); } }, 'Marker hier'),
-      el('button', { class: 'small', onclick: () => showIn3D(bx + 8, 64, bz + 8, 'live') }, 'In 3D zeigen'),
+      el('button', { class: 'small', onclick: () => showIn3D(bx + 8, bz + 8, 'live') }, 'In 3D zeigen'),
     ),
   );
   card.classList.remove('hidden');
@@ -727,7 +730,7 @@ async function removeSelectionFromLand() {
 // ------------------------------------------------------------------ Tabs & 3D-Karten
 const TAB_NOTES = {
   claim: 'Gezeigt werden nur Chunks, in deren Nähe schon ein Spieler war. Länder sind eine Anzeige – im Spiel wird nichts geschützt.',
-  live: 'Die echte Welt, gerendert von BlueMap. Länder und öffentliche Marker erscheinen dort als eigene Ebenen.',
+  live: 'Die echte Welt, gerendert von BlueMap – an derselben Stelle wie die Claim-Karte. Länder und öffentliche Marker sind dort eigene Ebenen.',
   seed: 'Die Seed-Vorschau kommt von einem extra Server mit gleichem Seed. Sie zeigt die ganze Welt – auch Unentdecktes und ohne Gebautes.',
 };
 
@@ -738,7 +741,7 @@ function setTab(tab) {
   $('liveView').classList.toggle('hidden', tab !== 'live');
   $('seedView').classList.toggle('hidden', tab !== 'seed');
   $('tabNote').textContent = TAB_NOTES[tab];
-  if (tab === 'claim') resizeCanvas(); else ensureFrame(tab);
+  if (tab === 'claim') resizeCanvas(); else openMapTab(tab);
 }
 
 function mapUrl(kind) {
@@ -751,33 +754,216 @@ function mapUrl(kind) {
   return '';
 }
 
+// ------------------------------------------------------------------ 3D-Karten (BlueMap)
+// Im Code von BlueMap 5.29 nachgeprüft:
+// - Die Adresse #karte:x:y:z:abstand:drehung:winkel:neigung:ortho:modus wird beim Laden gelesen und bei jeder
+//   Änderung übernommen (BlueMap hört auf "hashchange") – die Karte lädt dafür nicht neu.
+// - Die Kamera hat 75° Blickwinkel. Von oben (winkel 0) sieht man bei Abstand d etwa 1,53 × d Blöcke in der Höhe.
+// - Von oben erlaubt BlueMap höchstens ~2000 Blöcke Abstand (MapControls.getMaxDistanceForPerspectiveAngle).
+const BLUEMAP_FOV_DEG = 75;
+const BLUEMAP_VIEW_RATIO = 2 * Math.tan((BLUEMAP_FOV_DEG / 2) * Math.PI / 180);
+const BLUEMAP_MIN_DISTANCE = 30;
+const BLUEMAP_MAX_DISTANCE = 2000;
+const SHOW_POINT_DISTANCE = 150;
+
+function mapAreaHeight() {
+  return $('mapArea').clientHeight || 600;
+}
+
+/** Welcher BlueMap-Abstand zeigt ungefähr denselben Ausschnitt wie die Claim-Karte? */
+function distanceForZoom(zoom) {
+  const visibleBlocks = mapAreaHeight() / zoom;
+  return Math.round(Math.min(BLUEMAP_MAX_DISTANCE, Math.max(BLUEMAP_MIN_DISTANCE, visibleBlocks / BLUEMAP_VIEW_RATIO)));
+}
+function zoomForDistance(distance) {
+  return Math.min(4, Math.max(0.02, mapAreaHeight() / (distance * BLUEMAP_VIEW_RATIO)));
+}
+
+function claimViewTarget() {
+  return { dim: state.dim, x: Math.round(state.view.x), z: Math.round(state.view.z), distance: distanceForZoom(state.view.zoom) };
+}
+
+function blueMapId(dim) {
+  const ids = (state.me && state.me.maps && state.me.maps.mapIds) || {};
+  return ids[dim];
+}
+
+function blueMapHash(mapId, t) {
+  return `${mapId}:${t.x}:64:${t.z}:${t.distance}:0:0:0:0:perspective`;
+}
+
+/** Hat sich die Claim-Karte seit dem letzten Abgleich so bewegt, dass BlueMap nachziehen soll? */
+function viewChangedSince(sent, t) {
+  if (!sent) return true;
+  if (sent.dim !== t.dim) return true;
+  const moved = Math.hypot(sent.x - t.x, sent.z - t.z);
+  const zoomed = Math.abs(Math.log(t.distance / sent.distance));
+  return moved > t.distance * 0.25 || zoomed > Math.log(1.3);
+}
+
+/**
+ * Öffnet eine 3D-Karte. Sie zeigt dieselbe Stelle wie die Claim-Karte. Hat man sich in BlueMap selbst
+ * bewegt und die Claim-Karte seitdem nicht angefasst, bleibt BlueMap, wo man war.
+ */
+function openMapTab(kind) {
+  const target = claimViewTarget();
+  const mapId = blueMapId(target.dim);
+  const needsMove = !state.framesLoaded[kind] || viewChangedSince(state.blueMapSent[kind], target);
+  const shown = ensureFrame(kind, mapId && needsMove ? blueMapHash(mapId, target) : null);
+  if (shown && mapId && needsMove) {
+    state.blueMapSent[kind] = target;
+    state.mapStatusClosed[kind] = false;
+  }
+  state.mapTarget[kind] = target;
+  updateMapStatus(kind);
+  if (kind === 'live') loadBlueMapStatus().catch(() => { /* Status ist nur ein Extra */ });
+}
+
+/**
+ * Zeigt die 3D-Karte an. Beim ersten Mal wird geprüft, ob BlueMap überhaupt antwortet – sonst gäbe es
+ * nur eine leere Fläche ohne Erklärung. Gibt true zurück, wenn die Karte angezeigt wird (oder gerade lädt).
+ */
 function ensureFrame(kind, hash) {
   const url = safeUrl(mapUrl(kind) || '');
   const frame = $(kind + 'Frame'), empty = $(kind + 'Empty');
-  if (!url) { frame.classList.add('hidden'); empty.classList.remove('hidden'); return false; }
+  if (!url) { frame.classList.add('hidden'); showMapMessage(kind, null); return false; }
   if (location.protocol === 'https:' && url.startsWith('http:')) {
-    fill(empty, el('h2', { text: 'Karte blockiert' }),
-      el('p', { text: 'Diese Seite läuft über https://, die Karte über http://. Browser blockieren das. Der Admin muss BlueMap auch über https:// erreichbar machen.' }));
-    frame.classList.add('hidden'); empty.classList.remove('hidden');
+    showMapMessage(kind, 'Karte blockiert', 'Diese Seite läuft über https://, die Karte über http://. Browser blockieren das. Der Admin muss BlueMap auch über https:// erreichbar machen.');
     return false;
   }
-  frame.classList.remove('hidden');
-  empty.classList.add('hidden');
-  if (hash || !state.framesLoaded[kind]) {
-    frame.src = hash ? url.split('#')[0] + '#' + hash : url;
-    state.framesLoaded[kind] = true;
+  if (hash) state.pendingHash[kind] = hash;
+  const reach = state.mapReach[kind];
+  if (reach === 'ok') {
+    empty.classList.add('hidden');
+    frame.classList.remove('hidden');
+    if (state.pendingHash[kind] || !state.framesLoaded[kind]) {
+      const h = state.pendingHash[kind];
+      if (!state.framesLoaded[kind]) startLoadingOverlay(kind);
+      frame.src = h ? url.split('#')[0] + '#' + h : url;
+      state.framesLoaded[kind] = true;
+      state.pendingHash[kind] = null;
+    }
+    return true;
   }
+  if (reach !== 'checking') probeMap(kind, url);
   return true;
 }
 
-/** Öffnet BlueMap genau an dieser Stelle (BlueMap-Adressformat: #karte:x:y:z:abstand:drehung:winkel:neigung:ortho:modus). */
-function showIn3D(x, y, z, kind = 'live') {
-  const ids = (state.me && state.me.maps && state.me.maps.mapIds) || {};
-  const mapId = ids[state.dim];
+/** Fragt BlueMap einmal an. "no-cors" reicht: Wir wollen nur wissen, ob überhaupt jemand antwortet. */
+async function probeMap(kind, url) {
+  state.mapReach[kind] = 'checking';
+  $(kind + 'Frame').classList.add('hidden');
+  $(kind + 'Empty').classList.add('hidden'); // alte Fehlermeldung weg, solange neu geprüft wird
+  showMapLoading(kind, '3D-Karte wird geprüft …');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 6000);
+  let result = 'ok';
+  try {
+    await fetch(url, { mode: 'no-cors', cache: 'no-store', signal: ctrl.signal });
+  } catch {
+    result = ctrl.signal.aborted ? 'timeout' : 'unreachable';
+  } finally {
+    clearTimeout(timer);
+  }
+  hideMapLoading(kind);
+  state.mapReach[kind] = result;
+  if (result === 'ok') {
+    if (state.tab === kind) {
+      ensureFrame(kind);
+      updateMapStatus(kind);
+    }
+    return;
+  }
+  const name = kind === 'live' ? 'Die Live-Karte (BlueMap)' : 'Die Seed-Vorschau';
+  showMapMessage(kind, result === 'timeout' ? 'BlueMap antwortet nicht' : 'BlueMap ist nicht erreichbar',
+    `${name} unter ${url} ${result === 'timeout' ? 'hat nicht innerhalb von 6 Sekunden geantwortet' : 'ist gerade nicht erreichbar'}. ` +
+    'Läuft der Server mit BlueMap? Ist die Adresse richtig? Die Claim-Karte und alles andere funktionieren trotzdem.', true);
+}
+
+function showMapMessage(kind, title, text, retry) {
+  const empty = $(kind + 'Empty');
+  $(kind + 'Frame').classList.add('hidden');
+  $(kind + 'Status').classList.add('hidden');
+  if (title) {
+    fill(empty, el('h2', { text: title }), el('p', { text }),
+      retry ? el('button', { class: 'primary', onclick: () => { state.mapReach[kind] = null; ensureFrame(kind); } }, 'Erneut versuchen') : null);
+  } else {
+    fill(empty, el('h2', { text: kind === 'live' ? 'Keine Live-Karte eingerichtet' : 'Keine Seed-Vorschau eingerichtet' }),
+      el('p', { text: kind === 'live'
+        ? 'Der Admin kann in config/world-planner.json bei liveMapUrl die BlueMap-Adresse eintragen.'
+        : 'Der Admin kann in config/world-planner.json bei seedMapUrl die BlueMap-Adresse des Vorschau-Servers eintragen.' }));
+  }
+  empty.classList.remove('hidden');
+}
+
+function showMapLoading(kind, text) {
+  const box = $(kind + 'Loading');
+  box.textContent = text;
+  box.classList.remove('hidden');
+}
+function hideMapLoading(kind) {
+  $(kind + 'Loading').classList.add('hidden');
+  clearTimeout(state.loadingTimer[kind]);
+}
+
+/** Ladeanzeige bis das iframe fertig ist – aber nie endlos: nach 15 Sekunden kommt ein Hinweis. */
+function startLoadingOverlay(kind) {
+  showMapLoading(kind, '3D-Karte wird geladen …');
+  clearTimeout(state.loadingTimer[kind]);
+  state.loadingTimer[kind] = setTimeout(() => {
+    hideMapLoading(kind);
+    toast('Die 3D-Karte lädt ungewöhnlich lange. Eventuell ist der Server gerade stark beschäftigt.', true);
+  }, 15000);
+}
+
+/** Öffnet BlueMap nah an diesem Punkt – und stellt die Claim-Karte auf dieselbe Stelle, damit beide zusammenpassen. */
+function showIn3D(x, z, kind = 'live') {
   if (!mapUrl(kind)) { toast('Der Admin hat noch keine 3D-Karte eingerichtet.', true); return; }
-  if (!mapId) { toast('Für ' + dimName(state.dim) + ' ist keine BlueMap-Karte eingestellt.', true); return; }
+  if (!blueMapId(state.dim)) { toast('Für ' + dimName(state.dim) + ' ist keine BlueMap-Karte eingestellt.', true); return; }
+  centerOn(x, z, zoomForDistance(SHOW_POINT_DISTANCE));
+  state.blueMapSent[kind] = null; // erzwingt die Fahrt – auch wenn man sich in BlueMap vorher selbst bewegt hat
   setTab(kind);
-  ensureFrame(kind, `${mapId}:${Math.round(x)}:${Math.round(y)}:${Math.round(z)}:150:0:0:0:0:perspective`);
+}
+
+async function loadBlueMapStatus() {
+  state.blueMapStatus = await api('api/bluemap-status');
+  if (state.tab === 'live') updateMapStatus('live');
+}
+
+/** Hinweis-Leiste über der 3D-Karte: erklärt schwarze Flächen, statt sie wie einen Fehler wirken zu lassen. */
+function updateMapStatus(kind) {
+  const box = $(kind + 'Status');
+  const target = state.mapTarget[kind];
+  if (!box) return;
+  // Nur zeigen, wenn die Karte wirklich da ist – bei "nicht erreichbar" steht die Erklärung schon groß in der Mitte.
+  if (!target || !safeUrl(mapUrl(kind) || '') || state.mapStatusClosed[kind] || state.mapReach[kind] !== 'ok') {
+    box.classList.add('hidden');
+    return;
+  }
+  const lines = [];
+  if (!blueMapId(target.dim)) {
+    lines.push({ warn: true, text: `Für ${dimName(target.dim)} kennt der Planer keine BlueMap-Karte – BlueMap zeigt deshalb die letzte Karte. Der Admin kann sie in blueMapIds eintragen.` });
+  }
+  if (kind === 'live') {
+    const cx = Math.floor(target.x / 16), cz = Math.floor(target.z / 16);
+    if (target.dim === state.dim && state.discoveredCount > 0 && !isDiscovered(cx, cz)) {
+      lines.push({ warn: true, text: 'Hier war noch niemand: Dieser Teil der Welt ist noch nicht erzeugt, darum ist die 3D-Karte hier schwarz. Auf der Claim-Karte sind entdeckte Gebiete grau.' });
+    }
+    const st = state.blueMapStatus;
+    if (st && st.available && st.renderQueue > 0) {
+      lines.push({ text: `⏳ BlueMap rendert gerade (${st.renderQueue} ${st.renderQueue === 1 ? 'Aufgabe' : 'Aufgaben'} in der Warteschlange). Neue Gebiete erscheinen nach und nach.` });
+    } else if (st && st.available && st.paused) {
+      lines.push({ warn: true, text: 'BlueMap rendert auf dem Server gerade nicht (pausiert). Ein Admin kann es mit /bluemap start fortsetzen.' });
+    }
+  } else {
+    lines.push({ text: 'Die Vorschau zeigt nur, was auf dem Vorschau-Server erzeugt und gerendert wurde.' });
+  }
+  lines.push({ small: true, text: 'Schwarze Flächen = dort ist (noch) nichts gerendert. Das ist kein Fehler.' });
+  fill(box,
+    el('div', { class: 'grow' }, ...lines.map(l => el('div', { class: l.small ? 'small muted' : l.warn ? 'warn' : '', text: l.text }))),
+    el('button', { class: 'small', 'aria-label': 'Hinweis schließen', onclick: () => { state.mapStatusClosed[kind] = true; box.classList.add('hidden'); } }, '×'),
+  );
+  box.classList.remove('hidden');
 }
 
 async function setDimension(dim) {
@@ -791,6 +977,7 @@ async function setDimension(dim) {
   saveViewSoon();
   requestDraw();
   await act(loadDiscovered);
+  if (state.tab !== 'claim') openMapTab(state.tab);
 }
 
 // ------------------------------------------------------------------ Seitenleiste: Länder
@@ -1041,10 +1228,19 @@ function myPlayer() {
 
 function centerOnMe(complain = true) {
   const p = myPlayer();
-  if (!p) { if (complain) toast('Du bist gerade nicht auf dem Server.', true); return; }
+  if (!p) { if (complain) toast('Du bist gerade nicht auf dem Server.', true); return false; }
   setTab('claim');
   const go = () => centerOn(p.x, p.z, Math.max(state.view.zoom, 0.8));
   if (p.dimension !== state.dim) setDimension(p.dimension).then(go); else go();
+  return true;
+}
+
+/** Startpunkt, wenn es keine gespeicherte Ansicht gibt und man nicht online ist: der Spawn statt 0/0. */
+async function centerOnSpawn() {
+  const sp = state.world && state.world.spawn;
+  if (!sp) return;
+  if (sp.dimension !== state.dim) await setDimension(sp.dimension);
+  centerOn(sp.x, sp.z, 0.8);
 }
 
 function renderPlayers() {
@@ -1094,6 +1290,7 @@ function setupUi() {
   });
 
   document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+  ['live', 'seed'].forEach(kind => $(kind + 'Frame').addEventListener('load', () => hideMapLoading(kind)));
   $('dimSelect').addEventListener('change', e => setDimension(e.target.value));
   document.querySelectorAll('[data-layer]').forEach(cb => cb.addEventListener('change', () => {
     state.layers[cb.dataset.layer] = cb.checked;

@@ -55,7 +55,7 @@
       <select id="dimSelect" aria-label="Dimension"></select>
     </div>
 
-    <div class="map-area">
+    <div class="map-area" id="mapArea">
       <div id="claimView" class="view">
         <canvas id="mapCanvas" aria-label="Claim-Karte"></canvas>
         <div class="map-toolbar">
@@ -83,10 +83,14 @@
       </div>
       <div id="liveView" class="view hidden">
         <iframe id="liveFrame" class="hidden" title="BlueMap Live-Welt" referrerpolicy="no-referrer"></iframe>
+        <div id="liveStatus" class="map-status hidden" role="status"></div>
+        <div id="liveLoading" class="map-loading hidden" role="status"></div>
         <div class="map-empty" id="liveEmpty"><h2>Keine Live-Karte eingerichtet</h2><p>Der Admin kann in <code>config/world-planner.json</code> bei <code>liveMapUrl</code> die BlueMap-Adresse eintragen.</p></div>
       </div>
       <div id="seedView" class="view hidden">
         <iframe id="seedFrame" class="hidden" title="BlueMap Seed-Vorschau" referrerpolicy="no-referrer"></iframe>
+        <div id="seedStatus" class="map-status hidden" role="status"></div>
+        <div id="seedLoading" class="map-loading hidden" role="status"></div>
         <div class="map-empty" id="seedEmpty"><h2>Keine Seed-Vorschau eingerichtet</h2><p>Der Admin kann in <code>config/world-planner.json</code> bei <code>seedMapUrl</code> die BlueMap-Adresse des Vorschau-Servers eintragen.</p></div>
       </div>
     </div>

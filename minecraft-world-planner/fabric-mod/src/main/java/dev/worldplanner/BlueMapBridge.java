@@ -1,6 +1,7 @@
 package dev.worldplanner;
 
 import com.flowpowered.math.vector.Vector2d;
+import com.google.gson.JsonObject;
 import de.bluecolored.bluemap.api.BlueMapAPI;
 import de.bluecolored.bluemap.api.markers.MarkerSet;
 import de.bluecolored.bluemap.api.markers.POIMarker;
@@ -34,6 +35,7 @@ final class BlueMapBridge {
     private final MarkerStore markers;
     private final PlayerDirectory players;
     private final AtomicReference<Map<String, String>> detectedMapIds;
+    private final AtomicReference<JsonObject> status;
     private final Consumer<BlueMapAPI> onEnable = api -> this.api = api;
     private final Consumer<BlueMapAPI> onDisable = api -> this.api = null;
     private volatile BlueMapAPI api;
@@ -42,12 +44,13 @@ final class BlueMapBridge {
     private long drawnMarkerVersion = -1;
 
     BlueMapBridge(Logger logger, LandStore lands, MarkerStore markers, PlayerDirectory players,
-                  AtomicReference<Map<String, String>> detectedMapIds) {
+                  AtomicReference<Map<String, String>> detectedMapIds, AtomicReference<JsonObject> status) {
         this.logger = logger;
         this.lands = lands;
         this.markers = markers;
         this.players = players;
         this.detectedMapIds = detectedMapIds;
+        this.status = status;
         BlueMapAPI.onEnable(onEnable);
         BlueMapAPI.onDisable(onDisable);
     }
@@ -55,6 +58,7 @@ final class BlueMapBridge {
     /** Wird einmal pro Sekunde auf dem Server-Thread aufgerufen. Zeichnet nur neu, wenn sich etwas geändert hat. */
     void tick(MinecraftServer server) {
         BlueMapAPI current = api;
+        updateStatus(current);
         if (current == null) return;
         long landVersion = lands.version();
         long markerVersion = markers.version();
@@ -124,6 +128,29 @@ final class BlueMapBridge {
             }));
         }
         detectedMapIds.set(Map.copyOf(mapIds));
+    }
+
+    /**
+     * Wie weit ist BlueMap mit dem Rendern? Die Webseite zeigt das an, damit schwarze Flächen
+     * nicht wie ein Fehler aussehen. (BlueMap verrät nur die Länge der Warteschlange, nicht welche Gebiete fertig sind.)
+     */
+    private void updateStatus(BlueMapAPI current) {
+        if (current == null) {
+            status.set(PlannerServices.blueMapUnavailable());
+            return;
+        }
+        JsonObject o = new JsonObject();
+        o.addProperty("available", true);
+        try {
+            int queue = current.getRenderManager().renderQueueSize();
+            o.addProperty("renderQueue", queue);
+            o.addProperty("renderThreads", current.getRenderManager().renderThreadCount());
+            o.addProperty("rendering", current.getRenderManager().isRunning() && queue > 0);
+            o.addProperty("paused", !current.getRenderManager().isRunning());
+        } catch (Exception e) {
+            o.addProperty("renderQueue", -1);
+        }
+        status.set(o);
     }
 
     void close() {

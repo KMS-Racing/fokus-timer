@@ -23,6 +23,20 @@ Der Webserver läuft in eigenen Threads und benutzt deshalb nur:
 im Hintergrund-Thread gespeichert, beim Stoppen noch einmal direkt. Dateien werden erst als `.tmp` geschrieben und
 dann umbenannt, damit bei einem Absturz keine halbe Datei übrig bleibt.
 
+**Timer statt Ticks:** Ein leerer Server pausiert nach 60 Sekunden. Dann gibt es keine Ticks mehr. Deshalb laufen
+Speichern und BlueMap-Updates über einen eigenen Timer-Thread (`world-planner-timer`). Das BlueMap-Update liest
+Minecraft-Welten und wird darum per `server.execute()` auf den Server-Thread gereicht. Das arbeitet der Server auch in
+der Pause ab (getestet: neues Land war nach 2 s in BlueMap und nach 4 s auf der Festplatte). Über Ticks laufen nur noch
+Dinge, die Spieler brauchen (entdeckte Chunks, Spielerpositionen). Ohne Spieler sind die ohnehin egal.
+
+**BlueMap-Abgleich (Webseite):** BlueMap 5.29 liest die Adresse `#karte:x:y:z:abstand:drehung:winkel:neigung:ortho:modus`
+beim Laden und bei jedem `hashchange`. Die Kamera hat 75° Blickwinkel, von oben sieht man bei Abstand d also etwa
+1,53 × d Blöcke. Darüber rechnet `distanceForZoom()` den Zoom der Claim-Karte um (begrenzt auf 30–2000, BlueMaps Grenze
+von oben). Der Test `tests/integration/bluemap_sync_test.js` misst die echte Kamera im iframe nach.
+
+**Sicherheitsregel (CSP):** Die Webseite darf nur eigene Skripte laden. Als iframe und für die Erreichbarkeits-Prüfung
+sind nur die BlueMap-Adressen erlaubt (`liveMapUrl`, `seedMapUrl` oder automatisch `http://<host>:8100`).
+
 ## Dateien im Code
 
 | Datei | Aufgabe |
@@ -52,7 +66,7 @@ Chunk-Listen sind flach: `[x0, z0, x1, z1, ...]` (Chunk-Koordinaten, also Block 
 | POST | `/api/login` | `{code}` | `{token, uuid, name}` |
 | POST | `/api/logout` | – | `{ok}` |
 | GET | `/api/me` | – | Name, Admin, Chunk-Verbrauch, Limits, Karten-URLs |
-| GET | `/api/world` | – | Version, Seed (Text), Weltname, Dimensionen |
+| GET | `/api/world` | – | Version, Seed (Text), Weltname, Dimensionen, Spawn `{dimension, x, y, z}` |
 | GET | `/api/players` | – | Online-Spieler mit Position |
 | GET | `/api/discovered?dimension=…` | – | `{dimension, chunks:[…]}` |
 | GET | `/api/lands` | – | alle Länder (Einladungslisten nur für Besitzer/Admins) |
@@ -67,6 +81,7 @@ Chunk-Listen sind flach: `[x0, z0, x1, z1, ...]` (Chunk-Koordinaten, also Block 
 | POST | `/api/markers` | `{name, type, dimension, x, y, z, notes, public}` | `{ok, id}` |
 | POST | `/api/markers/{id}/edit` · `/delete` | wie oben / – | `{ok}` |
 | GET | `/api/known-players` | – | Namen für die Einladen-Vorschläge |
+| GET | `/api/bluemap-status` | – | `{available, renderQueue, renderThreads, rendering, paused}` von BlueMaps Render-Schnittstelle |
 
 Marker-Typen: `city`, `base`, `road`, `farm`, `resource`, `portal`, `other`.
 

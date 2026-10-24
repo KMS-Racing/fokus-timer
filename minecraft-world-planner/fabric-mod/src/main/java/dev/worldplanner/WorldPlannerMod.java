@@ -14,6 +14,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.storage.LevelData;
 import net.minecraft.world.level.storage.LevelResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +25,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -40,8 +43,10 @@ public final class WorldPlannerMod implements ModInitializer {
 
     private volatile PlannerServices services;
     private ApiServer api;
-    private BlueMapBridge blueMap;
+    private volatile BlueMapBridge blueMap;
     private ExecutorService saver;
+    private ScheduledExecutorService timer;
+    private final AtomicBoolean blueMapUpdateQueued = new AtomicBoolean();
     private long tick;
 
     @Override
@@ -68,7 +73,8 @@ public final class WorldPlannerMod implements ModInitializer {
         LandStore lands = new LandStore(data.resolve("lands.json"), LOGGER, discovery, players, config);
         MarkerStore markers = new MarkerStore(data.resolve("markers.json"), LOGGER, players, config);
         services = new PlannerServices(config, players, sessions, discovery, lands, markers,
-                new AtomicReference<>(new JsonObject()), new AtomicReference<>(emptyPlayers()), new AtomicReference<>(Map.of()));
+                new AtomicReference<>(new JsonObject()), new AtomicReference<>(emptyPlayers()), new AtomicReference<>(Map.of()),
+                new AtomicReference<>(PlannerServices.blueMapUnavailable()));
         saver = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "world-planner-save");
             t.setDaemon(true);
@@ -83,17 +89,11 @@ public final class WorldPlannerMod implements ModInitializer {
         for (ServerLevel level : server.getAllLevels()) dimensions.add(dimensionId(level));
         s.lands().setKnownDimensions(dimensions);
         s.markers().setKnownDimensions(dimensions);
+        s.worldSnapshot().set(worldSnapshot(server));
 
-        // Diese Werte ändern sich während der Laufzeit nicht – einmal reicht.
-        JsonObject world = new JsonObject();
-        world.addProperty("minecraftVersion", SharedConstants.getCurrentVersion().name());
-        world.addProperty("seed", String.valueOf(server.overworld().getSeed())); // als Text: JavaScript kann so große Zahlen nicht exakt
-        world.addProperty("worldName", server.getWorldData().getLevelName());
-        JsonArray dims = new JsonArray();
-        dimensions.forEach(dims::add);
-        world.add("dimensions", dims);
-        s.worldSnapshot().set(world);
-
+        if (!s.config().webOverrideDir().isBlank()) {
+            LOGGER.warn("[World Planner] Webseite kommt aus dem Ordner {} statt aus der Mod (webOverrideDir).", s.config().webOverrideDir());
+        }
         api = new ApiServer(LOGGER, s);
         try {
             api.start();
@@ -104,8 +104,47 @@ public final class WorldPlannerMod implements ModInitializer {
         }
 
         if (s.config().blueMapIntegration() && FabricLoader.getInstance().isModLoaded("bluemap")) {
-            blueMap = new BlueMapBridge(LOGGER, s.lands(), s.markers(), s.players(), s.detectedBlueMapIds());
+            blueMap = new BlueMapBridge(LOGGER, s.lands(), s.markers(), s.players(), s.detectedBlueMapIds(), s.blueMapStatus());
             LOGGER.info("[World Planner] BlueMap gefunden – Länder und Marker werden auf der 3D-Karte angezeigt.");
+        }
+
+        // Ein leerer Server pausiert nach 60 Sekunden – dann gibt es keine Ticks mehr. Speichern und BlueMap
+        // dürfen davon nicht abhängen, sonst würden nachts über die Webseite geänderte Länder weder gespeichert
+        // noch in BlueMap gezeigt. Deshalb ein eigener Timer.
+        timer = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "world-planner-timer");
+            t.setDaemon(true);
+            return t;
+        });
+        timer.scheduleWithFixedDelay(() -> safely(() -> saveAsync(s, false)), 5, 5, TimeUnit.SECONDS);
+        timer.scheduleWithFixedDelay(() -> safely(() -> {
+            saveAsync(s, true);
+            s.sessions().cleanup();
+        }), 60, 60, TimeUnit.SECONDS);
+        timer.scheduleWithFixedDelay(() -> safely(() -> queueBlueMapUpdate(server)), 1, 1, TimeUnit.SECONDS);
+    }
+
+    /**
+     * BlueMap-Update auf dem Server-Thread ausführen (es liest Minecraft-Welten). server.execute() wird auch
+     * im Pause-Zustand abgearbeitet. Es steht höchstens ein Auftrag gleichzeitig in der Schlange.
+     */
+    private void queueBlueMapUpdate(MinecraftServer server) {
+        if (blueMap == null || !blueMapUpdateQueued.compareAndSet(false, true)) return;
+        server.execute(() -> {
+            try {
+                BlueMapBridge bridge = blueMap;
+                if (bridge != null) bridge.tick(server);
+            } finally {
+                blueMapUpdateQueued.set(false);
+            }
+        });
+    }
+
+    private static void safely(Runnable task) {
+        try {
+            task.run();
+        } catch (Exception e) {
+            LOGGER.warn("[World Planner] Hintergrund-Aufgabe fehlgeschlagen: {}", e.toString());
         }
     }
 
@@ -114,23 +153,30 @@ public final class WorldPlannerMod implements ModInitializer {
         if (s == null) return;
         tick++;
 
+        // Nur was Spieler braucht, läuft über Ticks (ohne Spieler pausiert der Server ohnehin).
         if (tick % 20 == 0) { // jede Sekunde
             int radius = Math.min(s.config().discoverRadiusChunks(), server.getPlayerList().getViewDistance());
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 s.players().seen(player.getUUID(), player.getGameProfile().name(), isAdmin(player));
                 s.discovery().markArea(dimensionId(player.level()), player.chunkPosition().x(), player.chunkPosition().z(), radius);
             }
-            if (blueMap != null) blueMap.tick(server);
         }
-        if (tick % 40 == 0) s.playersSnapshot().set(playersSnapshot(server)); // alle 2 Sekunden
-        if (tick % 100 == 0) saveAsync(s, false); // alle 5 Sekunden (nur was sich geändert hat)
-        if (tick % 1200 == 0) { // jede Minute
-            saveAsync(s, true);
-            s.sessions().cleanup();
+        if (tick % 40 == 0) { // alle 2 Sekunden
+            s.playersSnapshot().set(playersSnapshot(server));
+            s.worldSnapshot().set(worldSnapshot(server)); // der Spawn kann sich mit /setworldspawn ändern
         }
     }
 
     private void onStopping(MinecraftServer server) {
+        if (timer != null) {
+            timer.shutdownNow();
+            try {
+                timer.awaitTermination(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            timer = null;
+        }
         if (api != null) api.stop();
         api = null;
         if (blueMap != null) blueMap.close();
@@ -170,6 +216,25 @@ public final class WorldPlannerMod implements ModInitializer {
             LOGGER.error("[World Planner] Konnte {} nicht speichern: {}", store.path, e.getMessage());
             store.markDirty(); // beim nächsten Mal nochmal versuchen
         }
+    }
+
+    private static JsonObject worldSnapshot(MinecraftServer server) {
+        JsonObject world = new JsonObject();
+        world.addProperty("minecraftVersion", SharedConstants.getCurrentVersion().name());
+        world.addProperty("seed", String.valueOf(server.overworld().getSeed())); // als Text: JavaScript kann so große Zahlen nicht exakt
+        world.addProperty("worldName", server.getWorldData().getLevelName());
+        JsonArray dims = new JsonArray();
+        for (ServerLevel level : server.getAllLevels()) dims.add(dimensionId(level));
+        world.add("dimensions", dims);
+        // Startpunkt für die Karten, wenn man selbst nicht online ist
+        LevelData.RespawnData respawn = server.overworld().getRespawnData();
+        JsonObject spawn = new JsonObject();
+        spawn.addProperty("dimension", respawn.dimension().identifier().toString());
+        spawn.addProperty("x", respawn.pos().getX());
+        spawn.addProperty("y", respawn.pos().getY());
+        spawn.addProperty("z", respawn.pos().getZ());
+        world.add("spawn", spawn);
+        return world;
     }
 
     private static JsonObject playersSnapshot(MinecraftServer server) {

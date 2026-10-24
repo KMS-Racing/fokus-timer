@@ -10,6 +10,10 @@ import com.sun.net.httpserver.HttpServer;
 import org.slf4j.Logger;
 
 import java.io.ByteArrayOutputStream;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.net.URISyntaxException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
@@ -17,11 +21,16 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Pattern;
 
 /**
  * Kleiner HTTP-Server: liefert die Webseite aus und beantwortet die API unter /api/...
@@ -31,30 +40,53 @@ import java.util.concurrent.Executors;
 final class ApiServer {
     private static final int MAX_BODY_BYTES = 256 * 1024;
     private static final int MAX_CHUNK_COORD = 1_875_000; // 30 Mio. Blöcke / 16
-    private static final Map<String, String> STATIC_FILES = Map.of(
-            "index.html", "text/html; charset=utf-8",
-            "app.js", "text/javascript; charset=utf-8",
-            "style.css", "text/css; charset=utf-8"
+    /** Webdateien: nur Kleinbuchstaben, Ziffern, _ und - in Pfaden – so sind "../"-Tricks unmöglich. */
+    private static final Pattern STATIC_PATH = Pattern.compile("[a-z0-9_-]+(/[a-z0-9_-]+)*\\.(html|js|css|svg)");
+    private static final Map<String, String> MIME = Map.of(
+            "html", "text/html; charset=utf-8",
+            "js", "text/javascript; charset=utf-8",
+            "css", "text/css; charset=utf-8",
+            "svg", "image/svg+xml"
     );
-    private static final String CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
-            + "connect-src 'self'; frame-src http: https:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+    private static final Pattern HOST = Pattern.compile("[A-Za-z0-9.-]{1,253}|\\[[0-9A-Fa-f:.]{2,45}]");
+    private static final int BLUEMAP_DEFAULT_PORT = 8100;
 
     private final Logger logger;
     private final PlannerServices s;
-    private final Map<String, byte[]> staticContent = new HashMap<>();
+    private final Map<String, Optional<byte[]>> staticContent = new ConcurrentHashMap<>();
     private HttpServer http;
     private ExecutorService executor;
 
     ApiServer(Logger logger, PlannerServices services) {
         this.logger = logger;
         this.s = services;
-        for (String name : STATIC_FILES.keySet()) {
-            try (InputStream in = ApiServer.class.getResourceAsStream("/world_planner_web/" + name)) {
-                if (in != null) staticContent.put(name, in.readAllBytes());
+    }
+
+    /**
+     * Lädt eine Webdatei aus der Mod-Jar (und merkt sie sich, die Jar ändert sich ja nicht).
+     * Ist in der Config "webOverrideDir" gesetzt, kommt sie stattdessen frisch aus diesem Ordner
+     * (zum Entwickeln oder Anpassen der Seite ohne neu zu bauen).
+     */
+    private byte[] staticFile(String name) {
+        String override = s.config().webOverrideDir();
+        if (!override.isBlank()) {
+            Path base = Path.of(override).toAbsolutePath().normalize();
+            Path file = base.resolve(name).normalize();
+            if (!file.startsWith(base)) return null;
+            try {
+                return Files.isRegularFile(file) ? Files.readAllBytes(file) : null;
             } catch (IOException e) {
-                logger.warn("[World Planner] Webdatei {} fehlt: {}", name, e.getMessage());
+                return null;
             }
         }
+        return staticContent.computeIfAbsent(name, n -> {
+            try (InputStream in = ApiServer.class.getResourceAsStream("/world_planner_web/" + n)) {
+                return in == null ? Optional.empty() : Optional.of(in.readAllBytes());
+            } catch (IOException e) {
+                logger.warn("[World Planner] Webdatei {} nicht lesbar: {}", n, e.getMessage());
+                return Optional.empty();
+            }
+        }).orElse(null);
     }
 
     void start() throws IOException {
@@ -145,6 +177,7 @@ final class ApiServer {
                 case "lands": return lands(me, admin);
                 case "markers": return markers(me, admin);
                 case "known-players": return knownPlayers();
+                case "bluemap-status": return s.blueMapStatus().get();
                 default: break;
             }
         }
@@ -306,7 +339,7 @@ final class ApiServer {
             return;
         }
         String name = seg.isEmpty() ? "index.html" : String.join("/", seg);
-        byte[] content = staticContent.get(name);
+        byte[] content = STATIC_PATH.matcher(name).matches() ? staticFile(name) : null;
         if (content == null) {
             byte[] msg = "Nicht gefunden".getBytes(StandardCharsets.UTF_8);
             h.set("Content-Type", "text/plain; charset=utf-8");
@@ -314,12 +347,50 @@ final class ApiServer {
             ex.getResponseBody().write(msg);
             return;
         }
-        h.set("Content-Type", STATIC_FILES.get(name));
+        h.set("Content-Type", MIME.get(name.substring(name.lastIndexOf('.') + 1)));
         h.set("Cache-Control", "no-cache");
-        h.set("Content-Security-Policy", CSP);
+        h.set("Content-Security-Policy", contentSecurityPolicy(ex));
         h.set("X-Frame-Options", "DENY");
         ex.sendResponseHeaders(200, content.length);
         ex.getResponseBody().write(content);
+    }
+
+    /**
+     * Strenge Sicherheitsregel für die Webseite. Nur die BlueMap-Adressen dürfen eingebettet und
+     * (für die Erreichbarkeits-Prüfung) angefragt werden – nicht beliebige fremde Seiten.
+     */
+    private String contentSecurityPolicy(HttpExchange ex) {
+        Set<String> maps = new LinkedHashSet<>();
+        origin(s.config().liveMapUrl()).ifPresent(maps::add);
+        origin(s.config().seedMapUrl()).ifPresent(maps::add);
+        if (s.config().liveMapUrl().isBlank() && !s.detectedBlueMapIds().get().isEmpty()) {
+            // Die Webseite probiert dann BlueMaps Standard-Port auf demselben Rechner (siehe app.js mapUrl()).
+            String host = ex.getRequestHeaders().getFirst("Host");
+            if (host != null) {
+                String hostname = host.startsWith("[") ? host.substring(0, host.indexOf(']') + 1) : host.split(":")[0];
+                if (HOST.matcher(hostname).matches()) maps.add("http://" + hostname + ":" + BLUEMAP_DEFAULT_PORT);
+            }
+        }
+        String mapList = String.join(" ", maps);
+        return "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+                + "connect-src 'self'" + (mapList.isEmpty() ? "" : " " + mapList) + "; "
+                + "frame-src " + (mapList.isEmpty() ? "'none'" : mapList) + "; "
+                + "base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+    }
+
+    /** "https://karte.example.de:8443/pfad" → "https://karte.example.de:8443" – oder leer, wenn ungültig. */
+    static Optional<String> origin(String url) {
+        if (url == null || url.isBlank()) return Optional.empty();
+        try {
+            URI uri = new URI(url.trim());
+            String scheme = uri.getScheme();
+            String host = uri.getHost();
+            if (scheme == null || host == null || !(scheme.equals("http") || scheme.equals("https"))) return Optional.empty();
+            if (!HOST.matcher(host).matches()) return Optional.empty();
+            return Optional.of(scheme + "://" + host + (uri.getPort() > 0 ? ":" + uri.getPort() : ""));
+        } catch (URISyntaxException e) {
+            return Optional.empty();
+        }
     }
 
     private void addApiHeaders(HttpExchange ex) {
