@@ -20,7 +20,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 /**
  * Alle Länder (Claims) auf dem Server. Ein Land besteht aus zusammenhängenden Chunks
@@ -29,19 +28,21 @@ import java.util.regex.Pattern;
  * Regeln:
  * - Jeder Besitzer darf einladen. Der Eingeladene muss annehmen.
  * - Niemand kann einen anderen Besitzer rauswerfen – man kann nur selbst austreten.
- *   Nur Admins können Besitzer entfernen oder Länder löschen.
+ *   Löschen darf ein Besitzer nur, wenn er der einzige ist. Nur Admins können Besitzer entfernen.
  * - Tritt der letzte Besitzer aus, wird das Land frei.
+ * - Ein Land kann einem Team zugeordnet werden (von einem Besitzer, der im Team ist). Die Besitzer bleiben
+ *   die einzigen, die das Land ändern dürfen – das Team zeigt es nur auf seiner Seite und kann Projekte verknüpfen.
+ * - Überschneidungen gibt es nicht: Jeder Chunk gehört höchstens einem Land (wird hier erzwungen).
  * - Claims sind nur eine Anzeige: Im Spiel wird nichts geschützt.
  */
 final class LandStore extends JsonStore {
-    private static final Pattern NAME = Pattern.compile("[\\p{L}\\p{N} _\\-]{2,24}");
-    private static final Pattern COLOR = Pattern.compile("#[0-9a-fA-F]{6}");
     private static final String[] PALETTE = {
             "#e57373", "#64b5f6", "#81c784", "#ffb74d", "#ba68c8",
             "#4dd0e1", "#f06292", "#aed581", "#ffd54f", "#90a4ae"
     };
     private static final int MAX_CHUNKS_PER_REQUEST = 512;
     private static final int MAX_PENDING_INVITES = 10;
+    private static final int SCHEMA = 2;
 
     private static final class Land {
         final String id;
@@ -49,7 +50,10 @@ final class LandStore extends JsonStore {
         final String dimension;
         String color;
         String description = "";
+        String notes = "";
+        String teamId;
         final long createdAt;
+        long updatedAt; // 0 = unbekannt (Länder aus Version 1)
         final UUID createdBy;
         final LinkedHashSet<UUID> owners = new LinkedHashSet<>();
         final LinkedHashSet<UUID> invites = new LinkedHashSet<>();
@@ -67,13 +71,14 @@ final class LandStore extends JsonStore {
 
     /** Unveränderliche Kopie eines Landes, z. B. für BlueMap. */
     record LandView(String id, String name, String dimension, String color, String description,
-                    List<UUID> owners, long[] chunks) {}
+                    List<UUID> owners, long[] chunks, String teamId) {}
 
     private final Map<String, Land> lands = new LinkedHashMap<>();
     private final Map<String, Long2ObjectOpenHashMap<Land>> chunkIndex = new HashMap<>();
     private final DiscoveryTracker discovery;
     private final PlayerDirectory players;
     private final PlannerConfig config;
+    private TeamStore teams;
     private volatile Set<String> knownDimensions = Set.of();
 
     LandStore(Path path, Logger logger, DiscoveryTracker discovery, PlayerDirectory players, PlannerConfig config) {
@@ -83,6 +88,7 @@ final class LandStore extends JsonStore {
         this.config = config;
         JsonElement json = readOrBackup(logger);
         if (json != null && json.isJsonObject() && json.getAsJsonObject().has("lands")) {
+            backupBeforeMigration(logger, json.getAsJsonObject(), SCHEMA);
             for (JsonElement el : json.getAsJsonObject().getAsJsonArray("lands")) {
                 try {
                     loadLand(el.getAsJsonObject());
@@ -97,6 +103,9 @@ final class LandStore extends JsonStore {
         Land land = new Land(o.get("id").getAsString(), o.get("name").getAsString(), o.get("dimension").getAsString(),
                 o.get("color").getAsString(), o.get("createdAt").getAsLong(), UUID.fromString(o.get("createdBy").getAsString()));
         if (o.has("description")) land.description = o.get("description").getAsString();
+        if (o.has("notes")) land.notes = o.get("notes").getAsString();
+        if (o.has("teamId") && !o.get("teamId").isJsonNull()) land.teamId = o.get("teamId").getAsString();
+        land.updatedAt = o.has("updatedAt") ? o.get("updatedAt").getAsLong() : 0;
         o.getAsJsonArray("owners").forEach(u -> land.owners.add(UUID.fromString(u.getAsString())));
         if (o.has("invites")) o.getAsJsonArray("invites").forEach(u -> land.invites.add(UUID.fromString(u.getAsString())));
         JsonArray flat = o.getAsJsonArray("chunks");
@@ -113,7 +122,31 @@ final class LandStore extends JsonStore {
         knownDimensions = Set.copyOf(dimensions);
     }
 
+    /** Für die Team-Zuordnung. Reihenfolge der Sperren: Land -> Team (Teams fragen nie hier nach). */
+    void setTeams(TeamStore teams) {
+        this.teams = teams;
+    }
+
     // ------------------------------------------------------------------ Abfragen
+
+    synchronized boolean exists(String id) {
+        return lands.containsKey(id);
+    }
+
+    synchronized boolean isOwner(UUID player, String id) {
+        Land land = lands.get(id);
+        return land != null && land.owners.contains(player);
+    }
+
+    synchronized String teamOf(String id) {
+        Land land = lands.get(id);
+        return land == null ? null : land.teamId;
+    }
+
+    synchronized String nameOf(String id) {
+        Land land = lands.get(id);
+        return land == null ? null : land.name;
+    }
 
     synchronized Optional<String> landNameAt(String dimension, long chunk) {
         Land land = index(dimension).get(chunk);
@@ -149,6 +182,10 @@ final class LandStore extends JsonStore {
         return sum;
     }
 
+    synchronized int ownedLandCount(UUID uuid) {
+        return (int) lands.values().stream().filter(l -> l.owners.contains(uuid)).count();
+    }
+
     /** Eigene Länder, die direkt an diesen Chunk grenzen (für "/land erweitern" ohne Namen). */
     synchronized List<String> ownLandsNextTo(UUID uuid, String dimension, long chunk) {
         Set<String> names = new LinkedHashSet<>();
@@ -162,15 +199,15 @@ final class LandStore extends JsonStore {
 
     synchronized String summary(String id) {
         Land land = require(id);
-        return "»" + land.name + "« – " + land.chunks.size() + " Chunks, Besitzer: " + ownerNames(land)
-                + (land.invites.isEmpty() ? "" : ", eingeladen: " + names(land.invites));
+        return "»" + land.name + "« – " + land.chunks.size() + (land.chunks.size() == 1 ? " Chunk" : " Chunks")
+                + ", Besitzer: " + ownerNames(land) + (land.invites.isEmpty() ? "" : ", eingeladen: " + names(land.invites));
     }
 
     synchronized List<LandView> views() {
         List<LandView> out = new ArrayList<>(lands.size());
         for (Land land : lands.values()) {
             out.add(new LandView(land.id, land.name, land.dimension, land.color, land.description,
-                    List.copyOf(land.owners), land.chunks.toLongArray()));
+                    List.copyOf(land.owners), land.chunks.toLongArray(), land.teamId));
         }
         return out;
     }
@@ -178,16 +215,26 @@ final class LandStore extends JsonStore {
     // ------------------------------------------------------------------ Ändern
 
     synchronized String create(UUID actor, boolean admin, String rawName, String dimension, long[] chunks) {
-        String name = validName(rawName);
+        return create(actor, admin, rawName, dimension, chunks, null, null);
+    }
+
+    synchronized String create(UUID actor, boolean admin, String rawName, String dimension, long[] chunks, String color, String description) {
+        String name = Validate.name(rawName, 2, 24, "Name");
         if (byName(name) != null) throw PlannerException.conflict("Es gibt schon ein Land mit dem Namen »" + name + "«.");
         if (!knownDimensions.isEmpty() && !knownDimensions.contains(dimension)) {
             throw PlannerException.badRequest("Unbekannte Dimension: " + dimension);
         }
+        String chosenColor = color == null || color.isBlank()
+                ? PALETTE[Math.floorMod(name.toLowerCase(Locale.ROOT).hashCode(), PALETTE.length)]
+                : Validate.color(color);
+        String desc = Validate.text(description, 200, "Beschreibung");
         LongOpenHashSet wanted = checkClaimable(actor, admin, dimension, chunks);
         if (!isConnected(wanted)) throw PlannerException.badRequest("Die Chunks eines Landes müssen zusammenhängen (Seite an Seite).");
 
-        String color = PALETTE[Math.floorMod(name.toLowerCase(Locale.ROOT).hashCode(), PALETTE.length)];
-        Land land = new Land(UUID.randomUUID().toString(), name, dimension, color, System.currentTimeMillis(), actor);
+        long now = System.currentTimeMillis();
+        Land land = new Land(UUID.randomUUID().toString(), name, dimension, chosenColor, now, actor);
+        land.description = desc;
+        land.updatedAt = now;
         land.owners.add(actor);
         for (LongIterator it = wanted.iterator(); it.hasNext(); ) {
             long key = it.nextLong();
@@ -213,7 +260,7 @@ final class LandStore extends JsonStore {
             land.chunks.add(key);
             index(land.dimension).put(key, land);
         }
-        changed();
+        touch(land);
         return wanted.size();
     }
 
@@ -231,7 +278,7 @@ final class LandStore extends JsonStore {
             land.chunks.remove(key);
             index(land.dimension).remove(key);
         }
-        changed();
+        touch(land);
         if (land.chunks.isEmpty()) {
             lands.remove(land.id);
             return true;
@@ -240,24 +287,37 @@ final class LandStore extends JsonStore {
     }
 
     synchronized void edit(UUID actor, boolean admin, String id, String newName, String newColor, String newDescription) {
+        edit(actor, admin, id, newName, newColor, newDescription, null);
+    }
+
+    synchronized void edit(UUID actor, boolean admin, String id, String newName, String newColor, String newDescription, String newNotes) {
         Land land = require(id);
         if (!admin) requireOwner(land, actor);
-        if (newName != null) {
-            String name = validName(newName);
-            Land other = byName(name);
-            if (other != null && other != land) throw PlannerException.conflict("Es gibt schon ein Land mit dem Namen »" + name + "«.");
-            land.name = name;
+        // Erst alles prüfen, dann übernehmen – ein Fehler soll nichts halb ändern
+        String name = newName == null ? land.name : Validate.name(newName, 2, 24, "Name");
+        Land other = byName(name);
+        if (other != null && other != land) throw PlannerException.conflict("Es gibt schon ein Land mit dem Namen »" + name + "«.");
+        String color = newColor == null ? land.color : Validate.color(newColor);
+        String description = newDescription == null ? land.description : Validate.text(newDescription, 200, "Beschreibung");
+        String notes = newNotes == null ? land.notes : Validate.text(newNotes, 1000, "Notizen");
+        land.name = name;
+        land.color = color;
+        land.description = description;
+        land.notes = notes;
+        touch(land);
+    }
+
+    /** Löschen geht nur als einziger Besitzer (mit Mitbesitzern: austreten). Admins dürfen immer. */
+    synchronized void delete(UUID actor, boolean admin, String id) {
+        Land land = require(id);
+        if (!admin) {
+            requireOwner(land, actor);
+            if (land.owners.size() > 1) {
+                throw PlannerException.conflict("»" + land.name + "« hat noch andere Besitzer. Du kannst nur austreten – löschen geht erst, wenn du allein bist.");
+            }
         }
-        if (newColor != null) {
-            if (!COLOR.matcher(newColor).matches()) throw PlannerException.badRequest("Farbe muss so aussehen: #a1b2c3");
-            land.color = newColor.toLowerCase(Locale.ROOT);
-        }
-        if (newDescription != null) {
-            String d = newDescription.strip();
-            if (d.length() > 200) throw PlannerException.badRequest("Beschreibung ist zu lang (max. 200 Zeichen).");
-            land.description = d;
-        }
-        changed();
+        land.owners.clear();
+        deleteIfOwnerless(land);
     }
 
     synchronized void invite(UUID actor, String id, UUID target) {
@@ -267,14 +327,14 @@ final class LandStore extends JsonStore {
         if (land.invites.contains(target)) throw PlannerException.conflict(players.name(target) + " ist schon eingeladen.");
         if (land.invites.size() >= MAX_PENDING_INVITES) throw PlannerException.badRequest("Zu viele offene Einladungen für dieses Land.");
         land.invites.add(target);
-        changed();
+        touch(land);
     }
 
     synchronized void uninvite(UUID actor, String id, UUID target) {
         Land land = require(id);
         requireOwner(land, actor);
         if (!land.invites.remove(target)) throw PlannerException.notFound(players.name(target) + " ist nicht eingeladen.");
-        changed();
+        touch(land);
     }
 
     synchronized void accept(UUID actor, boolean admin, String id) {
@@ -286,13 +346,13 @@ final class LandStore extends JsonStore {
         }
         land.invites.remove(actor);
         land.owners.add(actor);
-        changed();
+        touch(land);
     }
 
     synchronized void decline(UUID actor, String id) {
         Land land = require(id);
         if (!land.invites.remove(actor)) throw PlannerException.notFound("Du hast keine Einladung für »" + land.name + "«.");
-        changed();
+        touch(land);
     }
 
     /** Austreten. Gibt true zurück, wenn das Land dadurch frei (gelöscht) wurde. */
@@ -315,6 +375,116 @@ final class LandStore extends JsonStore {
         return deleteIfOwnerless(land);
     }
 
+    /**
+     * Land einem Team zuordnen (teamId) oder die Zuordnung lösen (null).
+     * Zuordnen: ein Besitzer, der im Team mindestens Mitglied ist. Lösen: ein Besitzer, ein Team-Admin oder ein Server-Admin.
+     */
+    synchronized void setTeam(UUID actor, boolean admin, String id, String teamId) {
+        Land land = require(id);
+        if (teamId == null || teamId.isEmpty()) {
+            boolean teamAdmin = land.teamId != null && teams.role(actor, land.teamId) != null
+                    && teams.role(actor, land.teamId).rank >= TeamStore.Role.ADMIN.rank;
+            if (!admin && !teamAdmin) requireOwner(land, actor);
+            land.teamId = null;
+        } else {
+            requireOwner(land, actor);
+            TeamStore.Role role = teams.role(actor, teamId);
+            if (role == null || role.rank < TeamStore.Role.MEMBER.rank) {
+                throw PlannerException.forbidden("Du kannst ein Land nur einem Team zuordnen, in dem du mindestens Mitglied bist.");
+            }
+            land.teamId = teamId;
+        }
+        touch(land);
+    }
+
+    /** Team aufgelöst: Zuordnungen lösen, die Länder selbst bleiben. */
+    synchronized void dropTeam(String teamId) {
+        for (Land land : lands.values()) {
+            if (teamId.equals(land.teamId)) {
+                land.teamId = null;
+                touch(land);
+            }
+        }
+    }
+
+    /** Nach Austritt/Rauswurf: Zuordnung lösen, wenn kein Besitzer mehr im Team ist. */
+    synchronized void recheckTeam(String teamId) {
+        for (Land land : lands.values()) {
+            if (teamId.equals(land.teamId) && land.owners.stream().noneMatch(o -> teams.role(o, teamId) != null)) {
+                land.teamId = null;
+                touch(land);
+            }
+        }
+    }
+
+    /**
+     * Vorschau vor dem Speichern (ändert nichts): Welche Chunks gehören schon jemandem, welche sind unentdeckt,
+     * hängt alles zusammen, wie viele Chunks hätte man danach? landId = bestehendes Land, das erweitert werden soll.
+     */
+    synchronized JsonObject check(UUID actor, boolean admin, String landId, String dimension, long[] chunks) {
+        Land target = landId == null || landId.isEmpty() ? null : require(landId);
+        if (target != null) dimension = target.dimension;
+        LongOpenHashSet wanted = new LongOpenHashSet(chunks);
+        JsonArray conflicts = new JsonArray();
+        JsonArray undiscovered = new JsonArray();
+        Map<String, Integer> perLand = new LinkedHashMap<>();
+        for (LongIterator it = wanted.iterator(); it.hasNext(); ) {
+            long key = it.nextLong();
+            Land owner = index(dimension).get(key);
+            if (owner != null && owner != target) {
+                JsonObject c = new JsonObject();
+                c.addProperty("x", Chunks.x(key));
+                c.addProperty("z", Chunks.z(key));
+                c.addProperty("land", owner.name);
+                conflicts.add(c);
+                perLand.merge(owner.name, 1, Integer::sum);
+            } else if (owner == null && config.claimOnlyDiscovered() && !discovery.isDiscovered(dimension, key)) {
+                JsonObject c = new JsonObject();
+                c.addProperty("x", Chunks.x(key));
+                c.addProperty("z", Chunks.z(key));
+                undiscovered.add(c);
+            }
+        }
+        LongOpenHashSet union = new LongOpenHashSet(wanted);
+        if (target != null) union.addAll(target.chunks);
+        boolean connected = isConnected(union);
+        int used = ownedChunkCount(actor);
+        int added = target == null ? wanted.size() : (int) wanted.longStream().filter(k -> !target.chunks.contains(k)).count();
+        JsonObject o = new JsonObject();
+        o.addProperty("chunkCount", wanted.size());
+        o.add("conflicts", conflicts);
+        JsonObject byLand = new JsonObject();
+        perLand.forEach(byLand::addProperty);
+        o.add("conflictsByLand", byLand);
+        o.add("undiscovered", undiscovered);
+        o.addProperty("connected", connected);
+        o.addProperty("usedChunks", used);
+        o.addProperty("chunksAfter", used + added);
+        o.addProperty("maxChunks", config.maxChunksPerPlayer());
+        o.addProperty("overLimit", !admin && used + added > config.maxChunksPerPlayer());
+        o.addProperty("tooMany", wanted.size() > MAX_CHUNKS_PER_REQUEST);
+        boolean fine = wanted.size() > 0 && conflicts.isEmpty() && undiscovered.isEmpty() && connected
+                && !o.get("overLimit").getAsBoolean() && wanted.size() <= MAX_CHUNKS_PER_REQUEST;
+        o.addProperty("ok", fine);
+        if (!wanted.isEmpty()) {
+            int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
+            for (LongIterator it = wanted.iterator(); it.hasNext(); ) {
+                long k = it.nextLong();
+                minX = Math.min(minX, Chunks.x(k));
+                maxX = Math.max(maxX, Chunks.x(k));
+                minZ = Math.min(minZ, Chunks.z(k));
+                maxZ = Math.max(maxZ, Chunks.z(k));
+            }
+            JsonObject bounds = new JsonObject();
+            bounds.addProperty("minX", minX * 16);
+            bounds.addProperty("maxX", maxX * 16 + 15);
+            bounds.addProperty("minZ", minZ * 16);
+            bounds.addProperty("maxZ", maxZ * 16 + 15);
+            o.add("bounds", bounds);
+        }
+        return o;
+    }
+
     // ------------------------------------------------------------------ Webseite
 
     synchronized JsonArray toApiJson(UUID viewer, boolean admin) {
@@ -328,21 +498,52 @@ final class LandStore extends JsonStore {
             o.addProperty("color", land.color);
             o.addProperty("description", land.description);
             o.addProperty("createdAt", land.createdAt);
+            o.addProperty("updatedAt", land.updatedAt); // 0 = unbekannt
+            o.add("createdBy", playerJson(land.createdBy));
+            if (land.teamId != null) o.addProperty("teamId", land.teamId);
             o.add("owners", playersJson(land.owners));
             o.addProperty("chunkCount", land.chunks.size());
             JsonArray flat = new JsonArray(land.chunks.size() * 2);
+            int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
             for (LongIterator it = land.chunks.iterator(); it.hasNext(); ) {
                 long key = it.nextLong();
-                flat.add(Chunks.x(key));
-                flat.add(Chunks.z(key));
+                int x = Chunks.x(key), z = Chunks.z(key);
+                flat.add(x);
+                flat.add(z);
+                minX = Math.min(minX, x);
+                maxX = Math.max(maxX, x);
+                minZ = Math.min(minZ, z);
+                maxZ = Math.max(maxZ, z);
             }
             o.add("chunks", flat);
+            // Grenzen in Blockkoordinaten (einschließlich)
+            JsonObject bounds = new JsonObject();
+            bounds.addProperty("minX", minX * 16);
+            bounds.addProperty("maxX", maxX * 16 + 15);
+            bounds.addProperty("minZ", minZ * 16);
+            bounds.addProperty("maxZ", maxZ * 16 + 15);
+            o.add("bounds", bounds);
             o.addProperty("mine", mine);
             o.addProperty("invitedMe", land.invites.contains(viewer));
-            // Wer eingeladen ist, sehen nur die Besitzer (und Admins).
-            if (mine || admin) o.add("invites", playersJson(land.invites));
+            // Wer eingeladen ist und die Notizen sehen nur die Besitzer (und Admins).
+            if (mine || admin) {
+                o.add("invites", playersJson(land.invites));
+                o.addProperty("notes", land.notes);
+            }
+            JsonObject can = new JsonObject();
+            can.addProperty("edit", mine || admin);
+            can.addProperty("delete", (mine && land.owners.size() == 1) || admin);
+            can.addProperty("leave", mine);
+            o.add("can", can);
             arr.add(o);
         }
+        return arr;
+    }
+
+    /** Eigene Länder für den Export (Notizen inklusive). */
+    synchronized JsonArray exportOwn(UUID owner) {
+        JsonArray arr = new JsonArray();
+        for (Land land : lands.values()) if (land.owners.contains(owner)) arr.add(storageJson(land));
         return arr;
     }
 
@@ -389,19 +590,11 @@ final class LandStore extends JsonStore {
     }
 
     private boolean deleteIfOwnerless(Land land) {
-        changed();
+        touch(land);
         if (!land.owners.isEmpty()) return false;
         for (LongIterator it = land.chunks.iterator(); it.hasNext(); ) index(land.dimension).remove(it.nextLong());
         lands.remove(land.id);
         return true;
-    }
-
-    private static String validName(String raw) {
-        String name = raw == null ? "" : raw.strip().replaceAll("\\s+", " ");
-        if (!NAME.matcher(name).matches()) {
-            throw PlannerException.badRequest("Name muss 2–24 Zeichen lang sein (Buchstaben, Zahlen, Leerzeichen, _ und -).");
-        }
-        return name;
     }
 
     private Land byName(String name) {
@@ -411,13 +604,18 @@ final class LandStore extends JsonStore {
     }
 
     private Land require(String id) {
-        Land land = lands.get(id);
+        Land land = id == null ? null : lands.get(id);
         if (land == null) throw PlannerException.notFound("Dieses Land gibt es nicht (mehr).");
         return land;
     }
 
     private void requireOwner(Land land, UUID actor) {
         if (!land.owners.contains(actor)) throw PlannerException.forbidden("Du besitzt »" + land.name + "« nicht.");
+    }
+
+    private void touch(Land land) {
+        land.updatedAt = System.currentTimeMillis();
+        changed();
     }
 
     private Long2ObjectOpenHashMap<Land> index(String dimension) {
@@ -434,46 +632,53 @@ final class LandStore extends JsonStore {
         return String.join(", ", names);
     }
 
+    private JsonObject playerJson(UUID u) {
+        JsonObject p = new JsonObject();
+        p.addProperty("uuid", u.toString());
+        p.addProperty("name", players.name(u));
+        return p;
+    }
+
     private JsonArray playersJson(Set<UUID> uuids) {
         JsonArray arr = new JsonArray();
-        for (UUID u : uuids) {
-            JsonObject p = new JsonObject();
-            p.addProperty("uuid", u.toString());
-            p.addProperty("name", players.name(u));
-            arr.add(p);
-        }
+        for (UUID u : uuids) arr.add(playerJson(u));
         return arr;
+    }
+
+    private JsonObject storageJson(Land land) {
+        JsonObject o = new JsonObject();
+        o.addProperty("id", land.id);
+        o.addProperty("name", land.name);
+        o.addProperty("dimension", land.dimension);
+        o.addProperty("color", land.color);
+        o.addProperty("description", land.description);
+        o.addProperty("notes", land.notes);
+        if (land.teamId != null) o.addProperty("teamId", land.teamId);
+        o.addProperty("createdAt", land.createdAt);
+        o.addProperty("updatedAt", land.updatedAt);
+        o.addProperty("createdBy", land.createdBy.toString());
+        JsonArray owners = new JsonArray();
+        land.owners.forEach(u -> owners.add(u.toString()));
+        o.add("owners", owners);
+        JsonArray invites = new JsonArray();
+        land.invites.forEach(u -> invites.add(u.toString()));
+        o.add("invites", invites);
+        JsonArray flat = new JsonArray();
+        for (LongIterator it = land.chunks.iterator(); it.hasNext(); ) {
+            long key = it.nextLong();
+            flat.add(Chunks.x(key));
+            flat.add(Chunks.z(key));
+        }
+        o.add("chunks", flat);
+        return o;
     }
 
     @Override
     protected JsonElement toJson() {
         JsonArray arr = new JsonArray();
-        for (Land land : lands.values()) {
-            JsonObject o = new JsonObject();
-            o.addProperty("id", land.id);
-            o.addProperty("name", land.name);
-            o.addProperty("dimension", land.dimension);
-            o.addProperty("color", land.color);
-            o.addProperty("description", land.description);
-            o.addProperty("createdAt", land.createdAt);
-            o.addProperty("createdBy", land.createdBy.toString());
-            JsonArray owners = new JsonArray();
-            land.owners.forEach(u -> owners.add(u.toString()));
-            o.add("owners", owners);
-            JsonArray invites = new JsonArray();
-            land.invites.forEach(u -> invites.add(u.toString()));
-            o.add("invites", invites);
-            JsonArray flat = new JsonArray();
-            for (LongIterator it = land.chunks.iterator(); it.hasNext(); ) {
-                long key = it.nextLong();
-                flat.add(Chunks.x(key));
-                flat.add(Chunks.z(key));
-            }
-            o.add("chunks", flat);
-            arr.add(o);
-        }
+        for (Land land : lands.values()) arr.add(storageJson(land));
         JsonObject root = new JsonObject();
-        root.addProperty("schemaVersion", 1);
+        root.addProperty("schemaVersion", SCHEMA);
         root.add("lands", arr);
         return root;
     }

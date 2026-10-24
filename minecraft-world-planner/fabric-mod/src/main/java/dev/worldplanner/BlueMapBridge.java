@@ -29,10 +29,12 @@ final class BlueMapBridge {
     private static final String LAND_SET_ID = "world_planner_lands";
     private static final String MARKER_SET_ID = "world_planner_markers";
     private static final float SHAPE_HEIGHT = 64f;
+    private static final double DEFAULT_MARKER_Y = 64;
 
     private final Logger logger;
     private final LandStore lands;
     private final MarkerStore markers;
+    private final TeamStore teams;
     private final PlayerDirectory players;
     private final AtomicReference<Map<String, String>> detectedMapIds;
     private final AtomicReference<JsonObject> status;
@@ -42,15 +44,16 @@ final class BlueMapBridge {
     private BlueMapAPI drawnFor;
     private long drawnLandVersion = -1;
     private long drawnMarkerVersion = -1;
+    private long drawnTeamVersion = -1;
 
-    BlueMapBridge(Logger logger, LandStore lands, MarkerStore markers, PlayerDirectory players,
-                  AtomicReference<Map<String, String>> detectedMapIds, AtomicReference<JsonObject> status) {
+    BlueMapBridge(Logger logger, PlannerServices s) {
         this.logger = logger;
-        this.lands = lands;
-        this.markers = markers;
-        this.players = players;
-        this.detectedMapIds = detectedMapIds;
-        this.status = status;
+        this.lands = s.lands();
+        this.markers = s.markers();
+        this.teams = s.teams();
+        this.players = s.players();
+        this.detectedMapIds = s.detectedBlueMapIds();
+        this.status = s.blueMapStatus();
         BlueMapAPI.onEnable(onEnable);
         BlueMapAPI.onDisable(onDisable);
     }
@@ -62,12 +65,15 @@ final class BlueMapBridge {
         if (current == null) return;
         long landVersion = lands.version();
         long markerVersion = markers.version();
-        if (current == drawnFor && landVersion == drawnLandVersion && markerVersion == drawnMarkerVersion) return;
+        long teamVersion = teams.version(); // Team-Kürzel stehen in den Land-Details
+        if (current == drawnFor && landVersion == drawnLandVersion && markerVersion == drawnMarkerVersion
+                && teamVersion == drawnTeamVersion) return;
         try {
             redraw(current, server);
             drawnFor = current;
             drawnLandVersion = landVersion;
             drawnMarkerVersion = markerVersion;
+            drawnTeamVersion = teamVersion;
         } catch (Exception e) {
             logger.warn("[World Planner] BlueMap-Marker konnten nicht aktualisiert werden: {}", e.toString());
             drawnFor = null; // beim nächsten Mal erneut versuchen
@@ -85,8 +91,10 @@ final class BlueMapBridge {
             List<String> ownerNames = new ArrayList<>();
             land.owners().forEach(u -> ownerNames.add(players.name(u)));
             String detail = "<b>" + html(land.name()) + "</b><br>Besitzer: " + html(String.join(", ", ownerNames))
-                    + "<br>" + land.chunks().length + " Chunks"
-                    + (land.description().isEmpty() ? "" : "<br><i>" + html(land.description()) + "</i>");
+                    + teamLine(land.teamId())
+                    + "<br>" + land.chunks().length + (land.chunks().length == 1 ? " Chunk" : " Chunks")
+                    + (land.description().isEmpty() ? "" : "<br><i>" + html(land.description()) + "</i>")
+                    + "<br><small>Geplantes Gebiet – kein Schutz im Spiel</small>";
             int part = 0;
             for (LandOutline.Polygon polygon : LandOutline.of(land.chunks())) {
                 ShapeMarker.Builder builder = ShapeMarker.builder()
@@ -103,14 +111,19 @@ final class BlueMapBridge {
             }
         }
 
+        // Nur öffentliche Marker: BlueMap ist oft ohne Anmeldung erreichbar.
+        Map<String, String> types = markers.types();
         for (MarkerStore.Marker m : markers.publicMarkers()) {
             MarkerSet set = markerSets.computeIfAbsent(m.dimension(), d -> newSet("Bau-Planer", false));
-            String detail = "<b>" + html(m.name()) + "</b><br>" + html(typeLabel(m.type()))
+            String detail = "<b>" + html(m.name()) + "</b><br>" + html(types.getOrDefault(m.type(), "Sonstiges"))
                     + " · von " + html(players.name(m.owner()))
+                    + (m.y() == null ? "<br><small>Höhe nicht angegeben</small>" : "")
                     + (m.notes().isEmpty() ? "" : "<br>" + html(m.notes()));
+            // Ohne Höhenangabe auf Meereshöhe zeichnen (die echte Oberfläche zu suchen hieße, Chunks zu laden).
+            double y = m.y() == null ? DEFAULT_MARKER_Y : m.y();
             set.put("marker-" + m.id(), POIMarker.builder()
-                    .label(plain(m.name()))
-                    .position(m.x() + 0.5, m.y(), m.z() + 0.5)
+                    .label(plain((m.symbol() == null ? "" : m.symbol() + " ") + m.name()))
+                    .position(m.x() + 0.5, y, m.z() + 0.5)
                     .detail(detail)
                     .defaultIcon()
                     .build());
@@ -173,16 +186,10 @@ final class BlueMapBridge {
         return new Color((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF, alpha);
     }
 
-    static String typeLabel(String type) {
-        return switch (type) {
-            case "city" -> "Stadt";
-            case "base" -> "Basis";
-            case "road" -> "Straße";
-            case "farm" -> "Farm";
-            case "resource" -> "Rohstoffe";
-            case "portal" -> "Portal";
-            default -> "Sonstiges";
-        };
+    /** Private Teams bleiben in BlueMap unsichtbar – dort kann jeder mitlesen. */
+    private String teamLine(String teamId) {
+        if (teamId == null || !teams.exists(teamId) || !teams.isPublic(teamId)) return "";
+        return "<br>Team: [" + html(teams.tagOf(teamId)) + "] " + html(teams.nameOf(teamId));
     }
 
     /** Für Beschriftungen: HTML-Sonderzeichen ganz entfernen. */

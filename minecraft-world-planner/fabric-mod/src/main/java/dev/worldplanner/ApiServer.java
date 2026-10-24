@@ -3,23 +3,21 @@ package dev.worldplanner;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.slf4j.Logger;
 
-import java.io.ByteArrayOutputStream;
-import java.net.URI;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.net.URISyntaxException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -37,10 +35,13 @@ import java.util.regex.Pattern;
  * Kleiner HTTP-Server: liefert die Webseite aus und beantwortet die API unter /api/...
  * Läuft in eigenen Threads und fasst keine Minecraft-Objekte direkt an – nur die
  * thread-sicheren Speicher und die Momentaufnahmen, die der Server-Thread erstellt.
+ *
+ * Ablauf einer Anfrage: Login prüfen (Bearer-Token) -> Bereich wählen (Routes) -> der Bereich prüft die Rechte.
+ * Fehler kommen immer als {"error": "deutsche Meldung"} mit passendem HTTP-Code.
  */
 final class ApiServer {
     private static final int MAX_BODY_BYTES = 256 * 1024;
-    private static final int MAX_CHUNK_COORD = 1_875_000; // 30 Mio. Blöcke / 16
+    private static final int MAX_IMPORT_BYTES = 4 * 1024 * 1024;
     /** Webdateien: nur Kleinbuchstaben, Ziffern, _ und - in Pfaden – so sind "../"-Tricks unmöglich. */
     private static final Pattern STATIC_PATH = Pattern.compile("[a-z0-9_-]+(/[a-z0-9_-]+)*\\.(html|js|css|svg)");
     private static final Map<String, String> MIME = Map.of(
@@ -54,6 +55,7 @@ final class ApiServer {
 
     private final Logger logger;
     private final PlannerServices s;
+    private final Map<String, Routes> routes = new HashMap<>();
     private final Map<String, Optional<byte[]>> staticContent = new ConcurrentHashMap<>();
     private HttpServer http;
     private ExecutorService executor;
@@ -61,40 +63,20 @@ final class ApiServer {
     ApiServer(Logger logger, PlannerServices services) {
         this.logger = logger;
         this.s = services;
-    }
-
-    /**
-     * Lädt eine Webdatei aus der Mod-Jar (und merkt sie sich, die Jar ändert sich ja nicht).
-     * Ist in der Config "webOverrideDir" gesetzt, kommt sie stattdessen frisch aus diesem Ordner
-     * (zum Entwickeln oder Anpassen der Seite ohne neu zu bauen).
-     */
-    private byte[] staticFile(String name) {
-        String override = s.config().webOverrideDir();
-        if (!override.isBlank()) {
-            Path base = Path.of(override).toAbsolutePath().normalize();
-            Path file = base.resolve(name).normalize();
-            if (!file.startsWith(base)) return null;
-            try {
-                return Files.isRegularFile(file) ? Files.readAllBytes(file) : null;
-            } catch (IOException e) {
-                return null;
-            }
-        }
-        return staticContent.computeIfAbsent(name, n -> {
-            try (InputStream in = ApiServer.class.getResourceAsStream("/world_planner_web/" + n)) {
-                return in == null ? Optional.empty() : Optional.of(in.readAllBytes());
-            } catch (IOException e) {
-                logger.warn("[World Planner] Webdatei {} nicht lesbar: {}", n, e.getMessage());
-                return Optional.empty();
-            }
-        }).orElse(null);
+        AccountRoutes account = new AccountRoutes(services);
+        for (String key : new String[]{"me", "meta", "people", "prefs", "activity", "export", "import"}) routes.put(key, account);
+        routes.put("lands", new LandRoutes(services));
+        routes.put("markers", new MarkerRoutes(services));
+        routes.put("teams", new TeamRoutes(services));
+        routes.put("projects", new ProjectRoutes(services));
+        routes.put("trades", new TradeRoutes(services));
     }
 
     void start() throws IOException {
         PlannerConfig c = s.config();
         http = HttpServer.create(new InetSocketAddress(c.bind(), c.port()), 0);
-        // Daemon-Threads: Sie halten den Server beim Herunterfahren nicht am Leben (Bug im Original).
-        executor = Executors.newFixedThreadPool(4, r -> {
+        // Daemon-Threads: Sie halten den Server beim Herunterfahren nicht am Leben.
+        executor = Executors.newFixedThreadPool(8, r -> {
             Thread t = new Thread(r, "world-planner-http");
             t.setDaemon(true);
             return t;
@@ -142,7 +124,12 @@ final class ApiServer {
                 send(ex, 200, result);
             } catch (PlannerException pe) {
                 send(ex, pe.status, error(pe.getMessage()));
+            } catch (ClassCastException | IllegalStateException | UnsupportedOperationException | NumberFormatException e) {
+                // So reagiert Gson auf falsche Datentypen im JSON (z. B. eine Liste statt eines Textes)
+                logger.info("[World Planner] Ungültige Anfrage an {}: {}", ex.getRequestURI().getPath(), e.toString());
+                send(ex, 400, error("Ungültige Daten in der Anfrage."));
             } catch (Exception e) {
+                // Keine Details nach außen – nur ins Server-Log
                 logger.warn("[World Planner] Anfrage fehlgeschlagen: {}", e.toString());
                 send(ex, 500, error("Interner Fehler auf dem Server."));
             }
@@ -151,43 +138,46 @@ final class ApiServer {
         }
     }
 
-    private JsonElement route(HttpExchange ex, String method, List<String> p) throws IOException {
+    private JsonElement route(HttpExchange ex, String method, List<String> p) {
         String first = p.isEmpty() ? "" : p.get(0);
         boolean get = method.equals("GET"), post = method.equals("POST");
+        String client = clientAddress(ex);
 
         // --- ohne Login
         if (get && first.equals("info") && p.size() == 1) return info();
-        if (post && first.equals("login") && p.size() == 1) return login(body(ex), clientAddress(ex));
+        if (post && first.equals("login") && p.size() == 1) {
+            ApiRequest r = new ApiRequest(method, p, Map.of(), null, false, client, null, ex.getRequestBody(), MAX_BODY_BYTES);
+            return login(r);
+        }
 
         // --- ab hier nur mit Login
         String token = bearer(ex);
         UUID me = s.sessions().authenticate(token).orElseThrow(() ->
                 new PlannerException(401, "Bitte einloggen: Tippe im Spiel /planer login."));
         boolean admin = s.players().isAdmin(me);
+        int maxBody = first.equals("import") ? MAX_IMPORT_BYTES : MAX_BODY_BYTES;
+        ApiRequest r = new ApiRequest(method, p, query(ex), me, admin, client, token, ex.getRequestBody(), maxBody);
 
-        if (post && first.equals("logout") && p.size() == 1) {
+        if (r.is("POST", "logout")) {
             s.sessions().logout(token);
-            return ok();
+            return Routes.ok();
         }
         if (get && p.size() == 1) {
             switch (first) {
-                case "me": return me(me, admin);
                 case "world": return world();
                 case "players": return players();
-                case "discovered": return discovered(query(ex).getOrDefault("dimension", "minecraft:overworld"));
-                case "lands": return lands(me, admin);
-                case "markers": return markers(me, admin);
+                case "discovered": return discovered(r.query.getOrDefault("dimension", "minecraft:overworld"), r.query.get("since"));
                 case "known-players": return knownPlayers();
                 case "bluemap-status": return s.blueMapStatus().get();
                 default: break;
             }
         }
-        if (post && first.equals("lands")) return landAction(me, admin, p, body(ex));
-        if (post && first.equals("markers")) return markerAction(me, admin, p, body(ex));
-        throw PlannerException.notFound("Unbekannte Adresse.");
+        Routes area = routes.get(first);
+        if (area == null) throw PlannerException.notFound("Unbekannte Adresse.");
+        return area.handle(r);
     }
 
-    // ------------------------------------------------------------------ Endpunkte
+    // ------------------------------------------------------------------ Einfache Endpunkte
 
     private JsonObject info() {
         JsonObject o = new JsonObject();
@@ -196,35 +186,12 @@ final class ApiServer {
         return o;
     }
 
-    private JsonObject login(JsonObject body, String client) {
-        SessionStore.LoginResult result = s.sessions().redeem(string(body, "code"), s.config().sessionDays(), client);
+    private JsonObject login(ApiRequest r) {
+        SessionStore.LoginResult result = s.sessions().redeem(r.str("code"), s.config().sessionDays(), r.client);
         JsonObject o = new JsonObject();
         o.addProperty("token", result.token());
         o.addProperty("uuid", result.uuid().toString());
         o.addProperty("name", s.players().name(result.uuid()));
-        return o;
-    }
-
-    private JsonObject me(UUID me, boolean admin) {
-        PlannerConfig c = s.config();
-        JsonObject o = new JsonObject();
-        o.addProperty("uuid", me.toString());
-        o.addProperty("name", s.players().name(me));
-        o.addProperty("admin", admin);
-        o.addProperty("usedChunks", s.lands().ownedChunkCount(me));
-        o.addProperty("maxChunks", c.maxChunksPerPlayer());
-        o.addProperty("maxMarkers", c.maxMarkersPerPlayer());
-        o.addProperty("claimOnlyDiscovered", c.claimOnlyDiscovered());
-        JsonObject maps = new JsonObject();
-        maps.addProperty("liveUrl", c.liveMapUrl());
-        maps.addProperty("seedUrl", c.seedMapUrl());
-        // Eingetragene Karten-IDs aus der Config haben Vorrang, sonst die von BlueMap erkannten.
-        JsonObject ids = new JsonObject();
-        s.detectedBlueMapIds().get().forEach(ids::addProperty);
-        c.blueMapIds().forEach(ids::addProperty);
-        maps.add("mapIds", ids);
-        maps.addProperty("blueMapDetected", !s.detectedBlueMapIds().get().isEmpty());
-        o.add("maps", maps);
         return o;
     }
 
@@ -244,26 +211,20 @@ final class ApiServer {
         return s.playersSnapshot().get();
     }
 
-    private JsonObject discovered(String dimension) {
+    /** Entdeckte Chunks. Mit since=<version> kommt nur {unchanged:true}, wenn sich nichts geändert hat (spart Daten). */
+    private JsonObject discovered(String dimension, String since) {
+        long version = s.discovery().version();
+        JsonObject o = new JsonObject();
+        o.addProperty("dimension", dimension);
+        o.addProperty("version", version);
+        if (since != null && since.equals(String.valueOf(version))) {
+            o.addProperty("unchanged", true);
+            return o;
+        }
         int[] flat = s.discovery().export(dimension);
         JsonArray arr = new JsonArray(flat.length);
         for (int v : flat) arr.add(v);
-        JsonObject o = new JsonObject();
-        o.addProperty("dimension", dimension);
         o.add("chunks", arr);
-        return o;
-    }
-
-    private JsonObject lands(UUID me, boolean admin) {
-        JsonObject o = new JsonObject();
-        o.addProperty("version", s.lands().version());
-        o.add("lands", s.lands().toApiJson(me, admin));
-        return o;
-    }
-
-    private JsonObject markers(UUID me, boolean admin) {
-        JsonObject o = new JsonObject();
-        o.add("markers", s.markers().toApiJson(me, admin));
         return o;
     }
 
@@ -275,61 +236,7 @@ final class ApiServer {
         return o;
     }
 
-    /** POST /api/lands  oder  POST /api/lands/{id}/{aktion} */
-    private JsonElement landAction(UUID me, boolean admin, List<String> p, JsonObject body) {
-        LandStore lands = s.lands();
-        if (p.size() == 1) {
-            String id = lands.create(me, admin, string(body, "name"), string(body, "dimension"), chunks(body, "chunks"));
-            JsonObject o = ok();
-            o.addProperty("id", id);
-            return o;
-        }
-        if (p.size() != 3) throw PlannerException.notFound("Unbekannte Adresse.");
-        String id = p.get(1);
-        JsonObject o = ok();
-        switch (p.get(2)) {
-            case "chunks" -> {
-                if (body.has("add")) lands.addChunks(me, admin, id, chunks(body, "add"));
-                if (body.has("remove")) o.addProperty("deleted", lands.removeChunks(me, admin, id, chunks(body, "remove")));
-            }
-            case "edit" -> lands.edit(me, admin, id, optString(body, "name"), optString(body, "color"), optString(body, "description"));
-            case "invite" -> lands.invite(me, id, player(body));
-            case "uninvite" -> lands.uninvite(me, id, player(body));
-            case "accept" -> lands.accept(me, admin, id);
-            case "decline" -> lands.decline(me, id);
-            case "leave" -> o.addProperty("deleted", lands.leave(me, id));
-            case "delete" -> {
-                requireAdmin(admin);
-                lands.adminDelete(id);
-            }
-            case "remove-owner" -> {
-                requireAdmin(admin);
-                o.addProperty("deleted", lands.adminRemoveOwner(id, player(body)));
-            }
-            default -> throw PlannerException.notFound("Unbekannte Aktion.");
-        }
-        return o;
-    }
-
-    /** POST /api/markers  oder  POST /api/markers/{id}/edit|delete */
-    private JsonElement markerAction(UUID me, boolean admin, List<String> p, JsonObject body) {
-        if (p.size() == 1) {
-            JsonObject o = ok();
-            o.addProperty("id", s.markers().create(me, admin, body));
-            return o;
-        }
-        if (p.size() == 3 && p.get(2).equals("edit")) {
-            s.markers().update(me, admin, p.get(1), body);
-            return ok();
-        }
-        if (p.size() == 3 && p.get(2).equals("delete")) {
-            s.markers().delete(me, admin, p.get(1));
-            return ok();
-        }
-        throw PlannerException.notFound("Unbekannte Adresse.");
-    }
-
-    // ------------------------------------------------------------------ Hilfsmethoden
+    // ------------------------------------------------------------------ Webseite und Sicherheit
 
     private void serveStatic(HttpExchange ex, String method, List<String> seg) throws IOException {
         Headers h = ex.getResponseHeaders();
@@ -357,6 +264,33 @@ final class ApiServer {
     }
 
     /**
+     * Lädt eine Webdatei aus der Mod-Jar (und merkt sie sich, die Jar ändert sich ja nicht).
+     * Ist in der Config "webOverrideDir" gesetzt, kommt sie stattdessen frisch aus diesem Ordner
+     * (zum Entwickeln oder Anpassen der Seite ohne neu zu bauen).
+     */
+    private byte[] staticFile(String name) {
+        String override = s.config().webOverrideDir();
+        if (!override.isBlank()) {
+            Path base = Path.of(override).toAbsolutePath().normalize();
+            Path file = base.resolve(name).normalize();
+            if (!file.startsWith(base)) return null;
+            try {
+                return Files.isRegularFile(file) ? Files.readAllBytes(file) : null;
+            } catch (IOException e) {
+                return null;
+            }
+        }
+        return staticContent.computeIfAbsent(name, n -> {
+            try (InputStream in = ApiServer.class.getResourceAsStream("/world_planner_web/" + n)) {
+                return in == null ? Optional.empty() : Optional.of(in.readAllBytes());
+            } catch (IOException e) {
+                logger.warn("[World Planner] Webdatei {} nicht lesbar: {}", n, e.getMessage());
+                return Optional.empty();
+            }
+        }).orElse(null);
+    }
+
+    /**
      * Strenge Sicherheitsregel für die Webseite. Nur die BlueMap-Adressen dürfen eingebettet und
      * (für die Erreichbarkeits-Prüfung) angefragt werden – nicht beliebige fremde Seiten.
      */
@@ -365,7 +299,7 @@ final class ApiServer {
         origin(s.config().liveMapUrl()).ifPresent(maps::add);
         origin(s.config().seedMapUrl()).ifPresent(maps::add);
         if (s.config().liveMapUrl().isBlank() && !s.detectedBlueMapIds().get().isEmpty()) {
-            // Die Webseite probiert dann BlueMaps Standard-Port auf demselben Rechner (siehe app.js mapUrl()).
+            // Die Webseite probiert dann BlueMaps Standard-Port auf demselben Rechner (siehe maps3d.js mapUrl()).
             String host = ex.getRequestHeaders().getFirst("Host");
             if (host != null) {
                 String hostname = host.startsWith("[") ? host.substring(0, host.indexOf(']') + 1) : host.split(":")[0];
@@ -430,85 +364,21 @@ final class ApiServer {
         return header != null && header.startsWith("Bearer ") ? header.substring(7).trim() : null;
     }
 
-    private static JsonObject body(HttpExchange ex) throws IOException {
-        try (InputStream in = ex.getRequestBody()) {
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] buf = new byte[8192];
-            int total = 0, n;
-            while ((n = in.read(buf)) != -1) {
-                total += n;
-                if (total > MAX_BODY_BYTES) throw new PlannerException(413, "Anfrage ist zu groß.");
-                out.write(buf, 0, n);
-            }
-            String text = out.toString(StandardCharsets.UTF_8);
-            if (text.isBlank()) return new JsonObject();
-            try {
-                return JsonParser.parseString(text).getAsJsonObject();
-            } catch (Exception e) {
-                throw PlannerException.badRequest("Ungültige Anfrage (kein JSON-Objekt).");
-            }
-        }
-    }
-
     private static Map<String, String> query(HttpExchange ex) {
         Map<String, String> q = new HashMap<>();
         String raw = ex.getRequestURI().getRawQuery();
         if (raw == null) return q;
         for (String pair : raw.split("&")) {
             int i = pair.indexOf('=');
-            if (i > 0) {
+            if (i <= 0) continue;
+            try {
                 q.put(URLDecoder.decode(pair.substring(0, i), StandardCharsets.UTF_8),
                         URLDecoder.decode(pair.substring(i + 1), StandardCharsets.UTF_8));
+            } catch (IllegalArgumentException e) {
+                throw PlannerException.badRequest("Ungültige Adresse.");
             }
         }
         return q;
-    }
-
-    private UUID player(JsonObject body) {
-        String name = string(body, "player");
-        return s.players().findByName(name).orElseThrow(() ->
-                PlannerException.notFound("Spieler »" + name + "« war noch nie auf dem Server."));
-    }
-
-    private static String string(JsonObject body, String key) {
-        try {
-            return body.get(key).getAsString();
-        } catch (Exception e) {
-            throw PlannerException.badRequest("Feld »" + key + "« fehlt.");
-        }
-    }
-
-    private static String optString(JsonObject body, String key) {
-        return body.has(key) && !body.get(key).isJsonNull() ? body.get(key).getAsString() : null;
-    }
-
-    /** Liest eine flache Liste [x0, z0, x1, z1, ...] von Chunk-Koordinaten. */
-    private static long[] chunks(JsonObject body, String key) {
-        try {
-            JsonArray arr = body.getAsJsonArray(key);
-            if (arr.size() % 2 != 0) throw new IllegalArgumentException();
-            long[] out = new long[arr.size() / 2];
-            for (int i = 0; i < out.length; i++) {
-                int x = arr.get(i * 2).getAsInt(), z = arr.get(i * 2 + 1).getAsInt();
-                if (Math.abs(x) > MAX_CHUNK_COORD || Math.abs(z) > MAX_CHUNK_COORD) throw new IllegalArgumentException();
-                out[i] = Chunks.key(x, z);
-            }
-            return out;
-        } catch (PlannerException pe) {
-            throw pe;
-        } catch (Exception e) {
-            throw PlannerException.badRequest("Chunk-Liste »" + key + "« ist ungültig.");
-        }
-    }
-
-    private static void requireAdmin(boolean admin) {
-        if (!admin) throw PlannerException.forbidden("Nur Admins dürfen das.");
-    }
-
-    private static JsonObject ok() {
-        JsonObject o = new JsonObject();
-        o.addProperty("ok", true);
-        return o;
     }
 
     private static JsonObject error(String message) {

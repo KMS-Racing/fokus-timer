@@ -1,6 +1,7 @@
 package dev.worldplanner;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import org.slf4j.Logger;
 
 import java.nio.file.Files;
@@ -33,6 +34,24 @@ abstract class JsonStore {
                 logger.error("[World Planner] Sicherung fehlgeschlagen: {}", moveError.getMessage());
             }
             return null;
+        }
+    }
+
+    /**
+     * Hat die Datei eine ältere Schema-Version, wird sie einmalig als "datei.json.v1.bak" kopiert,
+     * bevor sie im neuen Format überschrieben wird. So kann man bei Problemen zurück.
+     */
+    protected final void backupBeforeMigration(Logger logger, JsonObject json, int currentSchema) {
+        int version = json.has("schemaVersion") ? json.get("schemaVersion").getAsInt() : 1;
+        if (version >= currentSchema || !Files.exists(path)) return;
+        Path backup = path.resolveSibling(path.getFileName() + ".v" + version + ".bak");
+        try {
+            if (!Files.exists(backup)) {
+                Files.copy(path, backup);
+                logger.info("[World Planner] {} wird auf Version {} umgestellt. Sicherung der alten Datei: {}", path.getFileName(), currentSchema, backup.getFileName());
+            }
+        } catch (Exception e) {
+            logger.warn("[World Planner] Sicherung vor der Umstellung fehlgeschlagen: {}", e.getMessage());
         }
     }
 

@@ -66,8 +66,10 @@ final class PlannerCommands {
                 .then(Commands.literal("annehmen")
                         .then(Commands.argument("land", StringArgumentType.string()).suggests(invitedLands())
                                 .executes(ctx -> byLand(ctx, (me, id) -> {
-                                    services.get().lands().accept(me, isAdmin(ctx), id);
-                                    return "Willkommen! Du besitzt jetzt " + services.get().lands().summary(id);
+                                    PlannerServices s = services.get();
+                                    s.lands().accept(me, isAdmin(ctx), id);
+                                    s.activity().add(me, "land.joined", s.players().name(me) + " besitzt jetzt »" + s.lands().nameOf(id) + "« mit.", "land", id, "all");
+                                    return "Willkommen! Du besitzt jetzt " + s.lands().summary(id);
                                 }))))
                 .then(Commands.literal("ablehnen")
                         .then(Commands.argument("land", StringArgumentType.string()).suggests(invitedLands())
@@ -77,9 +79,16 @@ final class PlannerCommands {
                                 }))))
                 .then(Commands.literal("verlassen")
                         .then(Commands.argument("land", StringArgumentType.string()).suggests(ownLands())
-                                .executes(ctx -> byLand(ctx, (me, id) -> services.get().lands().leave(me, id)
-                                        ? "Du warst der letzte Besitzer – das Land ist jetzt frei."
-                                        : "Du bist ausgetreten."))))
+                                .executes(ctx -> byLand(ctx, (me, id) -> {
+                                    PlannerServices s = services.get();
+                                    String name = s.lands().nameOf(id);
+                                    if (s.lands().leave(me, id)) {
+                                        landDeleted(s, me, id, name);
+                                        return "Du warst der letzte Besitzer – das Land ist jetzt frei.";
+                                    }
+                                    s.activity().add(me, "land.left", s.players().name(me) + " ist aus »" + name + "« ausgetreten.", "land", id, "all");
+                                    return "Du bist ausgetreten.";
+                                }))))
                 .then(Commands.literal("admin")
                         .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
                         .then(Commands.literal("loeschen")
@@ -155,6 +164,7 @@ final class PlannerCommands {
             long chunk = currentChunk(player, s);
             String id = s.lands().create(player.getUUID(), isAdmin(ctx), StringArgumentType.getString(ctx, "name"),
                     dimension(player), new long[]{chunk});
+            s.activity().add(player.getUUID(), "land.created", s.players().name(player.getUUID()) + " hat das Land »" + s.lands().nameOf(id) + "« erstellt.", "land", id, "all");
             return "Land erstellt: " + s.lands().summary(id) + ". Erweitern mit /land erweitern.";
         });
     }
@@ -181,7 +191,9 @@ final class PlannerCommands {
             long chunk = Chunks.key(pos.x(), pos.z());
             String name = s.lands().landNameAt(dimension(player), chunk)
                     .orElseThrow(() -> PlannerException.badRequest("Dieser Chunk gehört niemandem."));
-            boolean deleted = s.lands().removeChunks(player.getUUID(), false, landId(s, name), new long[]{chunk});
+            String id = landId(s, name);
+            boolean deleted = s.lands().removeChunks(player.getUUID(), false, id, new long[]{chunk});
+            if (deleted) landDeleted(s, player.getUUID(), id, name);
             return deleted ? "Das war der letzte Chunk – »" + name + "« ist jetzt aufgelöst." : "Chunk aus »" + name + "« entfernt.";
         });
     }
@@ -209,7 +221,9 @@ final class PlannerCommands {
         PlannerServices s = services.get();
         return run(ctx, () -> {
             String name = StringArgumentType.getString(ctx, "land");
-            s.lands().adminDelete(landId(s, name));
+            String id = landId(s, name);
+            s.lands().adminDelete(id);
+            landDeleted(s, null, id, name);
             return "Land »" + name + "« gelöscht.";
         });
     }
@@ -221,12 +235,20 @@ final class PlannerCommands {
             String targetName = StringArgumentType.getString(ctx, "spieler");
             UUID target = s.players().findByName(targetName)
                     .orElseThrow(() -> PlannerException.notFound("Spieler »" + targetName + "« ist unbekannt."));
-            boolean deleted = s.lands().adminRemoveOwner(landId(s, name), target);
+            String id = landId(s, name);
+            boolean deleted = s.lands().adminRemoveOwner(id, target);
+            if (deleted) landDeleted(s, null, id, name);
             return targetName + " entfernt." + (deleted ? " Das Land hatte keine Besitzer mehr und wurde gelöscht." : "");
         });
     }
 
     // ------------------------------------------------------------------ Hilfsmethoden
+
+    /** Wie auf der Webseite: Projekte und Marker bleiben, nur die Verknüpfung zum Land wird gelöst. */
+    private static void landDeleted(PlannerServices s, UUID actor, String id, String name) {
+        s.onLandDeleted(id);
+        s.activity().add(actor, "land.deleted", "Das Land »" + name + "« wurde aufgelöst.", "land", id, "all");
+    }
 
     private interface PlayerAction {
         String run(ServerPlayer player, PlannerServices services);

@@ -31,30 +31,40 @@ final class TestSupport {
         return new UUID(0x1234L, n);
     }
 
-    /** Alle Speicher zusammen in einem Ordner – wie im echten Weltordner. */
+    /** Alle Speicher zusammen in einem Ordner – wie im echten Weltordner (gleiche Verdrahtung wie die Mod). */
     static final class World {
         final Path dir;
         final PlannerConfig config;
+        final PlannerServices services;
         final PlayerDirectory players;
         final DiscoveryTracker discovery;
         final LandStore lands;
         final MarkerStore markers;
+        final TeamStore teams;
+        final ProjectStore projects;
+        final TradeStore trades;
+        final PrefsStore prefs;
+        final ActivityLog activity;
 
         World(Path dir, PlannerConfig config) {
             this.dir = dir;
             this.config = config;
-            this.players = new PlayerDirectory(dir.resolve("players.json"), LOG);
-            this.discovery = new DiscoveryTracker(dir.resolve("discovered.json"), LOG);
-            this.lands = new LandStore(dir.resolve("lands.json"), LOG, discovery, players, config);
-            this.markers = new MarkerStore(dir.resolve("markers.json"), LOG, players, config);
-            java.util.Set<String> dims = java.util.Set.of(OVERWORLD, "minecraft:the_nether", "minecraft:the_end");
-            lands.setKnownDimensions(dims);
-            markers.setKnownDimensions(dims);
+            this.services = PlannerServices.create(dir, config, LOG);
+            this.players = services.players();
+            this.discovery = services.discovery();
+            this.lands = services.lands();
+            this.markers = services.markers();
+            this.teams = services.teams();
+            this.projects = services.projects();
+            this.trades = services.trades();
+            this.prefs = services.prefs();
+            this.activity = services.activity();
+            services.setKnownDimensions(java.util.Set.of(OVERWORLD, "minecraft:the_nether", "minecraft:the_end"));
         }
 
-        /** Speichert alle geänderten Daten wie der Mod-Timer. */
+        /** Speichert alle geänderten Daten wie der Mod-Timer (der Handel speichert jede Aktion selbst). */
         void save() throws Exception {
-            for (JsonStore store : new JsonStore[]{players, discovery, lands, markers}) {
+            for (JsonStore store : services.stores()) {
                 var snapshot = store.takeDirtySnapshot();
                 if (snapshot != null) JsonFiles.write(store.path, snapshot, true);
             }

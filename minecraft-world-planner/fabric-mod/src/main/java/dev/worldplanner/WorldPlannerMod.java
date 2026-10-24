@@ -21,14 +21,12 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Einstiegspunkt der Mod. Hier wird alles verbunden:
@@ -67,14 +65,7 @@ public final class WorldPlannerMod implements ModInitializer {
     private void onStarting(MinecraftServer server) {
         PlannerConfig config = PlannerConfig.load(FabricLoader.getInstance().getConfigDir().resolve("world-planner.json"), LOGGER);
         Path data = server.getWorldPath(LevelResource.ROOT).resolve("world-planner");
-        PlayerDirectory players = new PlayerDirectory(data.resolve("players.json"), LOGGER);
-        SessionStore sessions = new SessionStore(data.resolve("sessions.json"), LOGGER);
-        DiscoveryTracker discovery = new DiscoveryTracker(data.resolve("discovered.json"), LOGGER);
-        LandStore lands = new LandStore(data.resolve("lands.json"), LOGGER, discovery, players, config);
-        MarkerStore markers = new MarkerStore(data.resolve("markers.json"), LOGGER, players, config);
-        services = new PlannerServices(config, players, sessions, discovery, lands, markers,
-                new AtomicReference<>(new JsonObject()), new AtomicReference<>(emptyPlayers()), new AtomicReference<>(Map.of()),
-                new AtomicReference<>(PlannerServices.blueMapUnavailable()));
+        services = PlannerServices.create(data, config, LOGGER);
         saver = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "world-planner-save");
             t.setDaemon(true);
@@ -87,8 +78,7 @@ public final class WorldPlannerMod implements ModInitializer {
         PlannerServices s = services;
         Set<String> dimensions = new LinkedHashSet<>();
         for (ServerLevel level : server.getAllLevels()) dimensions.add(dimensionId(level));
-        s.lands().setKnownDimensions(dimensions);
-        s.markers().setKnownDimensions(dimensions);
+        s.setKnownDimensions(dimensions);
         s.worldSnapshot().set(worldSnapshot(server));
 
         if (!s.config().webOverrideDir().isBlank()) {
@@ -104,7 +94,7 @@ public final class WorldPlannerMod implements ModInitializer {
         }
 
         if (s.config().blueMapIntegration() && FabricLoader.getInstance().isModLoaded("bluemap")) {
-            blueMap = new BlueMapBridge(LOGGER, s.lands(), s.markers(), s.players(), s.detectedBlueMapIds(), s.blueMapStatus());
+            blueMap = new BlueMapBridge(LOGGER, s);
             LOGGER.info("[World Planner] BlueMap gefunden – Länder und Marker werden auf der 3D-Karte angezeigt.");
         }
 
@@ -122,6 +112,8 @@ public final class WorldPlannerMod implements ModInitializer {
             s.sessions().cleanup();
         }), 60, 60, TimeUnit.SECONDS);
         timer.scheduleWithFixedDelay(() -> safely(() -> queueBlueMapUpdate(server)), 1, 1, TimeUnit.SECONDS);
+        // Abgelaufene Auktionen/Angebote beendet der Server selbst – auch wenn niemand die Webseite offen hat.
+        timer.scheduleWithFixedDelay(() -> safely(() -> s.trades().settleExpired()), 1, 1, TimeUnit.SECONDS);
     }
 
     /**
@@ -238,7 +230,7 @@ public final class WorldPlannerMod implements ModInitializer {
     }
 
     private static JsonObject playersSnapshot(MinecraftServer server) {
-        JsonObject players = emptyPlayers();
+        JsonObject players = PlannerServices.emptyPlayers();
         JsonArray rows = players.getAsJsonArray("players");
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             JsonObject p = new JsonObject();
@@ -251,13 +243,6 @@ public final class WorldPlannerMod implements ModInitializer {
             rows.add(p);
         }
         return players;
-    }
-
-    private static JsonObject emptyPlayers() {
-        JsonObject o = new JsonObject();
-        o.addProperty("updatedAtEpochMs", System.currentTimeMillis());
-        o.add("players", new JsonArray());
-        return o;
     }
 
     private static boolean isAdmin(ServerPlayer player) {

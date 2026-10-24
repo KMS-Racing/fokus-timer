@@ -71,6 +71,16 @@ final class PlayerDirectory extends JsonStore {
                 .findFirst();
     }
 
+    synchronized List<Entry> entries() {
+        List<Entry> out = new ArrayList<>(byId.values());
+        out.sort((a, b) -> a.name.compareToIgnoreCase(b.name));
+        return out;
+    }
+
+    synchronized boolean known(UUID uuid) {
+        return byId.containsKey(uuid);
+    }
+
     synchronized List<String> names() {
         List<String> names = new ArrayList<>();
         byId.values().forEach(e -> names.add(e.name));

@@ -161,4 +161,69 @@ class LandStoreTest {
         assertEquals(409, assertThrows(PlannerException.class,
                 () -> after.lands.create(bob, false, "Klau", OVERWORLD, chunks(-3, -3))).status, "Index nach Neustart korrekt");
     }
+
+    @Test
+    void deleteOnlyAsSoleOwner() {
+        String id = w.lands.create(alice, false, "Base", OVERWORLD, chunks(0, 0));
+        assertEquals(403, status(() -> w.lands.delete(bob, false, id)), "Fremde löschen nicht");
+        w.lands.invite(alice, id, bob);
+        w.lands.accept(bob, false, id);
+        assertEquals(409, status(() -> w.lands.delete(alice, false, id)), "mit Mitbesitzer: nur austreten");
+        assertFalse(w.lands.toApiJson(alice, false).get(0).getAsJsonObject().getAsJsonObject("can").get("delete").getAsBoolean());
+        w.lands.leave(bob, id);
+        w.lands.delete(alice, false, id);
+        assertFalse(w.lands.exists(id));
+        String other = w.lands.create(bob, false, "Andere", OVERWORLD, chunks(3, 3));
+        w.lands.delete(admin, true, other);
+        assertFalse(w.lands.exists(other), "Admins dürfen immer");
+    }
+
+    @Test
+    void checkPreviewsWithoutChanging() {
+        w.lands.create(bob, false, "Bobs", OVERWORLD, chunks(2, 0));
+        long version = w.lands.version();
+        var c = w.lands.check(alice, false, null, OVERWORLD, chunks(0, 0, 1, 0, 2, 0, 20, 20));
+        assertEquals(1, c.getAsJsonArray("conflicts").size(), "ein Chunk gehört Bob");
+        assertEquals("Bobs", c.getAsJsonArray("conflicts").get(0).getAsJsonObject().get("land").getAsString());
+        assertEquals(1, c.getAsJsonArray("undiscovered").size(), "20/20 ist unentdeckt");
+        assertFalse(c.get("connected").getAsBoolean());
+        assertFalse(c.get("ok").getAsBoolean());
+        var fine = w.lands.check(alice, false, null, OVERWORLD, chunks(0, 0, 1, 0));
+        assertTrue(fine.get("ok").getAsBoolean());
+        assertEquals(2, fine.get("chunksAfter").getAsInt());
+        var tooMany = w.lands.check(alice, false, null, OVERWORLD, chunks(0, 1, 1, 1, 2, 1, 3, 1, 4, 1, 5, 1));
+        assertTrue(tooMany.get("overLimit").getAsBoolean(), "6 > 5 Chunks");
+        assertEquals(version, w.lands.version(), "Vorschau ändert nichts");
+        assertTrue(w.lands.landNameAt(OVERWORLD, Chunks.key(0, 0)).isEmpty());
+    }
+
+    @Test
+    void failedEditChangesNothing() {
+        String id = w.lands.create(alice, false, "Base", OVERWORLD, chunks(0, 0));
+        assertEquals(400, status(() -> w.lands.edit(alice, false, id, "Neuer Name", "kaputt", null, null)));
+        assertTrue(w.lands.findIdByName("Base").isPresent(), "Name darf nicht halb geändert werden");
+        assertEquals(400, status(() -> w.lands.edit(alice, false, id, null, null, null, "x".repeat(1001))), "Notizen zu lang");
+    }
+
+    @Test
+    void notesOnlyForOwners() {
+        String id = w.lands.create(alice, false, "Base", OVERWORLD, chunks(0, 0));
+        w.lands.edit(alice, false, id, null, null, null, "Truhe mit Diamanten unter dem Bett");
+        assertFalse(w.lands.toApiJson(bob, false).get(0).getAsJsonObject().has("notes"), "Notizen sind privat");
+        assertEquals("Truhe mit Diamanten unter dem Bett", w.lands.toApiJson(alice, false).get(0).getAsJsonObject().get("notes").getAsString());
+    }
+
+    @Test
+    void teamAssignmentRules() {
+        String team = w.teams.create(alice, "Bauteam", "BAU", null, null, null, null, null);
+        String id = w.lands.create(alice, false, "Base", OVERWORLD, chunks(0, 0));
+        String bobs = w.lands.create(bob, false, "Bobs", OVERWORLD, chunks(3, 3));
+        assertEquals(403, status(() -> w.lands.setTeam(bob, false, bobs, team)), "nur Teammitglieder ordnen zu");
+        assertEquals(403, status(() -> w.lands.setTeam(bob, false, id, team)), "nur Besitzer ordnen zu");
+        w.lands.setTeam(alice, false, id, team);
+        assertEquals(team, w.lands.teamOf(id));
+        assertEquals(403, status(() -> w.lands.setTeam(bob, false, id, null)), "Fremde lösen nicht");
+        w.lands.setTeam(admin, true, id, null);
+        assertTrue(w.lands.teamOf(id) == null, "Server-Admins dürfen lösen");
+    }
 }
