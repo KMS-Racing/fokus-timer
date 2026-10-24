@@ -299,7 +299,7 @@ final class ApiServer {
         origin(s.config().liveMapUrl()).ifPresent(maps::add);
         origin(s.config().seedMapUrl()).ifPresent(maps::add);
         if (s.config().liveMapUrl().isBlank() && !s.detectedBlueMapIds().get().isEmpty()) {
-            // Die Webseite probiert dann BlueMaps Standard-Port auf demselben Rechner (siehe maps3d.js mapUrl()).
+            // Die Webseite probiert dann BlueMaps Standard-Port auf demselben Rechner (siehe web/js/bluemap.js mapUrl()).
             String host = ex.getRequestHeaders().getFirst("Host");
             if (host != null) {
                 String hostname = host.startsWith("[") ? host.substring(0, host.indexOf(']') + 1) : host.split(":")[0];

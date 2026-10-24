@@ -3,191 +3,64 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark light">
 <title>World Planner</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23795548'/%3E%3Crect width='16' height='6' rx='2' fill='%238bcf9b'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
-<script src="app.js" defer></script>
+<script type="module" src="js/main.js"></script>
 </head>
 <body>
+<a class="skip" href="#viewRoot">Zum Inhalt springen</a>
 <header class="top">
-  <div>
-    <div class="brand">WORLD <span>PLANER</span></div>
-    <div class="status" id="serverLine">Minecraft-Server-Planer</div>
+  <button id="navToggle" class="icon nav-toggle" aria-label="Menü öffnen" aria-controls="sideNav">☰</button>
+  <a class="brand" href="#/dashboard">WORLD <span>PLANER</span></a>
+  <div class="search" role="search">
+    <input id="searchInput" type="search" placeholder="Suchen: Land, Marker, Spieler, Koordinaten … ( / )" aria-label="Alles durchsuchen"
+           autocomplete="off" aria-expanded="false" aria-controls="searchResults">
+    <div id="searchResults" class="search-results hidden" role="listbox"></div>
   </div>
   <div class="row" id="accountBox"></div>
 </header>
 
 <!-- Login -->
 <section id="loginView" class="login hidden">
-  <div class="panel login-card">
-    <div class="panel-head"><h2>Einloggen</h2></div>
-    <div class="content">
-      <ol class="steps">
-        <li>Geh auf den Minecraft-Server und tippe <code>/planer login</code></li>
-        <li>Gib den Code hier ein (er gilt 5 Minuten)</li>
-      </ol>
-      <form id="loginForm" class="row">
-        <input id="loginCode" autocomplete="off" spellcheck="false" maxlength="12" placeholder="ABCD-EFGH" aria-label="Login-Code" required>
-        <button class="primary" type="submit">Einloggen</button>
+  <div class="card login-card">
+    <h1>Einloggen</h1>
+    <ol class="steps">
+      <li>Geh auf den Minecraft-Server und tippe <code>/planer login</code></li>
+      <li>Klicke auf den Link im Chat – oder gib den Code hier ein (er gilt 5 Minuten)</li>
+    </ol>
+    <form id="loginForm" class="row">
+      <input id="loginCode" autocomplete="off" spellcheck="false" maxlength="12" placeholder="ABCD-EFGH" aria-label="Login-Code" required>
+      <button class="primary" type="submit">Einloggen</button>
+    </form>
+    <p id="loginError" class="error" role="alert"></p>
+    <details id="advancedBox">
+      <summary>Erweitert: Server-Adresse</summary>
+      <p class="muted small">Nur nötig, wenn diese Seite nicht vom Minecraft-Server selbst kommt (z.&nbsp;B. als Datei geöffnet).</p>
+      <form id="apiBaseForm" class="row">
+        <input id="apiBaseInput" placeholder="https://planer.example/" aria-label="API-Adresse">
+        <button type="submit">Speichern</button>
       </form>
-      <p id="loginError" class="error" role="alert"></p>
-      <details id="advancedBox">
-        <summary>Erweitert: Server-Adresse</summary>
-        <p class="muted small">Nur nötig, wenn diese Seite nicht vom Minecraft-Server selbst kommt (z.&nbsp;B. als Datei geöffnet).</p>
-        <form id="apiBaseForm" class="row">
-          <input id="apiBaseInput" placeholder="https://planer.example/" aria-label="API-Adresse">
-          <button type="submit">Speichern</button>
-        </form>
-      </details>
-    </div>
+    </details>
+    <p class="muted small">Länder auf dieser Seite sind eine Planung für alle – sie schützen im Spiel nichts.</p>
   </div>
 </section>
 
 <!-- Hauptansicht -->
-<main id="appView" class="hidden">
-  <section class="panel map-panel">
-    <div class="panel-head wrap">
-      <div class="tabs" role="tablist">
-        <button class="tab active" data-tab="claim" role="tab">Claim-Karte</button>
-        <button class="tab" data-tab="live" role="tab">Live-Welt 3D</button>
-        <button class="tab" data-tab="seed" role="tab">Seed-Vorschau 3D</button>
-      </div>
-      <select id="dimSelect" aria-label="Dimension"></select>
+<div id="appView" class="app hidden">
+  <nav id="sideNav" class="side-nav" aria-label="Hauptnavigation"></nav>
+  <div id="navBackdrop" class="nav-backdrop"></div>
+  <main id="main">
+    <div id="viewRoot" class="page" tabindex="-1"></div>
+    <div id="stage" class="stage hidden">
+      <div id="claimPane" class="stage-pane hidden"></div>
+      <div id="liveHost" class="stage-pane hidden"></div>
     </div>
+  </main>
+</div>
 
-    <div class="map-area" id="mapArea">
-      <div id="claimView" class="view">
-        <canvas id="mapCanvas" aria-label="Claim-Karte"></canvas>
-        <div class="map-toolbar">
-          <button id="selectModeBtn" title="Chunks zum Claimen auswählen">✚ Auswählen</button>
-          <button id="centerMeBtn" title="Karte auf dich zentrieren">◎ Zu mir</button>
-          <button id="zoomInBtn" aria-label="Hineinzoomen">+</button>
-          <button id="zoomOutBtn" aria-label="Herauszoomen">−</button>
-        </div>
-        <div class="map-layers">
-          <label><input type="checkbox" data-layer="lands" checked> Länder</label>
-          <label><input type="checkbox" data-layer="markers" checked> Marker</label>
-          <label><input type="checkbox" data-layer="players" checked> Spieler</label>
-          <label><input type="checkbox" data-layer="grid" checked> Gitter</label>
-        </div>
-        <div id="hoverInfo" class="hover-info hidden"></div>
-        <div id="chunkCard" class="chunk-card hidden"></div>
-        <div id="selectionBar" class="selection-bar hidden">
-          <strong id="selectionCount">0 Chunks</strong>
-          <button class="primary" id="newLandBtn">Neues Land</button>
-          <span class="row nowrap"><select id="addToLandSelect" aria-label="Land zum Erweitern"></select><button id="addToLandBtn">Hinzufügen</button></span>
-          <button id="removeFromLandBtn">Aus Land entfernen</button>
-          <button id="clearSelectionBtn">Leeren</button>
-        </div>
-        <div class="legend"><span class="sw fog"></span>unentdeckt <span class="sw found"></span>entdeckt <span class="sw sel"></span>Auswahl</div>
-      </div>
-      <div id="liveView" class="view hidden">
-        <iframe id="liveFrame" class="hidden" title="BlueMap Live-Welt" referrerpolicy="no-referrer"></iframe>
-        <div id="liveStatus" class="map-status hidden" role="status"></div>
-        <div id="liveLoading" class="map-loading hidden" role="status"></div>
-        <div class="map-empty" id="liveEmpty"><h2>Keine Live-Karte eingerichtet</h2><p>Der Admin kann in <code>config/world-planner.json</code> bei <code>liveMapUrl</code> die BlueMap-Adresse eintragen.</p></div>
-      </div>
-      <div id="seedView" class="view hidden">
-        <iframe id="seedFrame" class="hidden" title="BlueMap Seed-Vorschau" referrerpolicy="no-referrer"></iframe>
-        <div id="seedStatus" class="map-status hidden" role="status"></div>
-        <div id="seedLoading" class="map-loading hidden" role="status"></div>
-        <div class="map-empty" id="seedEmpty"><h2>Keine Seed-Vorschau eingerichtet</h2><p>Der Admin kann in <code>config/world-planner.json</code> bei <code>seedMapUrl</code> die BlueMap-Adresse des Vorschau-Servers eintragen.</p></div>
-      </div>
-    </div>
-
-    <div class="content">
-      <div class="statgrid">
-        <div class="stat"><div class="value" id="seedValue">—</div><div class="label">Seed</div></div>
-        <div class="stat"><div class="value" id="versionValue">—</div><div class="label">Minecraft-Version</div></div>
-        <div class="stat"><div class="value" id="onlineValue">—</div><div class="label">Spieler online</div></div>
-        <div class="stat"><div class="value" id="discoveredValue">—</div><div class="label">Entdeckte Chunks</div></div>
-      </div>
-      <p class="note small" id="tabNote">Gezeigt werden nur Chunks, in deren Nähe schon ein Spieler war. Länder sind eine Anzeige – im Spiel wird nichts geschützt.</p>
-    </div>
-  </section>
-
-  <aside class="side">
-    <section class="panel hidden" id="invitesPanel">
-      <div class="panel-head"><h2>✉ Einladungen</h2></div>
-      <div class="content" id="invitesList"></div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-head"><h2>Meine Länder</h2><span class="pill" id="usagePill">0 / 0 Chunks</span></div>
-      <div class="content">
-        <div id="myLands"></div>
-        <p class="muted small">Neues Land: oben <strong>✚ Auswählen</strong> drücken, Chunks anklicken, dann <strong>Neues Land</strong>. Oder im Spiel <code>/land neu &lt;Name&gt;</code>.</p>
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-head"><h2>Alle Länder</h2><span class="pill" id="landCount">0</span></div>
-      <div class="content">
-        <input id="landSearch" type="search" placeholder="Land oder Spieler suchen…" aria-label="Länder durchsuchen">
-        <div id="allLands" class="list-scroll"></div>
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-head"><h2>Bau-Planer</h2><span class="pill" id="markerCount">0 Marker</span></div>
-      <div class="content">
-        <form id="markerForm">
-          <input type="hidden" id="markerId">
-          <div class="field"><label for="markerName">Name</label><input id="markerName" required maxlength="48" placeholder="z. B. Spawn-Stadt"></div>
-          <div class="row">
-            <div class="field grow"><label for="markerType">Typ</label>
-              <select id="markerType">
-                <option value="city">Stadt</option><option value="base">Basis</option><option value="road">Straße</option>
-                <option value="farm">Farm</option><option value="resource">Rohstoffe</option><option value="portal">Portal</option><option value="other">Sonstiges</option>
-              </select>
-            </div>
-            <div class="field grow"><label for="markerDim">Dimension</label><select id="markerDim"></select></div>
-          </div>
-          <div class="row">
-            <div class="field grow"><label for="coordX">X</label><input id="coordX" type="number" step="1" required value="0"></div>
-            <div class="field grow"><label for="coordY">Y</label><input id="coordY" type="number" step="1" required value="64"></div>
-            <div class="field grow"><label for="coordZ">Z</label><input id="coordZ" type="number" step="1" required value="0"></div>
-          </div>
-          <p class="muted small" id="convertHint"></p>
-          <div class="field"><label for="markerNotes">Notizen / Material</label><textarea id="markerNotes" rows="2" maxlength="500" placeholder="Materialien, Maße, Team-Notizen…"></textarea></div>
-          <label class="check"><input type="checkbox" id="markerPublic" checked> Für alle sichtbar (auch auf BlueMap)</label>
-          <div class="row">
-            <button class="primary" type="submit" id="markerSubmit">Marker speichern</button>
-            <button type="button" id="markerHereBtn">Meine Position</button>
-            <button type="button" id="markerCancelBtn" class="hidden">Abbrechen</button>
-          </div>
-        </form>
-        <input id="markerSearch" type="search" placeholder="Marker suchen…" aria-label="Marker durchsuchen">
-        <div id="markerList" class="list-scroll"></div>
-        <div class="row">
-          <button id="exportBtn" type="button">Meine Marker exportieren</button>
-          <button id="importBtn" type="button">Importieren</button>
-          <input type="file" id="importFile" accept="application/json,.json" class="hidden">
-        </div>
-      </div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-head"><h2>Online</h2></div>
-      <div class="content" id="playerList"></div>
-    </section>
-  </aside>
-</main>
-
-<footer class="foot">World Planner · BlueMap zeigt die echte 3D-Welt · Gib deinen Login-Code niemals weiter.</footer>
-
-<dialog id="textDialog">
-  <form method="dialog" id="textDialogForm">
-    <div class="panel-head"><h2 id="textDialogTitle">Name</h2></div>
-    <div class="content">
-      <div class="field"><label for="textDialogInput" id="textDialogLabel">Name</label><input id="textDialogInput" maxlength="24" required></div>
-      <p class="error small" id="textDialogError"></p>
-      <div class="row"><button class="primary" value="ok" id="textDialogOk">OK</button><button value="cancel" formnovalidate>Abbrechen</button></div>
-    </div>
-  </form>
-</dialog>
-
-<datalist id="knownPlayers"></datalist>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
+<dialog id="modal" class="modal"></dialog>
 </body>
 </html>
