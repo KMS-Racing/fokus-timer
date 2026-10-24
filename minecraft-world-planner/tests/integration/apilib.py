@@ -80,3 +80,29 @@ class Checker:
         failed = len(self.results) - ok
         print(f"\n{self.label}: {ok} bestanden, {failed} fehlgeschlagen, 0 übersprungen")
         return 1 if failed else 0
+
+
+def rid():
+    """Neue requestId für Handels-Aktionen (schützt vor doppelt ausgeführten Klicks)."""
+    import uuid
+    return str(uuid.uuid4())
+
+
+def by_id(items, item_id):
+    for it in items:
+        if it.get("id") == item_id:
+            return it
+    return None
+
+
+def cleanup_test_teams(tokens, prefix="Testteam "):
+    """Räumt Teams früherer, abgebrochener Testläufe auf (nur Teams, deren Name mit prefix beginnt)."""
+    for tok in tokens:
+        _, me = call("api/me", token=tok)
+        for t in me.get("teams", []):
+            if not t["name"].startswith(prefix):
+                raise SystemExit(f"Testspieler ist schon im Team »{t['name']}« – bitte erst von Hand aufräumen.")
+            if t["role"] == "owner":
+                call(f"api/teams/{t['id']}/dissolve", {"confirmName": t["name"]}, tok)
+            else:
+                call(f"api/teams/{t['id']}/leave", {}, tok)
