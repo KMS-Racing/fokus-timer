@@ -109,7 +109,7 @@ function updateLayers() {
 
 function updateDims() {
   const dims = (store.world && store.world.dimensions && store.world.dimensions.length) ? store.world.dimensions : ['minecraft:overworld'];
-  if (!dims.includes(map.dim)) map.dim = dims[0];
+  if (!dims.includes(map.dim)) setDimension(dims[0]); // gemerkte Dimension gibt es auf diesem Server nicht
   fill(ui.dim, dims.map(d => el('option', { value: d, text: dimName(d) })));
   ui.dim.value = map.dim;
 }

@@ -299,7 +299,7 @@ function draw() {
   if (L.spawn && spawn && spawn.dimension === map.dim) {
     const [sx, sz] = toScreen(spawn.x + 0.5, spawn.z + 0.5);
     star(sx, sz, 8, '#ffe082');
-    if (L.labels) label('Spawn', sx, sz + 16, '#ffe082', 'bold 11px system-ui, sans-serif');
+    if (L.labels) label('Spawn', sx, sz + 16, '#ffe082', 'bold 11px system-ui, sans-serif', true);
   }
 
   // 6) Projekte mit Ort

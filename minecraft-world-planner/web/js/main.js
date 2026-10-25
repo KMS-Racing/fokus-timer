@@ -155,7 +155,10 @@ async function startApp() {
   mapModule.mapElement();
   if (!mapModule.map.viewRestored) {
     const p = store.players.find(x => x.uuid === store.me.uuid);
-    if (p) { mapModule.map.dim = p.dimension; mapModule.centerOn(p.x, p.z, 0.8); } else await centerOnSpawn();
+    if (p) {
+      await mapModule.setDimension(p.dimension); // baut auch die Länder dieser Dimension neu auf
+      mapModule.centerOn(p.x, p.z, 0.8);
+    } else await centerOnSpawn();
   }
   mapModule.loadDiscovered(true).catch(() => {});
   Promise.allSettled([load.projects(), load.trades(), load.people(), load.activity(), load.blueMapStatus()]);
