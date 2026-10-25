@@ -10,7 +10,7 @@ Die Mod bringt ihre Webseite selbst mit – kein extra Webhosting nötig.
 | 🧊 **Live-Welt** | BlueMap (3D) an derselben Stelle wie die Karte · optional Seed-Vorschau |
 | ⚑ **Claims** | Chunks anklicken → **Vorschau** (frei? entdeckt? zusammenhängend? Limit?) → Land erstellen · Mitbesitzer · Notizen · Team-Zuordnung |
 | ◆ **Marker** | Orte mit Typ, Symbol, Farbe, optionaler Höhe · Sichtbarkeit: nur ich / Team / Land-Besitzer / alle · Nether-Umrechnung · TP-Befehl |
-| ⚔ **Teams** | Rollen Owner / Admin / Moderator / Mitglied / Anwärter · Einladung oder Bewerbung (**nie ohne Zustimmung**) · bestätigte Übergabe · Auflösen ohne Datenverlust |
+| ⚔ **Teams** | Rollen Owner / Admin / Moderator / Mitglied / Anwärter · Einladung oder Bewerbung (**nie ohne Zustimmung**) · bestätigte Übergabe · Auflösen ohne Datenverlust · **Kürzel im Spiel**: `[KMS] Alice` im Chat, in der Tab-Liste und über dem Kopf |
 | ⚖ **Handel** | Auktion, Sofortkauf, Festpreis, Tausch und **Hilfe** (Bauen, Kämpfen …) · Gebote, Gegenangebote, Übergabe-Bestätigung, Streitfall |
 | ⚒ **Projekte** | Bauprojekte mit Aufgaben, Fortschritt, Verantwortlichen, Updates, Land/Team/Ort |
 | ☺ **Spieler** | Wer ist online, wer war zuletzt da, Teams, Länder |
@@ -47,12 +47,12 @@ cd fabric-mod
 ```
 
 Beim ersten Mal lädt Gradle viel herunter, das dauert ein paar Minuten. `build` führt auch die Unit-Tests aus.
-Fertig ist die Datei `fabric-mod/build/libs/world-planner-0.3.0.jar` (die `...-sources.jar` daneben brauchst du nicht).
+Fertig ist die Datei `fabric-mod/build/libs/world-planner-0.3.1.jar` (die `...-sources.jar` daneben brauchst du nicht).
 
 ## 2. Auf dem Server installieren (oder von 0.2 updaten)
 
 1. **Backup** machen (siehe [BACKUP.md](BACKUP.md)), dann Server stoppen.
-2. Alte `world-planner-*.jar` aus `mods/` entfernen, `world-planner-0.3.0.jar` und die passende **Fabric API** hineinlegen. Für 3D auch **BlueMap**.
+2. Alte `world-planner-*.jar` aus `mods/` entfernen, `world-planner-0.3.1.jar` und die passende **Fabric API** hineinlegen. Für 3D auch **BlueMap**.
 3. Server starten. Im Log sollte stehen:
    ```
    [World Planner] Webseite und API laufen auf http://127.0.0.1:8765/
@@ -106,6 +106,13 @@ Teams, Handel und Projekte gibt es (noch) nur auf der Webseite.
 - Der Owner kann nicht einfach austreten: **Übergabe** (Teamname eintippen, Empfänger nimmt an) oder **Auflösen** (Teamname eintippen).
 - Auflösen löscht keine Daten: Länder, Projekte, Marker und Angebote bleiben; „nur Team“ wird zu „privat“.
 - Private Teams sehen nur Mitglieder, Eingeladene und Server-Admins (auch nicht in BlueMap).
+- **Kürzel im Spiel** (`chatTeamTags`, Standard an): Mitglieder öffentlicher Teams bekommen `[KÜRZEL]` in der Teamfarbe vor den Namen –
+  im Chat, in der Tab-Liste und über dem Kopf. Dafür nutzt die Mod Minecrafts eigene Scoreboard-Teams (`wpt_…`, wie `/team`),
+  also braucht im Spiel niemand eine Mod. Ist man in mehreren Teams, zählt das mit der höchsten Rolle.
+  Private Teams bekommen kein Kürzel (sonst wüsste jeder, wer drin ist). Wer schon in einem anderen Scoreboard-Team ist
+  (z. B. von einem Minispiel), wird nicht herausgenommen. Am Spiel ändert sich fast nichts: Unsichtbare Teammitglieder bleiben
+  unsichtbar, Schaden untereinander bleibt an – nur Schwert-Schwungangriffe (Sweep) treffen Teammitglieder nicht mehr,
+  weil Minecraft sie als Verbündete zählt.
 
 **Handel (Web-Modus)**
 - **Auktion:** Mindestgebot = Höchstgebot + Mindestschritt; man kann sich nicht selbst überbieten; ein Gebot in den letzten
@@ -142,6 +149,7 @@ Datei: `config/world-planner.json` (Server neu starten nach Änderungen). Unsinn
 | `maxProjectsPerPlayer` | `50` | Höchstzahl Projekte, die ein Spieler anlegt |
 | `maxTeamsPerPlayer` | `1` | In wie vielen Teams man gleichzeitig sein darf (1–20) |
 | `teamInviteDays` | `7` | Nach wie vielen Tagen eine Team-Einladung abläuft |
+| `chatTeamTags` | `true` | Team-Kürzel im Spiel vor den Namen (Chat, Tab-Liste, über dem Kopf). Auf `false` stellen und neu starten entfernt alle Kürzel wieder. |
 | `tradeUnit` | `"Diamanten"` | Einheit für Preise im Handel (nur ein Wort für die Anzeige – es wird nichts abgebucht) |
 | `tradeMinIncrement` | `1` | Standard-Mindestschritt bei Auktionen |
 | `maxActiveListingsPerPlayer` | `20` | Aktive Angebote pro Spieler |
@@ -209,6 +217,8 @@ Export/Import auf der Webseite (Einstellungen) ist für **deine eigenen** Daten;
 - **Die Karte zeigt kein Gelände** – dafür gibt es die Live-Welt (BlueMap).
 - **Keine Benachrichtigung im Spiel** bei Geboten oder Team-Einladungen; das Dashboard zeigt alles beim nächsten Öffnen.
 - **Teams, Handel und Projekte** gibt es nur auf der Webseite, nicht als Befehle.
+- **Kürzel nach dem Entfernen der Mod:** Minecraft speichert Scoreboard-Teams selbst. Wer die Mod löscht, sollte vorher
+  `chatTeamTags` auf `false` stellen und einmal starten – sonst bleiben die `wpt_…`-Teams, bis man sie mit `/team remove` löscht.
 - **Nur Minecraft 26.3**, nur dedizierter Server.
 
 ## Fehlerbehebung

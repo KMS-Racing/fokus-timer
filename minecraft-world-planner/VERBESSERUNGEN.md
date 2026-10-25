@@ -106,3 +106,12 @@ Auf einem echten Minecraft-26.3-Server mit Fabric API, BlueMap 5.29 und vier Fak
 - API: **59** Kern + **85** SMP + **46** Handel (inkl. gleichzeitiger Gebote/Käufe über HTTP)
 - Browser (Chromium): **44** Kern + **32** SMP mit zwei Spielern + **22** BlueMap-Abgleich (echte Kamera)
 - Umstieg von echten 0.2-Daten auf 0.3, Neustart, Ablauf einer Auktion durch den Server-Timer
+
+# Version 0.3.1: Team-Kürzel im Spiel
+
+- Mitglieder öffentlicher Teams bekommen `[KÜRZEL]` vor den Namen – im Chat, in der Tab-Liste und über dem Kopf.
+  Umgesetzt mit Minecrafts eigenen Scoreboard-Teams, also ohne Mod im Spiel der Spieler.
+- Sicher eingebaut: nur eigene `wpt_…`-Teams werden angefasst, fremde Scoreboard-Teams (Minispiele, `/team`) bleiben, private
+  Teams bekommen kein Kürzel, „Unsichtbare halb sehen“ ist aus, damit sich am Spiel nichts ändert. Abschaltbar mit `chatTeamTags`.
+- Getestet: 6 Unit-Tests mit Minecrafts echtem Scoreboard, 10 Prüfungen auf dem echten Server (`/team list`, `/say` zeigt
+  `[[KÜRZEL] Alice] Hallo`), Neustart, Ab- und Wiedereinschalten.

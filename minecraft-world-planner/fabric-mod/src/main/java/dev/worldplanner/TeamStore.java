@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -131,6 +132,9 @@ final class TeamStore extends JsonStore {
 
     /** Was nach dem Auflösen übrig bleibt, damit Länder/Projekte/Marker die Verknüpfung lösen können. */
     record Dissolved(String id, String name, List<UUID> members) {}
+
+    /** Team-Kürzel für den Chat im Spiel (siehe ChatTagSync). */
+    record ChatTag(String teamId, String tag, String name, String color) {}
 
     /** Uhr – in Tests austauschbar, um Abläufe ohne Warten zu prüfen. */
     volatile java.util.function.LongSupplier clock = System::currentTimeMillis;
@@ -420,6 +424,27 @@ final class TeamStore extends JsonStore {
         if (t == null || !visible(t, viewer, admin)) throw PlannerException.notFound("Dieses Team gibt es nicht (oder es ist privat).");
         expire(t);
         return teamJson(t, viewer, admin);
+    }
+
+    /**
+     * Welches Kürzel steht im Spiel vor wessen Namen? Pro Spieler das Team mit der höchsten Rolle
+     * (bei Gleichstand das, in dem er am längsten ist). Nur öffentliche Teams – sonst wüsste jeder im Spiel,
+     * wer in einem privaten Team ist.
+     */
+    synchronized Map<UUID, ChatTag> chatTags() {
+        Map<UUID, ChatTag> out = new HashMap<>();
+        Map<UUID, Member> best = new HashMap<>();
+        for (Team t : teams.values()) {
+            if (!t.visibility.equals("public")) continue;
+            for (Member m : t.members.values()) {
+                Member b = best.get(m.uuid);
+                if (b == null || m.role.rank > b.role.rank || (m.role.rank == b.role.rank && m.joinedAt < b.joinedAt)) {
+                    best.put(m.uuid, m);
+                    out.put(m.uuid, new ChatTag(t.id, t.tag, t.name, t.color));
+                }
+            }
+        }
+        return out;
     }
 
     /** Offene Einladungen eines Spielers (für Dashboard und Benachrichtigung). */

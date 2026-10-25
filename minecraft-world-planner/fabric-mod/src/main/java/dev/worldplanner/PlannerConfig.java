@@ -39,6 +39,8 @@ record PlannerConfig(
         int maxProjectsPerPlayer,
         int maxTeamsPerPlayer,
         int teamInviteDays,
+        /** Kürzel öffentlicher Teams im Spiel vor dem Namen zeigen (Chat, Tab-Liste, über dem Kopf). */
+        boolean chatTeamTags,
         // Handel (Web-Auktionshaus – überträgt keine Items, siehe README)
         String tradeUnit,
         int tradeMinIncrement,
@@ -100,6 +102,7 @@ record PlannerConfig(
                 clamp(integer(json, "maxProjectsPerPlayer", 50), 0, 10_000),
                 clamp(integer(json, "maxTeamsPerPlayer", 1), 1, 20),
                 clamp(integer(json, "teamInviteDays", 7), 1, 90),
+                bool(json, "chatTeamTags", true),
                 limitText(str(json, "tradeUnit", "Diamanten"), 24, "Diamanten"),
                 clamp(integer(json, "tradeMinIncrement", 1), 1, 1_000_000),
                 clamp(integer(json, "maxActiveListingsPerPlayer", 20), 0, 1000),
@@ -132,6 +135,7 @@ record PlannerConfig(
         o.addProperty("maxProjectsPerPlayer", maxProjectsPerPlayer);
         o.addProperty("maxTeamsPerPlayer", maxTeamsPerPlayer);
         o.addProperty("teamInviteDays", teamInviteDays);
+        o.addProperty("chatTeamTags", chatTeamTags);
         o.addProperty("tradeUnit", tradeUnit);
         o.addProperty("tradeMinIncrement", tradeMinIncrement);
         o.addProperty("maxActiveListingsPerPlayer", maxActiveListingsPerPlayer);

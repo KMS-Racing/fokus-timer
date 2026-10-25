@@ -57,6 +57,7 @@ async function cleanup(page) {
   check('Team gegründet, Kürzel groß', (await a.textContent('#viewRoot h1')).includes(`[${tag}] ${teamName}`), await a.textContent('#viewRoot h1'));
   check('A ist Owner', (await a.textContent('#viewRoot')).includes('Du: Owner'));
   check('Beschreibung mit HTML wird als Text gezeigt', (await a.locator('#viewRoot .lead b').count()) === 0 && (await a.textContent('#viewRoot .lead')).includes('<b>Burgen</b>'));
+  check('Hinweis: Kürzel erscheint im Spiel', (await a.textContent('#chatTagNote')).includes(`[${tag}] vor den Namen`), await a.textContent('#chatTagNote'));
   const teamUrl = a.url().split('#')[1];
 
   // 2) B einladen – B ist erst nach Annahme im Team

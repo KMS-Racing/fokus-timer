@@ -31,7 +31,8 @@ function teamFields(t = {}) {
     { name: 'symbol', label: 'Logo (Symbol)', type: 'select', value: t.symbol || '', options: [['', '— keins —'], ...symbols.map(s => [s, s])],
       help: 'Statt Bild-Upload: Ein Upload müsste moderiert werden und wäre ein Sicherheitsrisiko.' },
     { name: 'visibility', label: 'Sichtbarkeit', type: 'select', value: t.visibility || 'public',
-      options: [['public', 'Öffentlich – alle sehen das Team'], ['private', 'Privat – nur Mitglieder und Eingeladene']] },
+      options: [['public', 'Öffentlich – alle sehen das Team'], ['private', 'Privat – nur Mitglieder und Eingeladene']],
+      help: store.meta && store.meta.chatTeamTags ? 'Öffentliche Teams bekommen im Spiel ihr Kürzel vor den Namen (Chat, Tab-Liste).' : null },
     { name: 'joinPolicy', label: 'Beitritt', type: 'select', value: t.joinPolicy || 'invite',
       options: [['invite', 'Nur per Einladung'], ['apply', 'Bewerbung möglich (nur bei öffentlichen Teams)']] },
   ];
@@ -159,6 +160,14 @@ async function transfer(t) {
   if (v) await teamAction(t, 'transfer', v, `Übergabe an ${v.player} angeboten.`);
 }
 
+/** Hinweis, ob und wie das Kürzel im Spiel erscheint (Server-Einstellung chatTeamTags). */
+function chatTagNote(t) {
+  if (!store.meta || !store.meta.chatTeamTags) return null;
+  return el('p', { class: 'muted small', id: 'chatTagNote' }, t.visibility === 'public'
+    ? `Im Spiel steht [${t.tag}] vor den Namen der Mitglieder – im Chat, in der Tab-Liste und über dem Kopf.`
+    : 'Private Teams bekommen im Spiel kein Kürzel – sonst wüsste jeder, wer drin ist.');
+}
+
 function teamStuff(t) {
   const lands = store.lands.filter(l => l.teamId === t.id);
   const projects = store.projects.filter(p => p.teamId === t.id);
@@ -206,6 +215,7 @@ function renderDetail(root, id) {
           tr.to.uuid === me.uuid ? el('button', { class: 'primary', onclick: () => teamAction(t, 'transfer-accept', {}, 'Du bist jetzt Owner.') }, 'Übergabe annehmen') : null,
           el('button', { onclick: () => teamAction(t, 'transfer-cancel', {}, 'Übergabe abgebrochen.') }, tr.to.uuid === me.uuid ? 'Ablehnen' : 'Abbrechen'))) : null,
       t.description ? el('p', { class: 'lead', text: t.description }) : null,
+      chatTagNote(t),
       el('div', { class: 'grid two' },
         el('section', { class: 'card' },
           el('h2', { text: `Mitglieder (${t.memberCount})` }),

@@ -106,6 +106,7 @@ final class AccountRoutes extends Routes {
         o.addProperty("maxListingDays", c.maxListingDays());
         o.addProperty("maxTeamsPerPlayer", c.maxTeamsPerPlayer());
         o.addProperty("teamInviteDays", c.teamInviteDays());
+        o.addProperty("chatTeamTags", c.chatTeamTags());
         o.addProperty("serverTime", System.currentTimeMillis());
         return o;
     }

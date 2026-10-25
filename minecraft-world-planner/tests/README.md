@@ -17,6 +17,8 @@ schicken gleichzeitige Anfragen (Gebote, Käufe) und messen, wo die BlueMap-Kame
 | `browser_core_test.js` | Login per Link, Land per Karte claimen mit Vorschau, einladen/annehmen, Marker, Suche, Handy |
 | `smp_browser_test.js` | Zwei Spieler gleichzeitig: Team gründen/einladen/Rolle, Team-Projekt, Kauf mit Übergabe, Auktion, Team auflösen |
 | `bluemap_sync_test.js` | BlueMap übernimmt Position und Zoom der Karte wirklich (misst die Kamera im iframe) |
+| `chat_tags_test.py` | Team-Kürzel im Spiel: liest die Server-Konsole mit (`/team list`, `/say`) – braucht `TESTSERVER_DIR` |
+| `restart_check.py` | Alle Daten vor und nach einem Server-Neustart vergleichen (`save`, Server neu starten, `compare`) |
 
 ## Integrationstests vorbereiten
 
@@ -40,6 +42,7 @@ schicken gleichzeitige Anfragen (Gebote, Käufe) und messen, wo die BlueMap-Kame
    node tests/integration/browser_core_test.js $($T code Alice) $($T code Bob) Bob
    node tests/integration/smp_browser_test.js  $($T code Alice) $($T code Bob) Bob
    node tests/integration/bluemap_sync_test.js $($T code Alice)   # braucht BlueMap mit gerenderter Welt
+   python3 tests/integration/chat_tags_test.py $($T code Alice) $($T code Bob) $($T code Dana)   # liest server.log in TESTSERVER_DIR
    ```
 
 Umgebungsvariablen: `PLANNER_URL` (Standard `http://127.0.0.1:8765/`), `CHROMIUM` (Pfad zu Chromium, sonst der von Playwright),

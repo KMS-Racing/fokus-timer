@@ -38,6 +38,10 @@ der **Ablauf von Auktionen** laufen deshalb über einen eigenen Timer-Thread (`w
 Handel). Das BlueMap-Update wird per `server.execute()` auf den Server-Thread gereicht; das arbeitet der Server auch in der
 Pause ab.
 
+**Team-Kürzel im Spiel:** `ChatTagSync` gleicht die Planer-Teams mit Minecrafts Scoreboard-Teams ab (Präfix = Kürzel).
+Der Timer prüft jede Sekunde, ob sich Teams oder Spielernamen geändert haben (`version()`), und gibt den Abgleich dann per
+`server.execute()` auf den Server-Thread. Angefasst werden nur Teams, deren Name mit `wpt_` beginnt.
+
 **Keine halben Änderungen:** Bearbeiten prüft erst alle Angaben und übernimmt sie dann (Länder, Teams, Projekte, Handel).
 Ein Fehler in einem Feld ändert also auch die anderen Felder nicht. Dafür gibt es eigene Tests.
 
@@ -97,6 +101,7 @@ Alle Dateien haben eine `schemaVersion`. Länder und Marker sind auf Version 2 (
 | `Access.java`, `Validate.java`, `RateLimiter.java` | Rechte über Bereiche hinweg, Eingabeprüfung, Bremse |
 | `DiscoveryTracker.java`, `SessionStore.java`, `PlayerDirectory.java` | Entdeckte Chunks, Logins, bekannte Spieler |
 | `BlueMapBridge.java`, `LandOutline.java` | BlueMap-Ebenen (nur geladen, wenn BlueMap da ist), Umrisse aus Chunks |
+| `ChatTagSync.java` | Spiegelt öffentliche Teams als Scoreboard-Teams `wpt_…` → `[KÜRZEL]` vor dem Namen im Spiel |
 | `JsonStore.java`, `JsonFiles.java`, `Chunks.java`, `PlannerException.java` | Hilfsklassen |
 
 **Webseite** (`web/`, ES-Module ohne Build-Schritt):

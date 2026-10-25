@@ -45,6 +45,10 @@ public final class WorldPlannerMod implements ModInitializer {
     private ExecutorService saver;
     private ScheduledExecutorService timer;
     private final AtomicBoolean blueMapUpdateQueued = new AtomicBoolean();
+    private volatile ChatTagSync chatTags;
+    private final AtomicBoolean chatTagsQueued = new AtomicBoolean();
+    private volatile long syncedTeamsVersion = -1;
+    private volatile long syncedPlayersVersion = -1;
     private long tick;
 
     @Override
@@ -93,6 +97,17 @@ public final class WorldPlannerMod implements ModInitializer {
             api = null;
         }
 
+        // Team-Kürzel im Chat über Minecrafts Scoreboard-Teams (wir sind hier auf dem Server-Thread)
+        if (s.config().chatTeamTags()) {
+            chatTags = new ChatTagSync(LOGGER, s.teams(), s.players());
+            syncedTeamsVersion = s.teams().version();
+            syncedPlayersVersion = s.players().version();
+            chatTags.sync(server.getScoreboard());
+        } else {
+            int removed = ChatTagSync.removeAll(server.getScoreboard());
+            if (removed > 0) LOGGER.info("[World Planner] chatTeamTags ist aus – {} Team-Kürzel aus dem Scoreboard entfernt.", removed);
+        }
+
         if (s.config().blueMapIntegration() && FabricLoader.getInstance().isModLoaded("bluemap")) {
             blueMap = new BlueMapBridge(LOGGER, s);
             LOGGER.info("[World Planner] BlueMap gefunden – Länder und Marker werden auf der 3D-Karte angezeigt.");
@@ -112,6 +127,7 @@ public final class WorldPlannerMod implements ModInitializer {
             s.sessions().cleanup();
         }), 60, 60, TimeUnit.SECONDS);
         timer.scheduleWithFixedDelay(() -> safely(() -> queueBlueMapUpdate(server)), 1, 1, TimeUnit.SECONDS);
+        timer.scheduleWithFixedDelay(() -> safely(() -> queueChatTags(server)), 1, 1, TimeUnit.SECONDS);
         // Abgelaufene Auktionen/Angebote beendet der Server selbst – auch wenn niemand die Webseite offen hat.
         timer.scheduleWithFixedDelay(() -> safely(() -> s.trades().settleExpired()), 1, 1, TimeUnit.SECONDS);
     }
@@ -128,6 +144,29 @@ public final class WorldPlannerMod implements ModInitializer {
                 if (bridge != null) bridge.tick(server);
             } finally {
                 blueMapUpdateQueued.set(false);
+            }
+        });
+    }
+
+    /**
+     * Team-Kürzel nachziehen, wenn sich Teams oder Spielernamen geändert haben. Das Scoreboard ist Minecraft-Zustand,
+     * deshalb läuft der Abgleich per server.execute() auf dem Server-Thread (auch in der Pause).
+     */
+    private void queueChatTags(MinecraftServer server) {
+        ChatTagSync sync = chatTags;
+        PlannerServices s = services;
+        if (sync == null || s == null) return;
+        long teamsVersion = s.teams().version();
+        long playersVersion = s.players().version();
+        if (teamsVersion == syncedTeamsVersion && playersVersion == syncedPlayersVersion) return;
+        if (!chatTagsQueued.compareAndSet(false, true)) return;
+        server.execute(() -> {
+            try {
+                sync.sync(server.getScoreboard());
+                syncedTeamsVersion = teamsVersion;
+                syncedPlayersVersion = playersVersion;
+            } finally {
+                chatTagsQueued.set(false);
             }
         });
     }
@@ -173,6 +212,7 @@ public final class WorldPlannerMod implements ModInitializer {
         api = null;
         if (blueMap != null) blueMap.close();
         blueMap = null;
+        chatTags = null; // die Scoreboard-Teams speichert Minecraft selbst; beim nächsten Start wird abgeglichen
         PlannerServices s = services;
         services = null;
         if (saver != null) {
