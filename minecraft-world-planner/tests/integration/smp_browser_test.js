@@ -131,7 +131,7 @@ async function cleanup(page) {
   await b.waitForSelector('#handoverBox', { timeout: 8000 });
   check('B: gekauft, Übergabe offen', (await b.textContent('#viewRoot')).includes('Du hast gekauft') && (await b.textContent('#handoverBox')).includes('Übergabe offen'));
   await go(b, '#/dashboard');
-  await b.waitForFunction(t => document.querySelector('#todoCard') && document.querySelector('#todoCard').textContent.includes('Übergabe bestätigen: »' + t), title, { timeout: 8000 });
+  await b.waitForFunction(t => document.querySelector('#todoCard') && document.querySelector('#todoCard').textContent.includes('Du hast »' + t + '« gekauft'), title, { timeout: 8000 });
   check('B: Dashboard erinnert an die Übergabe', true);
   await go(a, listingHash);
   await a.evaluate(() => planner.load.trades());

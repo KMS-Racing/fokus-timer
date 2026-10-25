@@ -108,8 +108,12 @@ async function dialogSubmit(page) {
   await page.waitForFunction(n => document.querySelector('#viewRoot').textContent.includes(n), markerName, { timeout: 8000 });
   check('HTML im Markernamen wird als Text gezeigt', (await page.locator('#viewRoot .item b').count()) === 0);
   await page.locator('#viewRoot .item', { hasText: markerName }).locator('button', { hasText: 'TP-Befehl' }).first().click();
-  await page.waitForSelector('#toast.show');
-  check('Kopieren gibt Rückmeldung', (await page.textContent('#toast')).includes('/tp @s -100 64 250'), await page.textContent('#toast'));
+  // Gezielt auf die Kopier-Meldung warten: Direkt davor steht noch „Marker angelegt“ – ein beliebiger Toast reicht nicht.
+  const copied = await page.waitForFunction(() => {
+    const t = document.querySelector('#toast.show');
+    return t && t.textContent.includes('/tp @s -100 64 250');
+  }, null, { timeout: 5000 }).then(() => true, () => false);
+  check('Kopieren gibt Rückmeldung', copied, await page.textContent('#toast'));
 
   // 6b) Koordinaten-Rechner auf der Karte
   await page.click('#sideNav a[data-route=karte]');

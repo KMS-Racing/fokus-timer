@@ -167,6 +167,11 @@ final class ImportExport {
                 // Alte Web-Exporte hatten Typen wie "City" – auf die neuen Schlüssel abbilden
                 if (m.has("type")) {
                     String t = m.get("type").getAsString().toLowerCase(Locale.ROOT);
+                    if (t.equals("death")) {
+                        // Ein importierter Todespunkt gehört zu einer anderen Welt oder einem anderen Spieler – das wäre irreführend.
+                        sum.skip(label, "Todespunkte werden nicht übernommen – der Planer setzt sie selbst, wenn du stirbst.");
+                        continue;
+                    }
                     m.addProperty("type", s.markers().types().containsKey(t) ? t : "other");
                 }
                 String problem = s.markers().problem(user, admin, m);

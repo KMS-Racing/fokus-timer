@@ -3,6 +3,7 @@
 //
 // Koordinaten: Blöcke (x, z). Ein Chunk = 16 Blöcke, eine Region = 32 Chunks = 512 Blöcke. Norden ist oben (−Z).
 import { api, enc } from './api.js';
+import { fmtDistance } from './coords.js';
 import { store, on } from './store.js';
 import { hexA, storageJson, storageSet } from './util.js';
 
@@ -13,7 +14,7 @@ export const MAX_ZOOM = 4;
 const COLORS = { fog: '#0b0e13', found: [0x2c, 0x36, 0x44], grid: 'rgba(255,255,255,0.06)', region: 'rgba(130,170,255,0.28)' };
 const TYPE_COLORS = {
   base: '#8bcf9b', farm: '#c5e17a', village: '#e0b47a', portal: '#b388ff', spawner: '#ff8a80', resource: '#80deea',
-  project: '#ffcc80', meeting: '#90caf9', danger: '#ff5252', city: '#ffd88a', road: '#bcaaa4', other: '#e0e0e0',
+  project: '#ffcc80', meeting: '#90caf9', danger: '#ff5252', city: '#ffd88a', road: '#bcaaa4', death: '#b0bec5', other: '#e0e0e0',
 };
 
 export const DEFAULT_LAYERS = { discovered: true, grid: true, regions: false, lands: true, markers: true, players: true, projects: true, spawn: true, labels: true };
@@ -27,6 +28,7 @@ export const map = {
   landRender: [], chunkOwner: new Map(),
   selection: new Set(), selecting: false,
   hover: null, highlight: null,
+  measure: null, // { dim, a: {x, z}, b: {x, z} | null } – Messlinie des Mess-Werkzeugs
   onClick: null, onHover: null, onSelection: null, onViewChange: null, onDimension: null,
 };
 
@@ -191,6 +193,14 @@ function draw() {
   ctx.fillStyle = COLORS.fog;
   ctx.fillRect(0, 0, w, h);
   placed = [];
+  // Spielernamen haben Vorrang: Ihre Plätze werden zuerst reserviert, Land- und Markernamen weichen aus.
+  if (L.players) {
+    for (const p of store.players) {
+      if (p.dimension !== map.dim) continue;
+      const [sx, sz] = toScreen(p.x, p.z);
+      placed.push(labelBox(p.name, sx, sz - 12, '11px system-ui, sans-serif'));
+    }
+  }
 
   const [minBX, minBZ] = toBlock(0, 0);
   const [maxBX, maxBZ] = toBlock(w, h);
@@ -352,6 +362,40 @@ function draw() {
     ctx.lineWidth = 1;
     ctx.strokeRect(sx + 0.5, sz + 0.5, cpx - 1, cpx - 1);
   }
+
+  // 10) Messlinie
+  const m = map.measure;
+  if (m && m.dim === map.dim) {
+    const [ax, az] = toScreen(m.a.x + 0.5, m.a.z + 0.5);
+    if (m.b) {
+      const [bx, bz] = toScreen(m.b.x + 0.5, m.b.z + 0.5);
+      ctx.setLineDash([8, 5]);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.beginPath(); ctx.moveTo(ax, az); ctx.lineTo(bx, bz); ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#ffd54f';
+      ctx.stroke();
+      ctx.setLineDash([]);
+      measurePoint(bx, bz, 'B');
+      label(fmtDistance(Math.hypot(m.b.x - m.a.x, m.b.z - m.a.z)), (ax + bx) / 2, (az + bz) / 2 - 12, '#ffd54f', 'bold 13px system-ui, sans-serif');
+    }
+    measurePoint(ax, az, 'A');
+  }
+}
+
+function measurePoint(x, y, letter) {
+  ctx.fillStyle = '#ffd54f';
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  label(letter, x, y - 14, '#ffd54f', 'bold 12px system-ui, sans-serif');
+}
+
+/** Messlinie setzen (null = weg). */
+export function setMeasure(m) {
+  map.measure = m;
+  requestDraw();
 }
 
 function teamTag(teamId) {
@@ -362,11 +406,16 @@ function teamTag(teamId) {
 /** Schon belegte Flächen für Beschriftungen in diesem Bild (gegen übereinander geschriebene Namen). */
 let placed = [];
 
+function labelBox(text, x, y, font) {
+  ctx.font = font;
+  const tw = ctx.measureText(text).width + 6, th = 15;
+  return { x0: x - tw / 2, x1: x + tw / 2, y0: y - th / 2, y1: y + th / 2 };
+}
+
 function label(text, x, y, color, font, avoidOverlap = false) {
   ctx.font = font;
   if (avoidOverlap) {
-    const tw = ctx.measureText(text).width + 6, th = 15;
-    const box = { x0: x - tw / 2, x1: x + tw / 2, y0: y - th / 2, y1: y + th / 2 };
+    const box = labelBox(text, x, y, font);
     if (placed.some(b => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) return;
     placed.push(box);
   }

@@ -6,7 +6,7 @@ Die Mod bringt ihre Webseite selbst mit – kein extra Webhosting nötig.
 | Bereich | Was er kann |
 |---|---|
 | 🏠 **Dashboard** | „Zu erledigen“ (Einladungen, überboten, Übergaben, Bewerbungen, überfällige Projekte), deine Zahlen, Server-Status, was zuletzt passiert ist |
-| 🗺️ **Karte** | Nur **entdeckte** Gebiete, Länder, Marker, Projekte, Spieler, Spawn · Gehe zu Koordinaten · Ebenen · Legende · Maßstab · Regionen |
+| 🗺️ **Karte** | Nur **entdeckte** Gebiete, Länder, Marker, Projekte, Spieler, Spawn · Gehe zu Koordinaten · Ebenen · Legende · Maßstab · Regionen · **Messen** (Entfernung, Richtung, Strecke durch den Nether) |
 | 🧊 **Live-Welt** | BlueMap (3D) an derselben Stelle wie die Karte · optional Seed-Vorschau |
 | ⚑ **Claims** | Chunks anklicken → **Vorschau** (frei? entdeckt? zusammenhängend? Limit?) → Land erstellen · Mitbesitzer · Notizen · Team-Zuordnung |
 | ◆ **Marker** | Orte mit Typ, Symbol, Farbe, optionaler Höhe · Sichtbarkeit: nur ich / Team / Land-Besitzer / alle · Nether-Umrechnung · TP-Befehl |
@@ -14,7 +14,8 @@ Die Mod bringt ihre Webseite selbst mit – kein extra Webhosting nötig.
 | ⚖ **Handel** | Auktion, Sofortkauf, Festpreis, Tausch und **Hilfe** (Bauen, Kämpfen …) · Gebote, Gegenangebote, Übergabe-Bestätigung, Streitfall |
 | ⚒ **Projekte** | Bauprojekte mit Aufgaben, Fortschritt, Verantwortlichen, Updates, Land/Team/Ort |
 | ☺ **Spieler** | Wer ist online, wer war zuletzt da, Teams, Länder |
-| ⚙ **Einstellungen** | Hell/Dunkel, Favoriten, **Export/Import** mit Vorschau, Server-Infos |
+| ⚙ **Einstellungen** | Hell/Dunkel, Schalter fürs Spiel, Favoriten, **Export/Import** mit Vorschau, Server-Infos |
+| 🎮 **Im Spiel** | Kurz nach dem Einloggen „Zu erledigen“ im Chat, danach Neues sofort (Einladung, überboten, verkauft …) · Land-Name über der Hotbar beim Betreten · **Todespunkt** als privater Marker · **Team-Chat** `/tc` · alles einzeln abschaltbar |
 
 Dazu eine **Suche oben** (Länder, Marker, Projekte, Teams, Spieler, Angebote – und Koordinaten wie `100 64 -200`; Taste `/`).
 
@@ -47,12 +48,12 @@ cd fabric-mod
 ```
 
 Beim ersten Mal lädt Gradle viel herunter, das dauert ein paar Minuten. `build` führt auch die Unit-Tests aus.
-Fertig ist die Datei `fabric-mod/build/libs/world-planner-0.3.1.jar` (die `...-sources.jar` daneben brauchst du nicht).
+Fertig ist die Datei `fabric-mod/build/libs/world-planner-0.4.0.jar` (die `...-sources.jar` daneben brauchst du nicht).
 
-## 2. Auf dem Server installieren (oder von 0.2 updaten)
+## 2. Auf dem Server installieren (oder von 0.2/0.3 updaten)
 
 1. **Backup** machen (siehe [BACKUP.md](BACKUP.md)), dann Server stoppen.
-2. Alte `world-planner-*.jar` aus `mods/` entfernen, `world-planner-0.3.1.jar` und die passende **Fabric API** hineinlegen. Für 3D auch **BlueMap**.
+2. Alte `world-planner-*.jar` aus `mods/` entfernen, `world-planner-0.4.0.jar` und die passende **Fabric API** hineinlegen. Für 3D auch **BlueMap**.
 3. Server starten. Im Log sollte stehen:
    ```
    [World Planner] Webseite und API laufen auf http://127.0.0.1:8765/
@@ -60,6 +61,8 @@ Fertig ist die Datei `fabric-mod/build/libs/world-planner-0.3.1.jar` (die `...-s
    Beim Update von 0.2 zusätzlich: `lands.json wird auf Version 2 umgestellt. Sicherung der alten Datei: lands.json.v1.bak`
    (genauso für `markers.json`). Alle Länder, Besitzer und Marker bleiben erhalten – getestet mit echten 0.2-Daten.
 4. Die Mod ergänzt `config/world-planner.json` um die neuen Einstellungen (siehe [Einstellungen](#einstellungen)).
+   Beim Update von 0.3 ändert sich an den Daten nichts – getestet: Länder, Marker, Teams, Projekte, Angebote und Favoriten
+   waren nach dem Update auf 0.4 genau gleich.
 
 ## 3. Webseite öffnen und einloggen
 
@@ -75,8 +78,15 @@ Ist `publicUrl` eingetragen, gibt es im Chat einen Link, der direkt einloggt. We
 
 | Befehl | Was er macht |
 |---|---|
+| `/planer` | Was gerade **zu erledigen** ist – dieselbe Liste wie auf dem Dashboard |
+| `/planer hilfe` | Alle Befehle (anklicken fügt sie in den Chat ein) |
 | `/planer login` | Login-Code für die Webseite |
 | `/planer abmelden` | Meldet dich auf **allen** Geräten von der Webseite ab |
+| `/planer einstellungen` | Deine Schalter fürs Spiel mit Klick zum An-/Ausschalten |
+| `/planer nachrichten an\|aus` · `/planer landanzeige an\|aus` · `/planer todespunkt an\|aus` | Einzelne Schalter (gelten auch für die Webseite) |
+| `/planer todespunkt` | Wo du zuletzt gestorben bist – mit Entfernung und Richtung von hier |
+| `/planer marker <Name>` | Privater Marker an deiner Position (teilen und bearbeiten auf der Webseite) |
+| `/tc <Nachricht>` (lang: `/teamchat`) | **Team-Chat** – nur Mitglieder deines Teams lesen mit, auch bei privaten Teams |
 | `/land` oder `/land info` | Wem gehört der Chunk, in dem ich stehe? |
 | `/land neu <Name>` | Neues Land aus dem Chunk, in dem du stehst |
 | `/land erweitern [Land]` | Chunk zu deinem Land hinzufügen (muss angrenzen) |
@@ -88,7 +98,7 @@ Ist `publicUrl` eingetragen, gibt es im Chat einen Link, der direkt einloggt. We
 | `/land admin loeschen <Land>` · `/land admin entfernen <Land> <Spieler>` | **Nur OPs** |
 
 Namen mit Leerzeichen in Anführungszeichen: `/land neu "Kims Base"`. Mit **Tab** werden Namen vervollständigt.
-Teams, Handel und Projekte gibt es (noch) nur auf der Webseite.
+Teams gründen, Handel und Projekte gehen nur auf der Webseite – im Spiel bekommst du dazu aber Nachrichten (siehe Regeln).
 
 ## Regeln
 
@@ -125,6 +135,29 @@ Teams, Handel und Projekte gibt es (noch) nur auf der Webseite.
   jede Aktion trägt eine `requestId` (ein Doppelklick führt nichts doppelt aus), Speichern **vor** der Bestätigung.
 - Team-Angebote dürfen Team-Admins und der Owner einstellen; Teammitglieder können beim eigenen Team nicht kaufen.
 
+**Im Spiel** (alles serverseitig – im Spiel braucht niemand eine Mod)
+- **Nachrichten** (`gameNotifications`): Etwa 3 Sekunden nach dem Einloggen kommt „Zu erledigen“ – dieselbe Liste wie auf dem
+  Dashboard (höchstens 6 Zeilen, `/planer` zeigt bis zu 12). Danach kommt **live**, was neu ist: Einladungen, Bewerbungen,
+  „überboten“, verkauft/gekauft/gewonnen, Gegenangebote, neue Gebote auf dein Angebot, Streitfälle. Viele Gebote hintereinander
+  fasst der Planer zusammen (höchstens eine Nachricht alle 15 Sekunden pro Angebot – „überboten“ kommt aber immer sofort).
+  Es gibt **keine Nachholung**: Wer offline war, sieht beim Einloggen, was jetzt noch offen ist – keine Liste alter Ereignisse.
+  Nachrichten sehen nur, was du auch auf der Webseite sehen darfst (z. B. erfährt ein Bieter nicht, wer ihn überboten hat).
+- **Land-Anzeige** (`landEnterMessages`): Über der Hotbar steht „▶ Kims Base [KMS] · von Kim“, wenn du ein Land betrittst,
+  und „Wildnis“, wenn du es verlässt. Das ist **nur eine Anzeige** – sie schützt nichts.
+- **Todespunkt** (`deathMarkers`): Stirbst du, speichert der Planer die Stelle als **privaten** Marker „Todespunkt“ ☠
+  (nur du siehst ihn, auch nicht in BlueMap). Jeder hat genau einen; beim nächsten Tod wird er verschoben. Was du auf der Webseite
+  daran änderst (Name, Sichtbarkeit), bleibt. Nach dem Wiederbeleben steht im Chat, wie weit und in welcher Richtung er liegt.
+  Er zählt zu deinen Markern (`maxMarkersPerPlayer`); ist das Limit voll, sagt der Planer das ehrlich. **Die Items schützt das nicht** –
+  sie verschwinden wie immer nach 5 Minuten. Beim Import (Einstellungen) wird ein Todespunkt nicht übernommen – er gehört zu der
+  Welt, in der du gestorben bist.
+- **Team-Chat** (`teamChat`): `/tc Hallo` geht an alle Mitglieder deines Teams, die online sind – auch bei **privaten** Teams.
+  Bist du in mehreren Teams, zählt das mit der höchsten Rolle. Wie normaler Chat steht der Team-Chat im **Server-Log**
+  (Admins können ihn also lesen). Es sind Server-Nachrichten wie bei Plugins üblich – Minecrafts „Chat melden“ gilt dafür nicht.
+  Öffentliche Teams mit Kürzel sind zugleich Minecraft-Scoreboard-Teams – dort sollte auch Minecrafts eigenes `/teammsg`
+  funktionieren. Das ist Minecraft-Standard; mit Fake-Spielern ließ es sich hier nicht prüfen.
+- Jeder Spieler kann Nachrichten, Land-Anzeige und Todespunkt **für sich** abschalten: im Spiel mit `/planer einstellungen`
+  oder auf der Webseite unter Einstellungen → „Im Spiel“.
+
 ---
 
 ## Einstellungen
@@ -150,6 +183,10 @@ Datei: `config/world-planner.json` (Server neu starten nach Änderungen). Unsinn
 | `maxTeamsPerPlayer` | `1` | In wie vielen Teams man gleichzeitig sein darf (1–20) |
 | `teamInviteDays` | `7` | Nach wie vielen Tagen eine Team-Einladung abläuft |
 | `chatTeamTags` | `true` | Team-Kürzel im Spiel vor den Namen (Chat, Tab-Liste, über dem Kopf). Auf `false` stellen und neu starten entfernt alle Kürzel wieder. |
+| `gameNotifications` | `true` | Nachrichten im Spiel: „Zu erledigen“ beim Einloggen und Neues live (jeder kann sie für sich abschalten) |
+| `landEnterMessages` | `true` | Land-Name über der Hotbar beim Betreten eines Landes |
+| `deathMarkers` | `true` | Privater Marker „Todespunkt“ beim Sterben |
+| `teamChat` | `true` | Team-Chat mit `/tc` für alle Planer-Teams |
 | `tradeUnit` | `"Diamanten"` | Einheit für Preise im Handel (nur ein Wort für die Anzeige – es wird nichts abgebucht) |
 | `tradeMinIncrement` | `1` | Standard-Mindestschritt bei Auktionen |
 | `maxActiveListingsPerPlayer` | `20` | Aktive Angebote pro Spieler |
@@ -215,8 +252,14 @@ Export/Import auf der Webseite (Einstellungen) ist für **deine eigenen** Daten;
   Items oder einer Economy verbunden ist, würde etwas vortäuschen. Darum ist der Handel bewusst ein „Absprache-Buch“.
 - **„Entdeckt“ gilt für den ganzen Server**, nicht pro Spieler, und erst ab Installation der Mod.
 - **Die Karte zeigt kein Gelände** – dafür gibt es die Live-Welt (BlueMap).
-- **Keine Benachrichtigung im Spiel** bei Geboten oder Team-Einladungen; das Dashboard zeigt alles beim nächsten Öffnen.
-- **Teams, Handel und Projekte** gibt es nur auf der Webseite, nicht als Befehle.
+- **Nachrichten im Spiel nur, solange du online bist.** Es gibt keine Nachholung alter Ereignisse – beim Einloggen kommt nur,
+  was noch zu erledigen ist. Auf der Webseite steht unter „Was ist passiert?“ der Verlauf.
+- **Teams, Handel und Projekte** bedienst du auf der Webseite. Im Spiel gibt es dazu Nachrichten, aber keine Befehle zum Bieten,
+  Kaufen oder Annehmen von Team-Einladungen.
+- **Getestet mit Fake-Spielern, nicht mit einem echten Minecraft-Fenster:** Dass Nachrichten beim richtigen Spieler ankommen, ist
+  auf einem echten Server geprüft. Wie Farben, Klick-Links und die Anzeige über der Hotbar in deinem Spiel **aussehen**, konnte ich
+  ohne echten Minecraft-Client nicht ansehen. Auch der Hinweis **nach dem Wiederbeleben** ist nur per Unit-Test geprüft
+  (Fake-Spieler werden beim Tod entfernt statt wiederbelebt).
 - **Kürzel nach dem Entfernen der Mod:** Minecraft speichert Scoreboard-Teams selbst. Wer die Mod löscht, sollte vorher
   `chatTeamTags` auf `false` stellen und einmal starten – sonst bleiben die `wpt_…`-Teams, bis man sie mit `/team remove` löscht.
 - **Nur Minecraft 26.3**, nur dedizierter Server.

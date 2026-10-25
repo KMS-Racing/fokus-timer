@@ -1,6 +1,6 @@
-// Einstellungen: Konto, Darstellung, Favoriten, Export/Import (mit Vorschau), Server-Infos.
+// Einstellungen: Konto, Darstellung, Schalter fürs Spiel, Favoriten, Export/Import (mit Vorschau), Server-Infos.
 import { api } from '../api.js';
-import { load, store, landById, teamById, projectById, tradeById, toggleFavorite } from '../store.js';
+import { load, store, landById, teamById, projectById, tradeById, toggleFavorite, setGameSwitch } from '../store.js';
 import { act, confirmDialog, el, fill, fmtDateTime, fmtNum, storageGet, storageSet, toast } from '../util.js';
 import { bind, pageHead, segmented } from './common.js';
 
@@ -54,6 +54,33 @@ async function importFile(file, resultBox) {
   if (!result) return;
   fill(resultBox, el('h3', { text: 'Ergebnis' }), el('p', { text: summaryText(result) }), skippedList(result));
   await Promise.all([load.lands(), load.markers(), load.projects(), load.me()]);
+}
+
+const GAME_SWITCHES = [
+  ['notify', 'Nachrichten im Chat', 'Kurz nach dem Einloggen eine Zusammenfassung „Zu erledigen“, danach Neues sofort – z. B. Einladungen, überboten, verkauft, neue Bewerbungen.'],
+  ['landEnter', 'Land-Anzeige', 'Name des Landes über der Hotbar, wenn du es betrittst, und „Wildnis“, wenn du es verlässt. Nur eine Anzeige – sie schützt nichts.'],
+  ['deathMarker', 'Todespunkt-Marker', 'Stirbst du, merkt sich der Planer die Stelle als privaten Marker ☠ (nur du siehst ihn). Die Items schützt das nicht.'],
+];
+
+function gameSection() {
+  const mine = (store.prefs && store.prefs.game) || {};
+  const server = (store.meta && store.meta.gameFeatures) || {};
+  return el('section', { class: 'card', id: 'gameSettings' }, el('h2', { text: 'Im Spiel' }),
+    el('div', { class: 'stack' }, GAME_SWITCHES.map(([key, title, text]) => {
+      const off = server[key] === false;
+      const cb = el('input', { type: 'checkbox', 'data-game': key, disabled: off });
+      cb.checked = !off && mine[key] !== false;
+      cb.addEventListener('change', async () => {
+        const on = cb.checked;
+        if (!await act(() => setGameSwitch(key, on), `${title}: ${on ? 'an' : 'aus'}`)) cb.checked = !on;
+      });
+      return el('label', { class: 'check multiline' }, cb,
+        el('span', {}, el('strong', { text: title }), el('br'), el('small', { class: 'muted', text: off ? 'Vom Server-Admin für alle ausgeschaltet.' : text })));
+    })),
+    el('p', { class: 'muted small', text: 'Das geht auch im Spiel mit /planer einstellungen. Alle Befehle: /planer hilfe.' }),
+    server.teamChat !== false
+      ? el('p', { class: 'muted small', text: 'Team-Chat im Spiel: /tc <Nachricht> – nur Mitglieder deines Teams lesen mit. Wie jeder Chat steht er im Server-Log.' })
+      : null);
 }
 
 function favoritesSection() {
@@ -110,6 +137,7 @@ export default {
             el('p', { text: 'Farbschema' }),
             segmented([['system', 'Wie das Gerät'], ['dark', 'Dunkel'], ['light', 'Hell']], theme, v => { storageSet(THEME_KEY, v === 'system' ? null : v); applyTheme(); draw(); }),
             el('p', { class: 'muted small', text: 'Ebenen der Karte, die letzte Ansicht und Filter merkt sich dieser Browser.' }))),
+        gameSection(),
         favoritesSection(),
         el('section', { class: 'card' }, el('h2', { text: 'Export und Import' }),
           el('p', { text: 'Der Export enthält deine eigenen Länder (inkl. Notizen), Marker, Projekte und Favoriten als JSON-Datei mit Versionsnummer.' }),
@@ -138,6 +166,6 @@ export default {
             el('li', { text: 'Die Karte zeigt nur Gebiete, in deren Nähe schon jemand war. Was niemand besucht hat, bleibt dunkel.' }))));
     };
     fill(root, pageHead('Einstellungen'), body);
-    return bind(root, ['me', 'world', 'prefs', 'lands', 'markers', 'projects', 'teams', 'trades'], draw);
+    return bind(root, ['me', 'meta', 'world', 'prefs', 'lands', 'markers', 'projects', 'teams', 'trades'], draw);
   },
 };

@@ -27,7 +27,7 @@ final class MarkerStore extends JsonStore {
     static final Map<String, String> BUILTIN_TYPES = ordered(
             "base", "Basis", "farm", "Farm", "village", "Dorf", "portal", "Portal", "spawner", "Spawner",
             "resource", "Ressource", "project", "Projekt", "meeting", "Treffpunkt", "danger", "Gefahr",
-            "city", "Stadt", "road", "Straße", "other", "Sonstiges");
+            "city", "Stadt", "road", "Straße", "death", "Todespunkt", "other", "Sonstiges");
     static final Map<String, String> VISIBILITY = ordered("private", "Nur ich", "team", "Mein Team", "land", "Besitzer des Landes", "public", "Alle");
     static final Set<String> SYMBOLS = Set.of("★", "●", "▲", "■", "◆", "✚", "⚑", "☠", "⌂", "⚒", "♥", "☼");
     private static final int SCHEMA = 2;
@@ -134,6 +134,12 @@ final class MarkerStore extends JsonStore {
         } catch (PlannerException e) {
             return e.getMessage();
         }
+    }
+
+    /** Eigener Marker mit dieser id oder null (z. B. für den Todespunkt). */
+    synchronized Marker ownMarker(UUID owner, String id) {
+        Marker m = id == null ? null : markers.get(id);
+        return m != null && m.owner.equals(owner) ? m : null;
     }
 
     synchronized int countOwnedBy(UUID owner) {

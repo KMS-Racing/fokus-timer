@@ -8,7 +8,10 @@ import { createProject } from './projects.js';
 
 const enc = encodeURIComponent;
 
-/** Alle offenen Punkte für den Spieler – nur aus Daten, die der Server geliefert hat. */
+/**
+ * Alle offenen Punkte für den Spieler – nur aus Daten, die der Server geliefert hat.
+ * Dieselben Regeln wie der Server (Notices.java): Im Spiel steht dieselbe Liste.
+ */
 export function todoItems() {
   const me = store.me || {};
   const items = [];
@@ -21,17 +24,27 @@ export function todoItems() {
   for (const t of store.teams.filter(x => x.pendingTransfer && x.pendingTransfer.to.uuid === me.uuid)) {
     items.push({ kind: 'warn', text: `Dir wird das Team [${t.tag}] übergeben – annehmen oder ablehnen`, href: '#/teams/' + enc(t.id) });
   }
-  for (const t of myTeams()) {
+  // Nur wer entscheiden darf (Moderator und höher) – Server-Admins sehen Bewerbungen, entscheiden aber nicht.
+  for (const t of myTeams().filter(x => x.can && x.can.decide)) {
     const apps = (t.applications || []).filter(a => a.status === 'pending').length;
     if (apps) items.push({ kind: 'info', text: `${plural(apps, 'offene Bewerbung', 'offene Bewerbungen')} bei [${t.tag}]`, href: '#/teams/' + enc(t.id) });
   }
   for (const l of store.trades) {
-    if (l.status === 'active' && l.iBid && !l.iAmHighest) items.push({ kind: 'warn', text: `Überboten: »${l.title}« (jetzt ${fmtNum(l.highestBid)})`, href: '#/handel/' + enc(l.id) });
+    const href = '#/handel/' + enc(l.id);
+    const title = `»${l.title}«`;
+    const price = l.finalPrice != null ? ` (${fmtNum(l.finalPrice)} ${l.unit})` : '';
+    if (l.status === 'active' && l.iBid && !l.iAmHighest) items.push({ kind: 'warn', text: `Überboten: ${title} (jetzt ${fmtNum(l.highestBid)} ${l.unit})`, href });
     const h = l.handover;
-    if (l.status === 'sold' && h && h.status === 'pending' && ((l.mine && !h.sellerConfirmedAt) || (l.iWon && !h.buyerConfirmedAt))) {
-      items.push({ kind: 'warn', text: `Übergabe bestätigen: »${l.title}«`, href: '#/handel/' + enc(l.id) });
+    if (l.status === 'sold' && h && h.status === 'pending') {
+      if (l.mine && !h.sellerConfirmedAt) {
+        items.push({ kind: 'warn', text: `${title} ist an ${l.buyer ? l.buyer.name : '?'} verkauft${price} – Übergabe im Spiel machen und bestätigen`, href });
+      } else if (l.iWon && !h.buyerConfirmedAt) {
+        const what = l.soldVia === 'bid' ? `Du hast die Auktion ${title} gewonnen${price}`
+          : l.soldVia === 'offer' ? `Dein Gegenangebot für ${title} wurde angenommen` : `Du hast ${title} gekauft${price}`;
+        items.push({ kind: 'warn', text: what + ' – nach der Übergabe bestätigen', href });
+      }
     }
-    if (me.admin && h && h.status === 'disputed') items.push({ kind: 'danger', text: `Streitfall klären: »${l.title}«`, href: '#/handel/' + enc(l.id) });
+    if (me.admin && h && h.status === 'disputed') items.push({ kind: 'danger', text: `Streitfall klären: ${title}`, href });
   }
   const today = new Date().toISOString().slice(0, 10);
   for (const p of store.projects.filter(x => x.mine && x.status !== 'done' && x.dueDate && x.dueDate < today)) {

@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** /api/me, /api/meta, /api/people, /api/prefs, /api/activity, /api/export, /api/import */
+/** /api/me, /api/meta, /api/people, /api/prefs, /api/todo, /api/activity, /api/export, /api/import */
 final class AccountRoutes extends Routes {
     private final ImportExport importExport;
 
@@ -26,6 +26,14 @@ final class AccountRoutes extends Routes {
         if (r.is("POST", "prefs", "favorite")) {
             s.prefs().setFavorite(r.user, r.str("kind"), r.str("id"), r.bool("on", true));
             return s.prefs().get(r.user);
+        }
+        if (r.is("POST", "prefs", "game")) {
+            s.prefs().setGame(r.user, r.str("key"), r.bool("on", true));
+            return s.prefs().get(r.user);
+        }
+        if (r.is("GET", "todo")) {
+            String today = java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString();
+            return Notices.toApiJson(Notices.collect(s, r.user, r.admin, today));
         }
         if (r.is("GET", "activity")) {
             int limit = 50;
@@ -107,6 +115,12 @@ final class AccountRoutes extends Routes {
         o.addProperty("maxTeamsPerPlayer", c.maxTeamsPerPlayer());
         o.addProperty("teamInviteDays", c.teamInviteDays());
         o.addProperty("chatTeamTags", c.chatTeamTags());
+        JsonObject game = new JsonObject(); // was der Server im Spiel anbietet (abschalten kann es jeder für sich)
+        game.addProperty("notify", c.gameNotifications());
+        game.addProperty("landEnter", c.landEnterMessages());
+        game.addProperty("deathMarker", c.deathMarkers());
+        game.addProperty("teamChat", c.teamChat());
+        o.add("gameFeatures", game);
         o.addProperty("serverTime", System.currentTimeMillis());
         return o;
     }

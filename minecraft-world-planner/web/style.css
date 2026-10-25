@@ -71,6 +71,8 @@ input[type="checkbox"] { min-height: auto; width: 18px; height: 18px; accent-col
 .field input, .field select, .field textarea { width: 100%; }
 .field.inline { margin: 0; }
 .check { display: flex; align-items: center; gap: 8px; margin: 6px 0; cursor: pointer; }
+.check.multiline { align-items: flex-start; }
+.check.multiline input { margin-top: 3px; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 14px; }
 .form-grid .field:has(textarea), .form-grid .check { grid-column: 1 / -1; }
 
@@ -234,6 +236,7 @@ a.stat:hover { border-color: var(--accent2); }
 .card-status.fog { color: var(--muted); }
 .map-selection { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 16px); background: var(--card); border: 1px solid var(--accent2); border-radius: var(--radius); padding: 10px 12px; box-shadow: var(--shadow); z-index: 6; }
 .map-selection select { min-height: 30px; padding: 3px 6px; max-width: 160px; }
+.map-measure { position: absolute; top: 40px; left: 8px; width: min(330px, calc(100% - 16px)); background: var(--card); border: 1px solid #ffd54f; border-radius: var(--radius); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; box-shadow: var(--shadow); z-index: 5; }
 .check-line { margin-top: 6px; font-size: .88rem; }
 .check-line.ok { color: var(--accent); }
 .check-line.warn { color: var(--warn); }

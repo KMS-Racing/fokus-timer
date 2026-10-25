@@ -41,6 +41,15 @@ record PlannerConfig(
         int teamInviteDays,
         /** Kürzel öffentlicher Teams im Spiel vor dem Namen zeigen (Chat, Tab-Liste, über dem Kopf). */
         boolean chatTeamTags,
+        // Im Spiel (jeder Spieler kann die ersten drei für sich mit /planer einstellungen abschalten)
+        /** Zusammenfassung "Zu erledigen" beim Einloggen und neue Hinweise live im Chat. */
+        boolean gameNotifications,
+        /** Name des Landes über der Hotbar, wenn man es betritt. */
+        boolean landEnterMessages,
+        /** Privater Marker "Todespunkt" beim Sterben. */
+        boolean deathMarkers,
+        /** Team-Chat mit /tc (alle Planer-Teams, auch private). */
+        boolean teamChat,
         // Handel (Web-Auktionshaus – überträgt keine Items, siehe README)
         String tradeUnit,
         int tradeMinIncrement,
@@ -103,6 +112,10 @@ record PlannerConfig(
                 clamp(integer(json, "maxTeamsPerPlayer", 1), 1, 20),
                 clamp(integer(json, "teamInviteDays", 7), 1, 90),
                 bool(json, "chatTeamTags", true),
+                bool(json, "gameNotifications", true),
+                bool(json, "landEnterMessages", true),
+                bool(json, "deathMarkers", true),
+                bool(json, "teamChat", true),
                 limitText(str(json, "tradeUnit", "Diamanten"), 24, "Diamanten"),
                 clamp(integer(json, "tradeMinIncrement", 1), 1, 1_000_000),
                 clamp(integer(json, "maxActiveListingsPerPlayer", 20), 0, 1000),
@@ -136,6 +149,10 @@ record PlannerConfig(
         o.addProperty("maxTeamsPerPlayer", maxTeamsPerPlayer);
         o.addProperty("teamInviteDays", teamInviteDays);
         o.addProperty("chatTeamTags", chatTeamTags);
+        o.addProperty("gameNotifications", gameNotifications);
+        o.addProperty("landEnterMessages", landEnterMessages);
+        o.addProperty("deathMarkers", deathMarkers);
+        o.addProperty("teamChat", teamChat);
         o.addProperty("tradeUnit", tradeUnit);
         o.addProperty("tradeMinIncrement", tradeMinIncrement);
         o.addProperty("maxActiveListingsPerPlayer", maxActiveListingsPerPlayer);

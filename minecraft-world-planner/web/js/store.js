@@ -114,6 +114,12 @@ export function isFavorite(kind, id) {
   return ((store.prefs.favorites || {})[kind] || []).includes(id);
 }
 
+/** Schalter fürs Spiel (Nachrichten, Land-Anzeige, Todespunkt) – gelten sofort im Spiel. */
+export async function setGameSwitch(key, on) {
+  store.prefs = await api('api/prefs/game', { key, on });
+  mark('prefs', store.prefs);
+}
+
 export async function toggleFavorite(kind, id) {
   store.prefs = await api('api/prefs/favorite', { kind, id, on: !isFavorite(kind, id) });
   mark('prefs', store.prefs);

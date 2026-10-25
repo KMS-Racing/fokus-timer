@@ -57,6 +57,19 @@ class ImportExportTest {
     }
 
     @Test
+    void deathPointsAreExportedButNotImported() {
+        DeathPoints.save(source.services, alice, false, new DeathPoints.Point(OVERWORLD, 104, 136, -34));
+        JsonObject file = new ImportExport(source.services).export(alice);
+        assertEquals(1, file.getAsJsonArray("markers").size(), "der Export enthält alle eigenen Daten");
+        JsonObject result = new ImportExport(target.services).importData(bob, false, file, true);
+        assertEquals(0, result.getAsJsonObject("markers").get("create").getAsInt(),
+                "ein fremder Todespunkt (andere Welt oder anderer Spieler) wäre irreführend");
+        assertEquals("Todespunkte werden nicht übernommen – der Planer setzt sie selbst, wenn du stirbst.",
+                result.getAsJsonObject("markers").getAsJsonArray("skipped").get(0).getAsJsonObject().get("reason").getAsString());
+        assertEquals(0, target.markers.countOwnedBy(bob));
+    }
+
+    @Test
     void exportContainsOwnDataWithVersion() {
         JsonObject e = exportAlice();
         assertEquals(ImportExport.FORMAT, e.get("format").getAsString());

@@ -24,8 +24,14 @@ import java.util.function.Supplier;
 
 /**
  * Befehle im Spiel:
+ *   /planer                  was gerade zu erledigen ist (wie das Dashboard der Webseite)
+ *   /planer hilfe            alle Befehle
  *   /planer login            Code für die Webseite holen
  *   /planer abmelden         auf allen Geräten von der Webseite abmelden
+ *   /planer einstellungen    Nachrichten, Land-Anzeige und Todespunkt an/aus (auch einzeln: /planer nachrichten aus)
+ *   /planer todespunkt       wo du zuletzt gestorben bist
+ *   /planer marker <Name>    privaten Marker an deiner Position setzen
+ *   /tc <Nachricht>          Team-Chat (auch /teamchat) – nur Mitglieder deines Teams lesen mit
  *   /land [info]             wem gehört dieser Chunk?
  *   /land neu <Name>         neues Land mit dem Chunk, in dem du stehst
  *   /land erweitern [Name]   Chunk zu deinem Land hinzufügen (muss angrenzen)
@@ -37,6 +43,7 @@ import java.util.function.Supplier;
  * Namen mit Leerzeichen in Anführungszeichen schreiben: /land neu "Kims Base"
  */
 final class PlannerCommands {
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(WorldPlannerMod.MOD_ID);
     private final Supplier<PlannerServices> services;
 
     PlannerCommands(Supplier<PlannerServices> services) {
@@ -45,8 +52,20 @@ final class PlannerCommands {
 
     void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("planer")
+                .executes(this::overview)
+                .then(Commands.literal("hilfe").executes(this::help))
                 .then(Commands.literal("login").executes(this::login))
-                .then(Commands.literal("abmelden").executes(this::logoutAll)));
+                .then(Commands.literal("abmelden").executes(this::logoutAll))
+                .then(Commands.literal("einstellungen").executes(this::settings))
+                .then(toggle("nachrichten", "notify"))
+                .then(toggle("landanzeige", "landEnter"))
+                .then(toggle("todespunkt", "deathMarker").executes(this::deathPoint))
+                .then(Commands.literal("marker")
+                        .then(Commands.argument("name", StringArgumentType.greedyString()).executes(this::marker))));
+
+        var teamChat = dispatcher.register(Commands.literal("teamchat")
+                .then(Commands.argument("nachricht", StringArgumentType.greedyString()).executes(this::teamChat)));
+        dispatcher.register(Commands.literal("tc").redirect(teamChat));
 
         dispatcher.register(Commands.literal("land")
                 .executes(this::info)
@@ -136,6 +155,170 @@ final class PlannerCommands {
         return 1;
     }
 
+    private int overview(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        PlannerServices s = services.get();
+        if (s == null) return notReady(ctx);
+        s.players().seen(player.getUUID(), player.getGameProfile().name(), playerIsAdmin(player));
+        String today = java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString();
+        List<Notices.Notice> todos = Notices.todos(Notices.collect(s, player.getUUID(), playerIsAdmin(player), today));
+        Component summary = GameText.summary(todos, s.config().publicUrl(), false);
+        ctx.getSource().sendSuccess(() -> summary, false);
+        MutableComponent more = GameText.message().append(GameText.command("Alle Befehle: /planer hilfe", "/planer hilfe", ChatFormatting.GRAY));
+        more.append(GameText.webLink(s.config().publicUrl(), "#/dashboard", " [Webseite öffnen]"));
+        ctx.getSource().sendSuccess(() -> more, false);
+        return 1;
+    }
+
+    private int help(CommandContext<CommandSourceStack> ctx) {
+        String[][] lines = {
+                {"/planer", "was gerade zu erledigen ist"},
+                {"/planer login", "Login-Code für die Webseite"},
+                {"/planer einstellungen", "Nachrichten, Land-Anzeige, Todespunkt an/aus"},
+                {"/planer todespunkt", "wo du zuletzt gestorben bist"},
+                {"/planer marker ", "privaten Marker hier setzen (Name dahinter)"},
+                {"/land", "wem gehört dieser Chunk? Außerdem: neu, erweitern, abgeben, liste, einladen"},
+                {"/tc ", "Team-Chat – nur dein Team liest mit (Nachricht dahinter)"},
+                {"/planer abmelden", "auf allen Geräten von der Webseite abmelden"},
+        };
+        MutableComponent out = GameText.message().append(GameText.text("Befehle (anklicken zum Einfügen):", ChatFormatting.WHITE));
+        for (String[] line : lines) {
+            out.append("\n ").append(GameText.command(line[0].strip(), line[0], ChatFormatting.AQUA))
+                    .append(GameText.text(" – " + line[1], ChatFormatting.GRAY));
+        }
+        ctx.getSource().sendSuccess(() -> out, false);
+        return 1;
+    }
+
+    /** "/planer <name>" zeigt den Schalter, "/planer <name> an|aus" stellt ihn um. */
+    private com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> toggle(String name, String key) {
+        return Commands.literal(name)
+                .executes(ctx -> settings(ctx))
+                .then(Commands.literal("an").executes(ctx -> setToggle(ctx, key, true)))
+                .then(Commands.literal("aus").executes(ctx -> setToggle(ctx, key, false)));
+    }
+
+    private int setToggle(CommandContext<CommandSourceStack> ctx, String key, boolean on) throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        PlannerServices s = services.get();
+        if (s == null) return notReady(ctx);
+        s.prefs().setGame(player.getUUID(), key, on);
+        String label = PrefsStore.GAME_KEYS.get(key);
+        String back = "/planer " + commandName(key) + (on ? " aus" : " an");
+        String extra = serverAllows(s, key) ? "" : " (Hinweis: Der Server-Admin hat das gerade für alle abgeschaltet.)";
+        MutableComponent msg = GameText.message().append(GameText.text(label + ": " + (on ? "an" : "aus") + "." + extra, ChatFormatting.WHITE))
+                .append(GameText.command(" [Rückgängig]", back, ChatFormatting.GRAY));
+        ctx.getSource().sendSuccess(() -> msg, false);
+        return 1;
+    }
+
+    private int settings(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        PlannerServices s = services.get();
+        if (s == null) return notReady(ctx);
+        PrefsStore.Game game = s.prefs().game(player.getUUID());
+        MutableComponent out = GameText.message().append(GameText.text("Deine Einstellungen im Spiel:", ChatFormatting.WHITE));
+        for (String key : PrefsStore.GAME_KEYS.keySet()) {
+            boolean on = game.get(key);
+            out.append("\n ").append(GameText.text(PrefsStore.GAME_KEYS.get(key) + ": ", ChatFormatting.GRAY));
+            if (!serverAllows(s, key)) {
+                out.append(GameText.text("vom Server ausgeschaltet", ChatFormatting.DARK_GRAY));
+                continue;
+            }
+            out.append(GameText.text(on ? "an " : "aus ", on ? ChatFormatting.GREEN : ChatFormatting.RED));
+            String cmd = "/planer " + commandName(key) + (on ? " aus" : " an");
+            out.append(GameText.button(on ? "[ausschalten]" : "[anschalten]", ChatFormatting.AQUA, new ClickEvent.RunCommand(cmd), cmd));
+        }
+        ctx.getSource().sendSuccess(() -> out, false);
+        return 1;
+    }
+
+    private static String commandName(String key) {
+        return switch (key) {
+            case "notify" -> "nachrichten";
+            case "landEnter" -> "landanzeige";
+            default -> "todespunkt";
+        };
+    }
+
+    private static boolean serverAllows(PlannerServices s, String key) {
+        return switch (key) {
+            case "notify" -> s.config().gameNotifications();
+            case "landEnter" -> s.config().landEnterMessages();
+            default -> s.config().deathMarkers();
+        };
+    }
+
+    private int deathPoint(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        PlannerServices s = services.get();
+        if (s == null) return notReady(ctx);
+        DeathPoints.Point p = DeathPoints.load(s, player.getUUID());
+        if (p == null) {
+            reply(ctx, s.config().deathMarkers() && s.prefs().game(player.getUUID()).deathMarker()
+                    ? "Noch kein Todespunkt gespeichert – sobald du stirbst, merkt sich der Planer die Stelle."
+                    : "Kein Todespunkt gespeichert (Todespunkt ist ausgeschaltet).");
+            return 1;
+        }
+        Component msg = GameText.deathWhere(p, dimension(player), player.getX(), player.getZ(), s.config().publicUrl());
+        ctx.getSource().sendSuccess(() -> msg, false);
+        return 1;
+    }
+
+    private int marker(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        return withPlayer(ctx, (player, s) -> {
+            com.google.gson.JsonObject data = new com.google.gson.JsonObject();
+            String name = StringArgumentType.getString(ctx, "name");
+            data.addProperty("name", name);
+            data.addProperty("type", "other");
+            data.addProperty("dimension", dimension(player));
+            data.addProperty("x", player.getBlockX());
+            data.addProperty("y", player.getBlockY());
+            data.addProperty("z", player.getBlockZ());
+            data.addProperty("visibility", "private");
+            s.markers().create(player.getUUID(), playerIsAdmin(player), data);
+            return "Marker »" + name.strip() + "« gesetzt bei " + player.getBlockX() + " / " + player.getBlockY() + " / " + player.getBlockZ()
+                    + " (privat). Teilen und bearbeiten kannst du ihn auf der Webseite unter Marker.";
+        });
+    }
+
+    private int teamChat(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        PlannerServices s = services.get();
+        if (s == null) return notReady(ctx);
+        if (!s.config().teamChat()) return fail(ctx, "Der Team-Chat ist auf diesem Server ausgeschaltet.");
+        TeamStore.ChatTeam team = s.teams().chatTeamOf(player.getUUID());
+        if (team == null) return fail(ctx, "Du bist in keinem Team. Teams gründest oder findest du auf der Webseite unter Teams.");
+        String text = StringArgumentType.getString(ctx, "nachricht").strip();
+        if (text.isEmpty()) return fail(ctx, "Schreib eine Nachricht dahinter: /tc Hallo");
+        Component msg = GameText.teamChat(team, player.getGameProfile().name(), text);
+        net.minecraft.server.MinecraftServer server = ctx.getSource().getServer();
+        int others = 0;
+        for (UUID member : team.members()) {
+            ServerPlayer p = server.getPlayerList().getPlayer(member);
+            if (p == null) continue;
+            p.sendSystemMessage(msg);
+            LOGGER.debug("[World Planner] Team-Chat an {}: {}", p.getGameProfile().name(), msg.getString());
+            if (!member.equals(player.getUUID())) others++;
+        }
+        server.sendSystemMessage(msg); // steht wie normaler Chat im Server-Log
+        if (others == 0) {
+            ctx.getSource().sendSuccess(() -> GameText.message().append(GameText.text("Gerade ist niemand sonst aus ["
+                    + team.tag() + "] online.", ChatFormatting.GRAY)), false);
+        }
+        return 1;
+    }
+
+    private static int notReady(CommandContext<CommandSourceStack> ctx) {
+        ctx.getSource().sendFailure(Component.literal("World Planner startet noch."));
+        return 0;
+    }
+
+    private static int fail(CommandContext<CommandSourceStack> ctx, String message) {
+        ctx.getSource().sendFailure(prefix().append(Component.literal(message).withStyle(ChatFormatting.RED)));
+        return 0;
+    }
+
     // ------------------------------------------------------------------ /land
 
     private int info(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
@@ -206,7 +389,8 @@ final class PlannerCommands {
                     .orElseThrow(() -> PlannerException.notFound("Spieler »" + targetName + "« war noch nie auf dem Server."));
             String id = landId(s, landName);
             s.lands().invite(player.getUUID(), id, target);
-            ServerPlayer online = ctx.getSource().getServer().getPlayerList().getPlayer(target);
+            // Sind die Hinweise im Spiel an, meldet GameNotifier die Einladung (und beachtet "/planer nachrichten aus").
+            ServerPlayer online = s.config().gameNotifications() ? null : ctx.getSource().getServer().getPlayerList().getPlayer(target);
             if (online != null) {
                 online.sendSystemMessage(prefix().append(Component.literal(player.getGameProfile().name()
                         + " lädt dich als Mitbesitzer von »" + landName + "« ein. ").withStyle(ChatFormatting.YELLOW))
@@ -312,7 +496,7 @@ final class PlannerCommands {
     }
 
     private static MutableComponent prefix() {
-        return Component.literal("[Planer] ").withStyle(ChatFormatting.GOLD);
+        return GameText.prefix();
     }
 
     private static void reply(CommandContext<CommandSourceStack> ctx, String text) {

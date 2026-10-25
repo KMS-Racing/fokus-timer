@@ -66,3 +66,22 @@ test('Teleport-Befehl je Dimension', () => {
   assert.equal(tpCommand('minecraft:the_nether', 10, 70, 20), '/execute in minecraft:the_nether run tp @s 10 70 20');
   assert.equal(tpCommand('minecraft:overworld', 1, undefined, 2), '/tp @s 1 64 2');
 });
+
+test('Messen: Entfernung, Richtung, Nether-Strecke und Laufzeit', async () => {
+  const { measure, fmtDuration } = await import('../../web/js/coords.js');
+  const r = measure({ x: 0, z: 0 }, { x: 300, z: -400 }, 'minecraft:overworld');
+  assert.equal(r.distance, 500);
+  assert.equal(r.direction, 'Nordosten');
+  assert.equal(r.dx, 300);
+  assert.equal(r.dz, -400);
+  assert.equal(r.netherDistance, 62.5, 'Oberwelt ÷ 8');
+  assert.equal(r.overworldDistance, null);
+  assert.equal(Math.round(r.walkSeconds), 116, '500 Blöcke ÷ 4,317 Blöcke/s');
+  const n = measure({ x: 0, z: 0 }, { x: 0, z: 100 }, 'minecraft:the_nether');
+  assert.equal(n.overworldDistance, 800, 'im Nether × 8');
+  assert.equal(n.netherDistance, null);
+  assert.equal(measure({ x: 1, z: 1 }, { x: 1, z: 1 }, 'minecraft:the_end').direction, 'hier');
+  assert.equal(fmtDuration(45), '45 s');
+  assert.equal(fmtDuration(185), '3:05 min');
+  assert.equal(fmtDuration(3720), '1:02 h');
+});

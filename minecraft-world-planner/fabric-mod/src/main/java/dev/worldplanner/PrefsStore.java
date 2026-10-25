@@ -16,15 +16,32 @@ import java.util.regex.Pattern;
 
 /**
  * Persönliche Einstellungen, die auf dem Server liegen (damit sie auf jedem Gerät gleich sind):
- * zurzeit die Favoriten. Ansicht, Ebenen und Sortierung speichert der Browser selbst (localStorage).
- * Jeder Spieler sieht und ändert nur seine eigenen Einträge.
+ * Favoriten und die Schalter fürs Spiel (Nachrichten, Land-Anzeige, Todespunkt). Ansicht, Ebenen und Sortierung
+ * speichert der Browser selbst (localStorage). Jeder Spieler sieht und ändert nur seine eigenen Einträge.
  */
 final class PrefsStore extends JsonStore {
     static final Set<String> KINDS = Set.of("lands", "markers", "projects", "teams", "listings");
     private static final Pattern ID = Pattern.compile("[A-Za-z0-9-]{1,64}");
     private static final int MAX_PER_KIND = 200;
 
+    /** Schalter fürs Spiel – Standard: alles an. */
+    static final Map<String, String> GAME_KEYS = gameKeys();
+
+    /** deathMarkerId: der automatische Todespunkt-Marker dieses Spielers (wird bei jedem Tod verschoben). */
+    record Game(boolean notices, boolean landEnter, boolean deathMarker, String deathMarkerId) {
+        static final Game DEFAULT = new Game(true, true, true, null);
+
+        boolean get(String key) {
+            return switch (key) {
+                case "notify" -> notices;
+                case "landEnter" -> landEnter;
+                default -> deathMarker;
+            };
+        }
+    }
+
     private final Map<UUID, Map<String, LinkedHashSet<String>>> favorites = new HashMap<>();
+    private final Map<UUID, Game> game = new HashMap<>();
 
     PrefsStore(Path path, Logger logger) {
         super(path);
@@ -45,6 +62,29 @@ final class PrefsStore extends JsonStore {
                 }
             }
         }
+        if (json != null && json.isJsonObject() && json.getAsJsonObject().has("game")) {
+            for (Map.Entry<String, JsonElement> e : json.getAsJsonObject().getAsJsonObject("game").entrySet()) {
+                try {
+                    JsonObject o = e.getValue().getAsJsonObject();
+                    game.put(UUID.fromString(e.getKey()), new Game(flag(o, "notify"), flag(o, "landEnter"), flag(o, "deathMarker"),
+                            o.has("deathMarkerId") ? o.get("deathMarkerId").getAsString() : null));
+                } catch (Exception ignored) {
+                    // kaputter Eintrag
+                }
+            }
+        }
+    }
+
+    private static Map<String, String> gameKeys() {
+        Map<String, String> m = new LinkedHashMap<>();
+        m.put("notify", "Nachrichten im Spiel");
+        m.put("landEnter", "Land-Anzeige");
+        m.put("deathMarker", "Todespunkt-Marker");
+        return java.util.Collections.unmodifiableMap(m);
+    }
+
+    private static boolean flag(JsonObject o, String key) {
+        return !o.has(key) || o.get(key).getAsBoolean();
     }
 
     synchronized JsonObject get(UUID user) {
@@ -57,7 +97,29 @@ final class PrefsStore extends JsonStore {
         }
         JsonObject o = new JsonObject();
         o.add("favorites", fav);
+        Game g = game(user);
+        JsonObject go = new JsonObject();
+        for (String key : GAME_KEYS.keySet()) go.addProperty(key, g.get(key));
+        o.add("game", go);
         return o;
+    }
+
+    synchronized Game game(UUID user) {
+        return game.getOrDefault(user, Game.DEFAULT);
+    }
+
+    synchronized void setGame(UUID user, String key, boolean on) {
+        Validate.oneOf(key, GAME_KEYS.keySet(), "Einstellung");
+        Game g = game(user);
+        game.put(user, new Game(key.equals("notify") ? on : g.notices, key.equals("landEnter") ? on : g.landEnter,
+                key.equals("deathMarker") ? on : g.deathMarker, g.deathMarkerId));
+        changed();
+    }
+
+    synchronized void setDeathMarkerId(UUID user, String markerId) {
+        Game g = game(user);
+        game.put(user, new Game(g.notices, g.landEnter, g.deathMarker, markerId));
+        changed();
     }
 
     synchronized void setFavorite(UUID user, String kind, String id, boolean on) {
@@ -85,9 +147,19 @@ final class PrefsStore extends JsonStore {
             });
             fav.add(user.toString(), k);
         });
+        JsonObject gameJson = new JsonObject();
+        game.forEach((user, g) -> {
+            JsonObject o = new JsonObject();
+            o.addProperty("notify", g.notices);
+            o.addProperty("landEnter", g.landEnter);
+            o.addProperty("deathMarker", g.deathMarker);
+            if (g.deathMarkerId != null) o.addProperty("deathMarkerId", g.deathMarkerId);
+            gameJson.add(user.toString(), o);
+        });
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", 1);
         root.add("favorites", fav);
+        root.add("game", gameJson);
         return root;
     }
 }

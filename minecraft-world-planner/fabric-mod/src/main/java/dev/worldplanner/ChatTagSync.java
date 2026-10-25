@@ -115,16 +115,8 @@ final class ChatTagSync {
     /** "[KMS] " – Klammern grau, Kürzel in der Teamfarbe. */
     static Component prefix(TeamStore.ChatTag tag) {
         MutableComponent out = Component.literal("[").withStyle(ChatFormatting.GRAY);
-        out.append(Component.literal(tag.tag()).withStyle(style -> style.withColor(TextColor.fromRgb(rgb(tag.color())))));
+        out.append(Component.literal(tag.tag()).withStyle(style -> style.withColor(TextColor.fromRgb(GameText.rgb(tag.color())))));
         out.append(Component.literal("] ").withStyle(ChatFormatting.GRAY));
         return out;
-    }
-
-    private static int rgb(String hex) {
-        try {
-            return Integer.parseInt(hex.substring(1), 16);
-        } catch (Exception e) {
-            return 0x64b5f6;
-        }
     }
 }

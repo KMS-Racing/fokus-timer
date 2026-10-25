@@ -159,6 +159,23 @@ final class LandStore extends JsonStore {
         return "»" + land.name + "« (Besitzer: " + ownerNames(land) + ")";
     }
 
+    /** Das Land an dieser Stelle – für die Anzeige beim Betreten im Spiel. null = kein Land. */
+    synchronized Here landAt(String dimension, long chunk, UUID viewer) {
+        Land land = chunkIndex.containsKey(dimension) ? chunkIndex.get(dimension).get(chunk) : null;
+        if (land == null) return null;
+        return new Here(land.id, land.name, land.color, land.teamId, players.name(land.owners.getFirst()),
+                land.owners.size(), land.owners.contains(viewer));
+    }
+
+    record Here(String id, String name, String color, String teamId, String firstOwner, int ownerCount, boolean mine) {}
+
+    record Ref(String id, String name) {}
+
+    /** Länder, zu denen der Spieler als Mitbesitzer eingeladen ist. */
+    synchronized List<Ref> invitesFor(UUID uuid) {
+        return lands.values().stream().filter(l -> l.invites.contains(uuid)).map(l -> new Ref(l.id, l.name)).toList();
+    }
+
     synchronized Optional<String> findIdByName(String name) {
         Land land = byName(name);
         return land == null ? Optional.empty() : Optional.of(land.id);

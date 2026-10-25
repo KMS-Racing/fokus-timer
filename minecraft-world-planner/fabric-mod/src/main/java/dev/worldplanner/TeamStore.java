@@ -457,6 +457,65 @@ final class TeamStore extends JsonStore {
         return out;
     }
 
+    /** Kürzel und Farbe eines öffentlichen Teams (für die Land-Anzeige im Spiel), sonst null. */
+    synchronized ChatTag publicTag(String teamId) {
+        Team t = teamId == null ? null : teams.get(teamId);
+        return t == null || !t.visibility.equals("public") ? null : new ChatTag(t.id, t.tag, t.name, t.color);
+    }
+
+    record InviteNote(String inviteId, String teamId, String tag, String name, String by) {}
+
+    record TransferNote(String teamId, String tag, String name, long createdAt) {}
+
+    record ApplicationNote(String applicationId, String teamId, String tag, String player) {}
+
+    /** Alles, was einen Spieler bei Teams betrifft – für die Hinweise im Spiel (siehe Notices). */
+    record Notes(List<InviteNote> invites, List<TransferNote> transfers, List<ApplicationNote> applications,
+                 List<ChatTag> memberships) {}
+
+    synchronized Notes notesFor(UUID player) {
+        List<InviteNote> invites = new ArrayList<>();
+        List<TransferNote> transfers = new ArrayList<>();
+        List<ApplicationNote> applications = new ArrayList<>();
+        List<ChatTag> memberships = new ArrayList<>();
+        for (Team t : teams.values()) {
+            expire(t);
+            Invite inv = pendingInvite(t, player);
+            if (inv != null) invites.add(new InviteNote(inv.id, t.id, t.tag, t.name, players.name(inv.by)));
+            if (t.transfer != null && t.transfer.to.equals(player)) transfers.add(new TransferNote(t.id, t.tag, t.name, t.transfer.createdAt));
+            if (!t.members.containsKey(player)) continue;
+            memberships.add(new ChatTag(t.id, t.tag, t.name, t.color));
+            // Bewerbungen sehen nur die, die darüber entscheiden dürfen (wie auf der Webseite)
+            if (rankOf(t, player) >= Role.MODERATOR.rank) {
+                for (Application a : t.applications) {
+                    if (a.status.equals("pending")) applications.add(new ApplicationNote(a.id, t.id, t.tag, players.name(a.player)));
+                }
+            }
+        }
+        return new Notes(invites, transfers, applications, memberships);
+    }
+
+    /** Team für den Team-Chat. */
+    record ChatTeam(String id, String tag, String name, String color, List<UUID> members) {}
+
+    /**
+     * Mit welchem Team chattet der Spieler über /tc? Wie bei den Kürzeln das Team mit der höchsten Rolle
+     * (bei Gleichstand das älteste) – hier aber auch private Teams, denn die Nachricht lesen nur Mitglieder.
+     */
+    synchronized ChatTeam chatTeamOf(UUID player) {
+        Team best = null;
+        Member bestMember = null;
+        for (Team t : teams.values()) {
+            Member m = t.members.get(player);
+            if (m == null) continue;
+            if (bestMember == null || m.role.rank > bestMember.role.rank || (m.role.rank == bestMember.role.rank && m.joinedAt < bestMember.joinedAt)) {
+                best = t;
+                bestMember = m;
+            }
+        }
+        return best == null ? null : new ChatTeam(best.id, best.tag, best.name, best.color, List.copyOf(best.members.keySet()));
+    }
+
     private JsonObject teamJson(Team t, UUID viewer, boolean admin) {
         Member me = t.members.get(viewer);
         int myRank = me == null ? 0 : me.role.rank;

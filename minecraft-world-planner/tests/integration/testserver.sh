@@ -1,6 +1,7 @@
 #!/bin/bash
 # Steuert einen lokalen Minecraft-Testserver für die Integrationstests.
 #   TESTSERVER_DIR=/pfad/zum/server JAVA=/pfad/zu/java ./testserver.sh start|stop|cmd <befehl>|code <spieler>|status
+#   LOG_CONFIG=/pfad/zu/log4j2-debug.xml (optional): Log mit DEBUG-Zeilen der Mod – braucht game_integration_test.py
 #
 # Der Server braucht: Fabric 26.3, Fabric API, diese Mod, optional BlueMap und für Fake-Spieler die Carpet-Mod.
 # Befehle werden über die Datei cmds.txt an die Server-Konsole geschickt.
@@ -19,11 +20,13 @@ case "$1" in
   start)
     if [ -n "$(javapid)" ]; then echo "läuft schon"; exit 0; fi
     pkill -f "tail -n +1 -f cmds.txt"
+    LOGOPT=()
+    [ -n "$LOG_CONFIG" ] && LOGOPT=("-Dlog4j.configurationFile=$(realpath "$LOG_CONFIG")") # vor dem cd: relativ zum Aufrufer
     cd "$TS" || exit 1
     mkdir -p old-logs
     : > cmds.txt
     [ -f server.log ] && mv server.log "old-logs/server-$(date +%s).log"
-    (tail -n +1 -f cmds.txt | "$JAVA" -Xmx2G -jar fabric-server.jar nogui > server.log 2>&1 &)
+    (tail -n +1 -f cmds.txt | "$JAVA" -Xmx2G "${LOGOPT[@]}" -jar fabric-server.jar nogui > server.log 2>&1 &)
     for _ in $(seq 1 240); do
       grep -qE "Done \(|Exception in server|crash-reports" server.log 2>/dev/null && break
       sleep 1

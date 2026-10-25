@@ -1,4 +1,4 @@
-"""Neustart-Test: Bleiben Teams, Projekte, Handel, Favoriten, Aktivität, Länder, Marker und Logins erhalten?
+"""Neustart-Test: Bleiben Teams, Projekte, Handel, Favoriten, Spiel-Schalter, Aktivität, Länder, Marker und Logins erhalten?
 
 Ablauf:
   1. python3 restart_check.py save <datei> <code-A> <code-B>   (legt Testdaten an und merkt sich den Stand)
@@ -36,6 +36,7 @@ def normalize(snap):
     n["projects"] = sorted((p["id"], p["name"], p["status"], tuple((t["text"], t["done"]) for t in p["tasks"]), len(p["updates"])) for p in snap["projects"]["projects"])
     n["trades"] = sorted((l["id"], l["title"], l["status"], l["bidCount"], l.get("highestBid")) for l in snap["trades"]["listings"])
     n["prefs"] = {k: sorted(v) for k, v in snap["prefs"]["favorites"].items()}
+    n["game"] = snap["prefs"].get("game")  # Schalter fürs Spiel (seit 0.4)
     n["activity"] = [e["id"] for e in snap["activity"]["events"]]
     return n
 
@@ -88,6 +89,8 @@ if mode == "compare":
                 continue
             same = json.loads(json.dumps(before[area])) == json.loads(json.dumps(after[area]))
             check(f"{who.upper()}: {area} unverändert", same, f"vorher {before[area]} nachher {after[area]}" if not same else "")
+        check(f"{who.upper()}: Spiel-Schalter unverändert", before.get("game") is not None and before.get("game") == after.get("game"),
+              f"vorher {before.get('game')} nachher {after.get('game')}")
     # Die requestId des Gebots kennt der Server noch: derselbe Klick wird nicht noch einmal ausgeführt
     st, r = call(f"api/trades/{saved['listing']}/bid", {"requestId": saved["bidRequest"], "amount": 2}, saved["b"])
     check("Gleiche requestId nach dem Neustart: kein zweites Gebot", st == 200 and r.get("repeated") is True, r)

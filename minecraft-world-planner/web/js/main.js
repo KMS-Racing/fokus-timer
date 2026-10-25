@@ -51,7 +51,7 @@ function updateBadges() {
   const counts = {
     claims: store.lands.filter(l => l.invitedMe).length,
     teams: store.teams.filter(t => t.myInvite || (t.pendingTransfer && t.pendingTransfer.to.uuid === me.uuid)).length
-      + myTeams().reduce((n, t) => n + (t.applications || []).filter(a => a.status === 'pending').length, 0),
+      + myTeams().filter(t => t.can && t.can.decide).reduce((n, t) => n + (t.applications || []).filter(a => a.status === 'pending').length, 0),
     handel: store.trades.filter(l => (l.status === 'active' && l.iBid && !l.iAmHighest)
       || (l.status === 'sold' && l.handover && l.handover.status === 'pending' && ((l.mine && !l.handover.sellerConfirmedAt) || (l.iWon && !l.handover.buyerConfirmedAt)))
       || (me.admin && l.handover && l.handover.status === 'disputed')).length,

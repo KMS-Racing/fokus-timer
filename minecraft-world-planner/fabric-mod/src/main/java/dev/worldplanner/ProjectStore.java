@@ -246,6 +246,20 @@ final class ProjectStore extends JsonStore {
         return json(requireVisible(viewer, id), viewer, admin);
     }
 
+    record Overdue(String id, String name, String dueDate) {}
+
+    /** Eigene (angelegt oder verantwortlich), nicht abgeschlossene Projekte mit Zieldatum vor "today" (JJJJ-MM-TT). */
+    synchronized List<Overdue> overdueFor(UUID viewer, String today) {
+        List<Overdue> out = new ArrayList<>();
+        for (Project p : projects.values()) {
+            boolean mine = p.createdBy.equals(viewer) || p.responsible.contains(viewer);
+            if (mine && !p.status.equals("done") && p.dueDate != null && p.dueDate.compareTo(today) < 0) {
+                out.add(new Overdue(p.id, p.name, p.dueDate));
+            }
+        }
+        return out;
+    }
+
     /** Nur Projekte, die der Spieler selbst angelegt hat (für den Export). */
     synchronized JsonArray exportOwn(UUID owner) {
         JsonArray arr = new JsonArray();

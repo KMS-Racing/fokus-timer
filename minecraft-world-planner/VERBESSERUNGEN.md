@@ -115,3 +115,57 @@ Auf einem echten Minecraft-26.3-Server mit Fabric API, BlueMap 5.29 und vier Fak
   Teams bekommen kein Kürzel, „Unsichtbare halb sehen“ ist aus, damit sich am Spiel nichts ändert. Abschaltbar mit `chatTeamTags`.
 - Getestet: 6 Unit-Tests mit Minecrafts echtem Scoreboard, 10 Prüfungen auf dem echten Server (`/team list`, `/say` zeigt
   `[[KÜRZEL] Alice] Hallo`), Neustart, Ab- und Wiedereinschalten.
+
+# Version 0.4: Spiel-Integration
+
+Bis 0.3 passierte alles auf der Webseite – im Spiel merkte man nichts davon. Jetzt kommt der Planer ins Spiel, und zwar nur
+mit dem, was der Server ohnehin kann (niemand braucht eine Mod im Spiel):
+
+- **Nachrichten im Chat:** Kurz nach dem Einloggen „Zu erledigen“ (dieselbe Liste wie auf dem Dashboard), danach live, was neu ist:
+  Einladungen, Bewerbungen, überboten, verkauft/gekauft/gewonnen, Gegenangebote, neue Gebote, Streitfälle. Alles wird aus dem echten
+  Zustand berechnet – es gibt keine erfundenen Ereignisse und keine Nachholung alter Meldungen. Viele Gebote hintereinander werden
+  zusammengefasst; „überboten“ kommt immer sofort. Niemand erfährt im Spiel mehr als auf der Webseite.
+- **Land-Anzeige:** Name des Landes (mit Team-Kürzel, wenn öffentlich) über der Hotbar beim Betreten, „Wildnis“ beim Verlassen.
+- **Todespunkt:** Beim Sterben ein privater Marker ☠ (einer pro Spieler, wird verschoben), nach dem Wiederbeleben Entfernung und
+  Richtung im Chat. Schützt keine Items – das steht auch so dabei.
+- **Befehle:** `/planer` (Liste), `/planer hilfe`, `/planer einstellungen` mit Klick-Schaltern, `/planer todespunkt`,
+  `/planer marker <Name>` und **Team-Chat** `/tc` – auch für private Teams.
+- **Webseite:** Schalter „Im Spiel“ in den Einstellungen, **Mess-Werkzeug** auf der Karte (Entfernung, Richtung, Strecke durch den
+  Nether, ungefähre Laufzeit), `/api/todo`.
+- Jeder Spieler kann Nachrichten, Land-Anzeige und Todespunkt für sich abschalten; der Admin für alle (`gameNotifications`,
+  `landEnterMessages`, `deathMarkers`, `teamChat`).
+
+## Fehler, die beim Bauen und Testen von 0.4 gefunden und behoben wurden
+
+| Fehler | Gefunden durch | Behoben |
+|---|---|---|
+| Das Dashboard zeigte Server-Admins Bewerbungen als „zu erledigen“, obwohl sie darüber nicht entscheiden dürfen | Vergleich mit der neuen Liste im Spiel | Dashboard und Spiel nutzen dieselbe Regel (Moderator und höher) |
+| Die Liste im Spiel hätte bei Preisen die *aktuelle* Handels-Einheit aus der Config benutzt statt der Einheit des Angebots | Code-Durchsicht | Einheit des Angebots |
+| Beim Import wurde ein fremder Todespunkt als normaler Marker übernommen (Alices Todespunkt landete bei Dana) | Integrationstest: Dana hatte plötzlich zwei Todespunkte | Todespunkte werden nicht importiert; die Vorschau nennt den Grund |
+| Ein Record-Feld hieß `notify` – das gibt es in Java schon (`Object.notify()`), der Bau schlug fehl | Compiler | umbenannt |
+| Neue CSS-Klasse `top` gab es schon (Kopfzeile, „klebt“ beim Scrollen) – die Schalter in den Einstellungen sahen falsch aus | Screenshot | eigener Klassenname |
+| Spielernamen auf der Karte konnten unter Marker-Namen verschwinden (z. B. „Todespunkt“ neben dem Spieler) | Screenshot | Spielernamen haben Vorrang |
+| `/planer` zeigte wie die Zusammenfassung nur 6 Punkte – ohne Webseiten-Link kam man im Spiel nicht an den Rest | Code-Durchsicht | `/planer` zeigt bis zu 12 und sagt, wo der Rest steht |
+| Test-Fehler: Der Browser-Test „Kopieren gibt Rückmeldung“ las manchmal noch die vorige Meldung („Marker angelegt“) | zweiter Testlauf | Der Test wartet gezielt auf die Kopier-Meldung (genauso streng, ohne Zufall) |
+| Test-Anpassung: Ein Browser-Test erwartete den alten Dashboard-Text „Übergabe bestätigen“ | Absicht (neuer, genauerer Text) | prüft jetzt „Du hast »…« gekauft“ |
+
+Und ehrlich: Beim Testen auf dem echten Server sind die Fake-Spieler mehrfach gestorben – durch Fallschaden nach einem Teleport,
+durch Monster in der Nacht und einmal ertrunken (das Test-Land liegt in einem See). Das waren Fehler im **Testaufbau**, nicht in der
+Mod; jeder dieser Tode hat aber nebenbei gezeigt, dass der Todespunkt auch bei „echten“ Toden gespeichert wird.
+
+## So wurde 0.4 getestet
+
+Auf demselben echten Minecraft-26.3-Server (Fabric API, BlueMap 5.29, Carpet, vier Fake-Spieler, einer OP) – zum Schluss alles
+noch einmal mit genau der Jar, die ausgeliefert wird:
+- **128** Java-Unit-Tests (27 neu: Hinweise, Nachrichten-Logik mit austauschbarer Uhr, Todespunkt, Land-Anzeige, Schalter, Import)
+- **8** Web-Unit-Tests (neu: Messen)
+- API: **59** Kern + **85** SMP + **46** Handel, Chat-Kürzel **10**
+- **36** Prüfungen „Spiel-Integration“ auf dem Server: Einladung kommt live und nur beim Richtigen, abgeschaltet = nichts und keine
+  Nachholung, Zusammenfassung nach dem Einloggen, Land-Anzeige rein/raus/aus, Todespunkt (privat, einer, wird verschoben,
+  abschaltbar), `/planer`, `/planer hilfe`, `/planer marker`, `/tc` (auch privates Team, nur Mitglieder), „überboten“ live ohne Namen
+- Browser: **48** Kern + **33** SMP + **22** BlueMap + **20** neue (Schalter, Dashboard = Liste im Spiel wörtlich, Messen, Handy)
+- Neustart: **19** (inkl. Spiel-Schalter), Update von 0.3.1: alle Länder, Marker, Projekte, Angebote und Favoriten gleich
+- Server-Log des letzten Laufs: 0 Fehler
+
+**Nicht geprüft** (ehrlich): wie es in einem echten Minecraft-Fenster aussieht (Farben, Klick-Links, Actionbar), der Hinweis
+nach dem Wiederbeleben auf dem Server (Fake-Spieler werden beim Tod entfernt) und Minecrafts eigenes `/teammsg`.

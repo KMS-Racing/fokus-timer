@@ -101,6 +101,37 @@ export function fmtCoords(p) {
   return p.y == null ? `X ${p.x} · Z ${p.z}` : `X ${p.x} · Y ${p.y} · Z ${p.z}`;
 }
 
+/** Laufen und Sprinten in Blöcken pro Sekunde (Minecraft-Werte, auf ebenem Boden). */
+export const WALK_SPEED = 4.317;
+export const SPRINT_SPEED = 5.612;
+
+/**
+ * Messen von a nach b (Luftlinie, ohne Höhe). Im Nether zählt jeder Block 8 Blöcke in der Oberwelt –
+ * deshalb steht dabei, wie weit dieselbe Strecke in der anderen Dimension ist (für Portal-Wege).
+ */
+export function measure(a, b, dim) {
+  const distance = distance2d(a, b);
+  return {
+    dx: b.x - a.x,
+    dz: b.z - a.z,
+    distance,
+    direction: direction(a, b),
+    netherDistance: dim === OVERWORLD ? distance / 8 : null,
+    overworldDistance: dim === NETHER ? distance * 8 : null,
+    walkSeconds: distance / WALK_SPEED,
+    sprintSeconds: distance / SPRINT_SPEED,
+  };
+}
+
+/** Dauer lesbar: 45 s, 3:05 min, 1:02 h */
+export function fmtDuration(seconds) {
+  const s = Math.round(seconds);
+  if (s < 60) return `${s} s`;
+  const two = n => String(n).padStart(2, '0');
+  if (s < 3600) return `${Math.floor(s / 60)}:${two(s % 60)} min`;
+  return `${Math.floor(s / 3600)}:${two(Math.floor(s / 60) % 60)} h`;
+}
+
 /** Entfernungen lesbar: 950 Blöcke, 12,3 km */
 export function fmtDistance(blocks) {
   if (blocks < 1000) return `${Math.round(blocks)} Blöcke`;

@@ -1,11 +1,12 @@
 // Ansicht „Karte“: die 2D-Claim-Karte mit Werkzeugleiste, Infokarte, Auswahl und Vorschau vor dem Claimen.
 import { api, enc } from '../api.js';
 import {
-  blockToChunk, blockToRegion, chunkBounds, convertForPortal, direction, distance2d, fmtCoords, fmtDistance, parseCoords, tpCommand,
+  blockToChunk, blockToRegion, chunkBounds, convertForPortal, direction, distance2d, fmtCoords, fmtDistance, fmtDuration, measure,
+  parseCoords, tpCommand,
 } from '../coords.js';
 import {
   DEFAULT_LAYERS, centerOn, chunkStatus, clearSelection, loadDiscovered, map, mapElement, paintChunk, requestDraw, scaleBar,
-  selectionInfo, setDimension, setLayer, setSelecting, showLand, zoomBy,
+  selectionInfo, setDimension, setLayer, setMeasure, setSelecting, showLand, zoomBy,
 } from '../map.js';
 import { showIn3D } from '../bluemap.js';
 import { navigate } from '../router.js';
@@ -24,11 +25,12 @@ const ui = {};
 /** Baut die Bedienelemente einmal; die Karte selbst bleibt beim Ansichtswechsel erhalten. */
 function buildPane(host) {
   pane = host;
-  ui.dim = el('select', { id: 'dimSelect', 'aria-label': 'Dimension', onchange: e => act(() => setDimension(e.target.value)) });
+  ui.dim = el('select', { id: 'dimSelect', 'aria-label': 'Dimension', onchange: e => act(() => setDimension(e.target.value)).then(renderMeasure) });
   ui.goto = el('input', { id: 'gotoInput', placeholder: 'Gehe zu: X Z oder X Y Z', 'aria-label': 'Koordinaten', autocomplete: 'off' });
   const gotoForm = el('form', { class: 'goto', onsubmit: e => { e.preventDefault(); gotoCoords(ui.goto.value); } }, ui.goto,
     el('button', { type: 'submit', class: 'small' }, 'Los'));
-  ui.selectBtn = el('button', { id: 'selectModeBtn', class: 'small', onclick: () => setSelecting(!map.selecting) }, '✚ Auswählen');
+  ui.selectBtn = el('button', { id: 'selectModeBtn', class: 'small', onclick: () => { setMeasuring(false); setSelecting(!map.selecting); } }, '✚ Auswählen');
+  ui.measureBtn = el('button', { id: 'measureBtn', class: 'small', title: 'Entfernung und Richtung zwischen zwei Punkten', onclick: () => setMeasuring(!measuring) }, '📏 Messen');
   ui.layersBox = el('div', { class: 'layer-list' });
   const layers = el('details', { class: 'dropdown' }, el('summary', { class: 'button small' }, 'Ebenen'), ui.layersBox);
   const calc = el('details', { class: 'dropdown', id: 'calcBox' }, el('summary', { class: 'button small' }, 'Rechner'), calculator());
@@ -39,17 +41,19 @@ function buildPane(host) {
     el('button', { class: 'small', title: 'Ansicht zurücksetzen (Spawn, normaler Zoom, Standard-Ebenen)', onclick: resetView }, '↺'),
     el('button', { class: 'small', 'aria-label': 'Herauszoomen', onclick: () => zoomBy(1 / 1.5) }, '−'),
     el('button', { class: 'small', 'aria-label': 'Hineinzoomen', onclick: () => zoomBy(1.5) }, '+'),
-    layers, calc, ui.selectBtn);
+    layers, calc, ui.measureBtn, ui.selectBtn);
   ui.hover = el('div', { id: 'hoverInfo', class: 'map-hover hidden' });
   ui.card = el('div', { id: 'chunkCard', class: 'map-card hidden', role: 'dialog', 'aria-label': 'Chunk-Info' });
   ui.selection = el('div', { id: 'selectionBar', class: 'map-selection hidden' });
+  ui.measure = el('div', { id: 'measureBox', class: 'map-measure hidden', 'aria-live': 'polite' });
   ui.scale = el('div', { class: 'map-scale', 'aria-hidden': 'true' }, el('div', { class: 'bar' }), el('span'));
   ui.legend = el('details', { class: 'map-legend' }, el('summary', { text: 'Legende' }), legend());
   ui.note = el('div', { class: 'map-note', text: 'Grau = entdeckt, dunkel = noch nie besucht. Länder sind eine Anzeige – im Spiel wird nichts geschützt.' });
-  fill(host, toolbar, el('div', { class: 'map-body' }, mapElement(), ui.hover, ui.card, ui.selection, ui.scale, ui.legend, ui.note));
+  fill(host, toolbar, el('div', { class: 'map-body' }, mapElement(), ui.hover, ui.card, ui.selection, ui.measure, ui.scale, ui.legend, ui.note));
 
   map.onClick = (chunk, block, problem) => {
     if (problem) { toast(problem, true); return; }
+    if (measuring && block) { measureClick(block); return; }
     showChunkCard(chunk, block);
   };
   map.onHover = h => updateHover(h);
@@ -156,6 +160,54 @@ async function resetView() {
   clearSelection();
   setSelecting(false);
   await centerOnSpawn(true);
+}
+
+// ------------------------------------------------------------------ Messen
+
+let measuring = false;
+
+function setMeasuring(on) {
+  measuring = on;
+  if (on) { setSelecting(false); hideChunkCard(); } else setMeasure(null);
+  if (!ui.measureBtn) return;
+  ui.measureBtn.classList.toggle('active', on);
+  ui.measureBtn.textContent = on ? '✓ Messen beenden' : '📏 Messen';
+  renderMeasure();
+}
+
+/** Erster Klick = Punkt A, zweiter = Punkt B, dritter = neue Messung ab dort. */
+function measureClick(block) {
+  const m = map.measure;
+  if (!m || m.b || m.dim !== map.dim) setMeasure({ dim: map.dim, a: block, b: null });
+  else setMeasure({ ...m, b: block });
+  renderMeasure();
+}
+
+const signed = n => (n > 0 ? '+' : '') + n;
+
+function renderMeasure() {
+  const box = ui.measure;
+  if (!box) return;
+  box.classList.toggle('hidden', !measuring);
+  if (!measuring) return;
+  const m = map.measure && map.measure.dim === map.dim ? map.measure : null;
+  const close = el('button', { class: 'icon', 'aria-label': 'Messen beenden', onclick: () => setMeasuring(false) }, '×');
+  if (!m || !m.b) {
+    fill(box, el('div', { class: 'item-top' }, el('strong', { text: '📏 Messen' }), close),
+      el('small', { id: 'measureHint', text: m ? `A: X ${m.a.x} · Z ${m.a.z} – jetzt auf das Ziel B klicken.` : 'Klicke auf den Startpunkt A.' }));
+    return;
+  }
+  const r = measure(m.a, m.b, map.dim);
+  const summary = `${fmtDistance(r.distance)} Richtung ${r.direction} (von X ${m.a.x} Z ${m.a.z} nach X ${m.b.x} Z ${m.b.z})`;
+  fill(box,
+    el('div', { class: 'item-top' }, el('strong', { id: 'measureResult', text: `📏 ${fmtDistance(r.distance)} · ${r.direction}` }), close),
+    el('small', { class: 'muted', text: `A: X ${m.a.x} · Z ${m.a.z} → B: X ${m.b.x} · Z ${m.b.z} (X ${signed(r.dx)} · Z ${signed(r.dz)})` }),
+    r.netherDistance != null ? el('small', { id: 'measureNether', text: `Durch den Nether: ${fmtDistance(r.netherDistance)} (÷ 8)` }) : null,
+    r.overworldDistance != null ? el('small', { id: 'measureNether', text: `In der Oberwelt wären das ${fmtDistance(r.overworldDistance)} (× 8)` }) : null,
+    el('small', { class: 'muted', text: `Luftlinie ohne Höhe · zu Fuß ≈ ${fmtDuration(r.walkSeconds)}, sprintend ≈ ${fmtDuration(r.sprintSeconds)}` }),
+    el('div', { class: 'row' },
+      el('button', { class: 'small', onclick: () => { setMeasure(null); renderMeasure(); } }, 'Neu messen'),
+      el('button', { class: 'small', onclick: () => copyText(summary) }, 'Kopieren')));
 }
 
 // ------------------------------------------------------------------ Infokarte zu einem Chunk
@@ -315,6 +367,7 @@ export default {
       }
     }
     loadDiscovered().catch(() => { /* nächster Versuch beim Polling */ });
-    return () => { hideChunkCard(); };
+    renderMeasure();
+    return () => { hideChunkCard(); setMeasuring(false); };
   },
 };

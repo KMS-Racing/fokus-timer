@@ -445,6 +445,48 @@ final class TradeStore extends JsonStore {
         return o;
     }
 
+    /**
+     * Ein Hinweis zum Handel für einen Spieler (siehe Notices). "key" ändert sich, wenn etwas Neues passiert
+     * (z. B. ein neues Höchstgebot) – daran erkennt das Spiel, dass es eine neue Nachricht schicken soll.
+     * Zu erledigen: outbid, handover_seller, handover_buyer, dispute_admin. Nur Neuigkeiten: bid, offer, disputed,
+     * resolved, completed, unsold.
+     */
+    record Note(String type, String listingId, String title, String key, Integer amount, String unit, String other) {}
+
+    /** Nur was der Spieler auch auf der Webseite sehen darf (z. B. Bieter-Namen nur für die Verkäufer-Seite). */
+    synchronized List<Note> notesFor(UUID viewer, boolean admin) {
+        settleExpired();
+        long now = clock.getAsLong();
+        List<Note> out = new ArrayList<>();
+        for (Listing l : listings.values()) {
+            boolean sellerSide = isSellerSide(l, viewer);
+            boolean buyer = viewer.equals(l.buyer);
+            boolean active = l.status.equals("active") && now < l.endsAt;
+            Bid top = l.highest();
+            if (active && top != null && !top.bidder.equals(viewer) && l.bids.stream().anyMatch(b -> b.bidder.equals(viewer))) {
+                out.add(new Note("outbid", l.id, l.title, top.id, top.amount, l.unit, null));
+            }
+            if (active && sellerSide && top != null) out.add(new Note("bid", l.id, l.title, top.id, top.amount, l.unit, players.name(top.bidder)));
+            if (active && sellerSide) {
+                for (Offer o : l.offers) if (o.status.equals("open")) out.add(new Note("offer", l.id, l.title, o.id, null, l.unit, players.name(o.from)));
+            }
+            if (l.status.equals("unsold") && sellerSide) out.add(new Note("unsold", l.id, l.title, "", null, l.unit, null));
+            if (!l.status.equals("sold") || l.handover == null) continue;
+            if (l.handover.equals("pending")) {
+                if (sellerSide && l.sellerConfirmedAt == 0) out.add(new Note("handover_seller", l.id, l.title, "", l.finalPrice, l.unit, players.name(l.buyer)));
+                if (buyer && l.buyerConfirmedAt == 0) out.add(new Note("handover_buyer", l.id, l.title, l.soldVia, l.finalPrice, l.unit, players.name(l.seller)));
+            }
+            boolean participant = sellerSide || buyer;
+            if (l.handover.equals("disputed")) {
+                if (admin) out.add(new Note("dispute_admin", l.id, l.title, "", null, l.unit, null));
+                if (participant && !viewer.equals(l.disputeBy)) out.add(new Note("disputed", l.id, l.title, "", null, l.unit, players.name(l.disputeBy)));
+            }
+            if (participant && l.handover.startsWith("resolved_")) out.add(new Note("resolved", l.id, l.title, l.handover, null, l.unit, null));
+            if (participant && l.handover.equals("completed")) out.add(new Note("completed", l.id, l.title, "", null, l.unit, null));
+        }
+        return out;
+    }
+
     // ------------------------------------------------------------------ Regeln
 
     private Listing parseNew(UUID actor, JsonObject d) {

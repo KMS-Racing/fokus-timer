@@ -64,7 +64,7 @@ final class ApiServer {
         this.logger = logger;
         this.s = services;
         AccountRoutes account = new AccountRoutes(services);
-        for (String key : new String[]{"me", "meta", "people", "prefs", "activity", "export", "import"}) routes.put(key, account);
+        for (String key : new String[]{"me", "meta", "people", "prefs", "todo", "activity", "export", "import"}) routes.put(key, account);
         routes.put("lands", new LandRoutes(services));
         routes.put("markers", new MarkerRoutes(services));
         routes.put("teams", new TeamRoutes(services));
