@@ -111,6 +111,19 @@ async function dialogSubmit(page) {
   await page.waitForSelector('#toast.show');
   check('Kopieren gibt Rückmeldung', (await page.textContent('#toast')).includes('/tp @s -100 64 250'), await page.textContent('#toast'));
 
+  // 6b) Koordinaten-Rechner auf der Karte
+  await page.click('#sideNav a[data-route=karte]');
+  await page.evaluate(() => planner.map.setDimension('minecraft:overworld'));
+  await page.click('#calcBox summary');
+  await page.fill('#calcInput', 'XYZ: -100.5 / 64.0 / 250.2');
+  const calc = await page.textContent('#calcOut');
+  check('Rechner: Chunk -7 / 15', calc.includes('-7 / 15'), calc);
+  check('Rechner: Region r.-1.0.mca', calc.includes('r.-1.0.mca'), calc);
+  check('Rechner: Nether X -13 · Z 31', calc.includes('X -13 · Z 31'), calc);
+  await page.fill('#calcInput', 'Basis');
+  check('Rechner: Unsinn wird erklärt', (await page.textContent('#calcOut')).includes('keine gültigen Koordinaten'));
+  await page.click('#calcBox summary');
+
   // 7) Globale Suche: Land und Koordinaten
   await page.fill('#searchInput', landName);
   await page.waitForSelector('#searchResults:not(.hidden) .search-item');

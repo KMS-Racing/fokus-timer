@@ -62,3 +62,47 @@ Auf einem echten Minecraft-26.3-Server mit Fabric API, BlueMap 5.29 und zwei Fak
 - **26/26** Browser-Tests mit Chromium (Login per Link, Chunks auswählen, Land erstellen, einladen, annehmen, Marker, BlueMap-Tab, Handy-Ansicht)
 - Neustart-Test: Logins, Länder und Marker bleiben erhalten
 - BlueMap zeigt Länder als Flächen und Marker als Punkte
+
+---
+
+# Version 0.3: SMP-Plattform
+
+## Neu
+
+- **Neue Oberfläche** mit Hauptnavigation (Dashboard, Karte, Live-Welt, Claims, Marker, Teams, Handel, Projekte, Spieler,
+  Einstellungen), Adressen zum Teilen (`#/teams/<id>`), globaler Suche (auch Koordinaten), hellem und dunklem Design.
+  Die Webseite besteht jetzt aus kleinen Modulen statt einer 1300-Zeilen-Datei.
+- **Teams** mit Rollen, Einladung/Bewerbung (nie ohne Zustimmung), bestätigter Übergabe und Auflösen ohne Datenverlust.
+- **Handel (Web-Modus):** Auktion, Sofortkauf, Festpreis, Tausch und Hilfe (Bauen, Kämpfen …). Gebote unter Sperre,
+  Speichern vor der Bestätigung, `requestId` gegen Doppelklicks, Ablauf auf dem Server, Verlängerung bei späten Geboten,
+  Übergabe-Bestätigung und Streitfall. **Es werden keine Items oder Zahlungen vorgetäuscht.**
+- **Projekte** mit Aufgaben, Fortschritt, Verantwortlichen, Updates, Land/Team/Ort.
+- **Claims 2.0:** Vorschau vor dem Claimen, Notizen (nur Besitzer), Team-Zuordnung, Löschen nur als einziger Besitzer.
+- **Marker 2.0:** Sichtbarkeit nur ich / Team / Land-Besitzer / alle, Symbol, Farbe, Höhe optional, eigene Arten per Config.
+- **Karte:** Gehe zu Koordinaten, Zu mir, Spawn, Zurücksetzen, Ebenen, Legende, Maßstab, Regionen, Projekt-Fahnen.
+- **Dashboard** mit „Zu erledigen“ aus echten Daten, **Aktivität**, **Favoriten**, **Export/Import** mit Vorschau.
+- Alte Daten (0.2) werden übernommen; vorher sichert die Mod sie als `*.v1.bak` (getestet mit echten 0.2-Daten: 9/9 Länder, 5/5 Marker).
+
+## Fehler, die beim Bauen und Testen von 0.3 gefunden und behoben wurden
+
+Ehrlich aufgeschrieben, weil Tests genau dafür da sind:
+
+| Fehler | Gefunden durch | Behoben |
+|---|---|---|
+| Bearbeiten mit einem ungültigen Feld hat die gültigen Felder davor trotzdem übernommen (Projekte, Länder, Teams) | Code-Durchsicht, dann Unit-Tests | Erst alles prüfen, dann übernehmen |
+| Ein Streitfall mit zu kurzem Grund wurde abgelehnt, stand intern aber schon auf „Streitfall“ (genauso bei der Admin-Klärung) | Unit-Test `handoverAndDispute` | Erst prüfen, dann ändern |
+| Bei der Team-Übergabe wurde der alte Owner herabgestuft, bevor geprüft war, ob der neue noch im Team ist | Code-Durchsicht | Reihenfolge getauscht |
+| Falsche JSON-Datentypen (z. B. Liste statt Text) gaben „Interner Fehler“ (500) | Code-Durchsicht | jetzt 400 „Ungültige Daten“ |
+| Die Karte zeigte Länder erst nach 10 Sekunden (sie verpasste das erste Laden) | Screenshot | Karte übernimmt vorhandene Daten sofort |
+| Nach dem Abhaken einer Aufgabe stand der Fortschritt erst nach einem Klick woanders richtig da | Browser-Test | nur echte Textfelder verzögern das Neuzeichnen |
+| Handy: Menü schloss nicht sofort; nach dem Abmelden landete der nächste Spieler auf der alten Seite | Browser-Test | behoben |
+| Aktiver Filter-Knopf im hellen Design unlesbar, 3D-Hinweis über BlueMaps Leiste, Beschriftungen übereinander | Screenshots | behoben |
+
+## So wurde 0.3 getestet
+
+Auf einem echten Minecraft-26.3-Server mit Fabric API, BlueMap 5.29 und vier Fake-Spielern (Carpet), einer davon OP:
+- **95** Java-Unit-Tests (u. a. 8 Bieter × 50 gleichzeitige Gebote, 16 gleichzeitige Sofortkäufe, volle Festplatte, Neustart)
+- **7** Web-Unit-Tests (Koordinaten)
+- API: **59** Kern + **85** SMP + **46** Handel (inkl. gleichzeitiger Gebote/Käufe über HTTP)
+- Browser (Chromium): **44** Kern + **32** SMP mit zwei Spielern + **22** BlueMap-Abgleich (echte Kamera)
+- Umstieg von echten 0.2-Daten auf 0.3, Neustart, Ablauf einer Auktion durch den Server-Timer

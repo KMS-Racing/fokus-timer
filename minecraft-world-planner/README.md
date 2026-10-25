@@ -1,18 +1,28 @@
 # Minecraft World Planner
 
-Ein Planungs-Tool für **alle Spieler auf deinem Minecraft-Server** (Java Edition, Fabric 26.3).
+Eine SMP-Plattform im Browser für **alle Spieler auf deinem Minecraft-Server** (Java Edition, Fabric 26.3).
+Die Mod bringt ihre Webseite selbst mit – kein extra Webhosting nötig.
 
-- 🗺️ **Claim-Karte**: zeigt nur die Gebiete, die schon entdeckt wurden (wo ein Spieler in der Nähe war)
-- 🏠 **Land claimen**: Chunks anklicken → „Neues Land“, oder im Spiel `/land neu <Name>`
-- 🤝 **Land teilen**: Mitbesitzer einladen. Alle Besitzer sind gleichberechtigt, niemand kann einen anderen rauswerfen.
-- 👀 **Für alle sichtbar**: Jeder sieht alle Länder, auf der Webseite und als Ebene in **BlueMap** (3D-Karte)
-- 📍 **Bau-Planer**: Marker mit Koordinaten, Nether↔Oberwelt-Umrechnung, TP-Befehl kopieren, öffentlich oder privat
-- 🔐 **Login ohne Passwort**: im Spiel `/planer login` tippen, Code auf der Webseite eingeben
-- 🌱 **Seed-Vorschau** (optional): zweite BlueMap von einem extra Server mit demselben Seed
+| Bereich | Was er kann |
+|---|---|
+| 🏠 **Dashboard** | „Zu erledigen“ (Einladungen, überboten, Übergaben, Bewerbungen, überfällige Projekte), deine Zahlen, Server-Status, was zuletzt passiert ist |
+| 🗺️ **Karte** | Nur **entdeckte** Gebiete, Länder, Marker, Projekte, Spieler, Spawn · Gehe zu Koordinaten · Ebenen · Legende · Maßstab · Regionen |
+| 🧊 **Live-Welt** | BlueMap (3D) an derselben Stelle wie die Karte · optional Seed-Vorschau |
+| ⚑ **Claims** | Chunks anklicken → **Vorschau** (frei? entdeckt? zusammenhängend? Limit?) → Land erstellen · Mitbesitzer · Notizen · Team-Zuordnung |
+| ◆ **Marker** | Orte mit Typ, Symbol, Farbe, optionaler Höhe · Sichtbarkeit: nur ich / Team / Land-Besitzer / alle · Nether-Umrechnung · TP-Befehl |
+| ⚔ **Teams** | Rollen Owner / Admin / Moderator / Mitglied / Anwärter · Einladung oder Bewerbung (**nie ohne Zustimmung**) · bestätigte Übergabe · Auflösen ohne Datenverlust |
+| ⚖ **Handel** | Auktion, Sofortkauf, Festpreis, Tausch und **Hilfe** (Bauen, Kämpfen …) · Gebote, Gegenangebote, Übergabe-Bestätigung, Streitfall |
+| ⚒ **Projekte** | Bauprojekte mit Aufgaben, Fortschritt, Verantwortlichen, Updates, Land/Team/Ort |
+| ☺ **Spieler** | Wer ist online, wer war zuletzt da, Teams, Länder |
+| ⚙ **Einstellungen** | Hell/Dunkel, Favoriten, **Export/Import** mit Vorschau, Server-Infos |
 
-> **Wichtig, ehrlich gesagt:** Claims sind **nur eine Anzeige**. Im Spiel wird nichts geschützt. Jemand kann trotzdem in einem fremden Land abbauen.
-> Das Tool zeigt, wem was gehört, damit ihr euch absprechen könnt. Wenn ihr echten Schutz gegen Griefer braucht,
-> gibt es fertige Mods wie *Open Parties and Claims* (läuft auf 26.3).
+Dazu eine **Suche oben** (Länder, Marker, Projekte, Teams, Spieler, Angebote – und Koordinaten wie `100 64 -200`; Taste `/`).
+
+> **Wichtig, ehrlich gesagt:**
+> - **Claims sind nur eine Anzeige.** Im Spiel wird nichts geschützt. Jemand kann trotzdem in einem fremden Land abbauen.
+>   Das Tool zeigt, wem was gehört, damit ihr euch absprechen könnt. Für echten Schutz gibt es Mods wie *Open Parties and Claims*.
+> - **Der Handel überträgt keine Items und kein Geld.** Er hält fest, was ihr abmacht (Gebote, Käufe, Tausch). Übergeben wird **im Spiel**;
+>   danach bestätigen beide Seiten auf der Webseite. Bei Problemen gibt es einen Streitfall, den ein Admin klärt.
 
 ---
 
@@ -22,7 +32,7 @@ Ein Planungs-Tool für **alle Spieler auf deinem Minecraft-Server** (Java Editio
 |---|---|---|
 | Minecraft-**Server** (Java) mit Fabric | **26.3** | https://fabricmc.net/use/server/ |
 | Fabric API | 0.164.0+26.3 (oder neuer für 26.3) | https://modrinth.com/mod/fabric-api |
-| BlueMap (optional, für 3D-Karte) | 5.29 oder neuer | https://modrinth.com/plugin/bluemap |
+| BlueMap (optional, für 3D) | 5.29 oder neuer | https://modrinth.com/plugin/bluemap |
 | Java (JDK) zum Bauen und für den Server | **25** | https://adoptium.net/ (Temurin 25) |
 
 Die Mod läuft **nur auf einem richtigen Server** (`"environment": "server"`), nicht in einer Einzelspieler- oder LAN-Welt.
@@ -36,30 +46,28 @@ cd fabric-mod
 ./gradlew build          # Windows: gradlew.bat build
 ```
 
-Beim ersten Mal lädt Gradle viel herunter, das dauert ein paar Minuten.
-Fertig ist die Datei `fabric-mod/build/libs/world-planner-0.2.0.jar`.
-(Die `...-sources.jar` daneben brauchst du nicht.)
+Beim ersten Mal lädt Gradle viel herunter, das dauert ein paar Minuten. `build` führt auch die Unit-Tests aus.
+Fertig ist die Datei `fabric-mod/build/libs/world-planner-0.3.0.jar` (die `...-sources.jar` daneben brauchst du nicht).
 
-## 2. Auf dem Server installieren
+## 2. Auf dem Server installieren (oder von 0.2 updaten)
 
-1. **Backup** von Server und Welt machen, dann Server stoppen.
-2. `world-planner-0.2.0.jar` und die passende **Fabric API** in den Ordner `mods/` legen. Für die 3D-Karte auch **BlueMap**.
+1. **Backup** machen (siehe [BACKUP.md](BACKUP.md)), dann Server stoppen.
+2. Alte `world-planner-*.jar` aus `mods/` entfernen, `world-planner-0.3.0.jar` und die passende **Fabric API** hineinlegen. Für 3D auch **BlueMap**.
 3. Server starten. Im Log sollte stehen:
    ```
    [World Planner] Webseite und API laufen auf http://127.0.0.1:8765/
    ```
-4. Die Mod hat `config/world-planner.json` angelegt (siehe [Einstellungen](#einstellungen)).
+   Beim Update von 0.2 zusätzlich: `lands.json wird auf Version 2 umgestellt. Sicherung der alten Datei: lands.json.v1.bak`
+   (genauso für `markers.json`). Alle Länder, Besitzer und Marker bleiben erhalten – getestet mit echten 0.2-Daten.
+4. Die Mod ergänzt `config/world-planner.json` um die neuen Einstellungen (siehe [Einstellungen](#einstellungen)).
 
 ## 3. Webseite öffnen und einloggen
 
-- Auf dem **Server-PC selbst**: http://127.0.0.1:8765/ öffnen.
-- Damit **andere** die Seite erreichen, siehe [Für Freunde erreichbar machen](#für-freunde-erreichbar-machen).
+- Auf dem **Server-PC selbst**: http://127.0.0.1:8765/
+- Damit **andere** die Seite erreichen: [Für Freunde erreichbar machen](#für-freunde-erreichbar-machen).
 
-Einloggen:
-1. Auf dem Server `/planer login` tippen → du bekommst einen Code wie `K7QM-2XPA` (5 Minuten gültig, nur einmal benutzbar). Klick auf den Code kopiert ihn.
-2. Code auf der Webseite eingeben → fertig. Der Browser bleibt 30 Tage eingeloggt.
-
-Ist in der Config `publicUrl` eingetragen, bekommst du im Chat zusätzlich einen anklickbaren Link, der dich direkt einloggt.
+Einloggen: Im Spiel `/planer login` tippen → Code wie `K7QM-2XPA` (5 Minuten gültig, nur einmal) → auf der Webseite eingeben.
+Ist `publicUrl` eingetragen, gibt es im Chat einen Link, der direkt einloggt. Wer **OP** ist (Level 2+), ist auf der Webseite Admin.
 
 ---
 
@@ -68,131 +76,140 @@ Ist in der Config `publicUrl` eingetragen, bekommst du im Chat zusätzlich einen
 | Befehl | Was er macht |
 |---|---|
 | `/planer login` | Login-Code für die Webseite |
-| `/planer abmelden` | Meldet dich auf **allen** Geräten von der Webseite ab (z. B. wenn dein Handy weg ist) |
+| `/planer abmelden` | Meldet dich auf **allen** Geräten von der Webseite ab |
 | `/land` oder `/land info` | Wem gehört der Chunk, in dem ich stehe? |
 | `/land neu <Name>` | Neues Land aus dem Chunk, in dem du stehst |
-| `/land erweitern [Land]` | Chunk zu deinem Land hinzufügen (muss angrenzen). Ohne Namen wird das angrenzende Land genommen. |
+| `/land erweitern [Land]` | Chunk zu deinem Land hinzufügen (muss angrenzen) |
 | `/land abgeben` | Chunk aus deinem Land entfernen |
 | `/land liste` | Deine Länder, Chunk-Verbrauch und Einladungen |
 | `/land einladen <Land> <Spieler>` | Mitbesitzer einladen (geht auch, wenn der Spieler offline ist) |
-| `/land annehmen <Land>` / `/land ablehnen <Land>` | Einladung annehmen / ablehnen |
-| `/land verlassen <Land>` | Aus einem Land austreten. Als letzter Besitzer wird das Land frei. |
-| `/land admin loeschen <Land>` | **Nur OPs:** Land löschen |
-| `/land admin entfernen <Land> <Spieler>` | **Nur OPs:** Besitzer entfernen (z. B. bei Streit) |
+| `/land annehmen <Land>` / `ablehnen <Land>` | Einladung annehmen / ablehnen |
+| `/land verlassen <Land>` | Austreten. Als letzter Besitzer wird das Land frei. |
+| `/land admin loeschen <Land>` · `/land admin entfernen <Land> <Spieler>` | **Nur OPs** |
 
 Namen mit Leerzeichen in Anführungszeichen: `/land neu "Kims Base"`. Mit **Tab** werden Namen vervollständigt.
+Teams, Handel und Projekte gibt es (noch) nur auf der Webseite.
 
-### Regeln für Länder
+## Regeln
 
-- Ein Land besteht aus **zusammenhängenden Chunks** (Seite an Seite) in einer Dimension.
-- Man kann nur **entdeckte** Chunks claimen (abschaltbar mit `claimOnlyDiscovered`).
-- Jeder Spieler darf höchstens `maxChunksPerPlayer` Chunks besitzen (Standard 64). Geteilte Länder zählen bei jedem Besitzer mit.
-- **Gleichberechtigte Besitzer:** Jeder Besitzer darf einladen, erweitern, verkleinern, umbenennen. **Niemand kann einen anderen Besitzer rauswerfen**, man kann nur selbst austreten. Nur Admins können Besitzer entfernen.
-- Nachteil dieser Regel: Wenn du den Falschen einlädst, kannst du ihn nicht selbst wieder loswerden. Lad also nur Leute ein, denen du vertraust. Sonst muss ein Admin helfen.
-- Wer **OP** ist (Level 2+), ist auf der Webseite automatisch Admin.
+**Länder**
+- Ein Land besteht aus **zusammenhängenden Chunks** (Seite an Seite) in einer Dimension. Keine Überschneidungen.
+- Nur **entdeckte** Chunks (abschaltbar mit `claimOnlyDiscovered`). Höchstens `maxChunksPerPlayer` Chunks pro Spieler.
+- **Gleichberechtigte Besitzer:** Jeder Besitzer darf einladen, erweitern, verkleinern, umbenennen. Niemand kann einen anderen
+  rauswerfen – nur Admins. **Löschen** geht nur als einziger Besitzer; mit Mitbesitzern kann man nur austreten.
+- Ein Land kann einem **Team** zugeordnet werden (von einem Besitzer, der im Team ist). Die Besitzer bleiben die Besitzer.
+- Wird ein Land aufgelöst, bleiben verknüpfte Projekte und Marker erhalten (nur die Verknüpfung fällt weg).
+
+**Teams**
+- Rollen: Owner > Admin > Moderator > Mitglied > Anwärter. Man verwaltet nur Leute **unter** dem eigenen Rang.
+- Beitritt nur per **Einladung** (muss angenommen werden, läuft nach `teamInviteDays` ab) oder **Bewerbung** (muss ein Moderator+ annehmen).
+- Der Owner kann nicht einfach austreten: **Übergabe** (Teamname eintippen, Empfänger nimmt an) oder **Auflösen** (Teamname eintippen).
+- Auflösen löscht keine Daten: Länder, Projekte, Marker und Angebote bleiben; „nur Team“ wird zu „privat“.
+- Private Teams sehen nur Mitglieder, Eingeladene und Server-Admins (auch nicht in BlueMap).
+
+**Handel (Web-Modus)**
+- **Auktion:** Mindestgebot = Höchstgebot + Mindestschritt; man kann sich nicht selbst überbieten; ein Gebot in den letzten
+  2 Minuten **verlängert** die Auktion um 2 Minuten. Ab dem Sofortkaufpreis nimmt man den Sofortkauf.
+- **Festpreis:** der erste Kauf gewinnt – auch wenn mehrere gleichzeitig klicken (getestet mit 16 gleichzeitigen Käufen).
+- **Tausch / Hilfe:** Gegenangebote als Text; der Ersteller nimmt eins an. Für „Biete“ und „Suche“.
+- Ablauf auf dem **Server** (jede Sekunde), nicht im Browser. Wer geboten hat, sieht nur die Verkäufer-Seite; Käufer sind privat.
+- Nach dem Verkauf: Übergabe im Spiel → **beide bestätigen**. Problem → **Streitfall** → ein Admin klärt (nur Status und Notiz).
+- Schutz vor Missbrauch: höchstens `tradeActionsPerMinute` Aktionen pro Minute, `maxActiveListingsPerPlayer` aktive Angebote,
+  jede Aktion trägt eine `requestId` (ein Doppelklick führt nichts doppelt aus), Speichern **vor** der Bestätigung.
+- Team-Angebote dürfen Team-Admins und der Owner einstellen; Teammitglieder können beim eigenen Team nicht kaufen.
 
 ---
 
 ## Einstellungen
 
-Datei: `config/world-planner.json` (Server neu starten nach Änderungen)
+Datei: `config/world-planner.json` (Server neu starten nach Änderungen). Unsinnige Werte werden auf sichere Grenzen gesetzt.
 
 | Einstellung | Standard | Bedeutung |
 |---|---|---|
-| `bind` | `"127.0.0.1"` | Auf welcher Netzwerk-Adresse der Webserver lauscht. `127.0.0.1` = nur dieser PC. `0.0.0.0` = alle (siehe Sicherheit!). |
+| `bind` | `"127.0.0.1"` | Netzwerk-Adresse des Webservers. `127.0.0.1` = nur dieser PC, `0.0.0.0` = alle (siehe Sicherheit!) |
 | `port` | `8765` | Port der Webseite |
-| `publicUrl` | `""` | Adresse, unter der Spieler die Seite öffnen (z. B. `https://planer.example.de/`). Dann gibt es im Chat einen Login-Link. |
-| `allowedOrigin` | `""` | Nur nötig, wenn die Webseite auf einem **anderen** Server liegt als die Mod (CORS). Normalerweise leer lassen. |
-| `liveMapUrl` | `""` | BlueMap-Adresse der echten Welt. Leer + BlueMap installiert → die Seite probiert automatisch Port 8100 auf demselben Rechner. |
+| `publicUrl` | `""` | Adresse für Spieler (z. B. `https://planer.example.de/`) → Login-Link im Chat |
+| `allowedOrigin` | `""` | Nur wenn die Webseite auf einem **anderen** Server liegt (CORS). Normalerweise leer |
+| `liveMapUrl` | `""` | BlueMap-Adresse. Leer + BlueMap installiert → automatisch Port 8100 auf demselben Rechner |
 | `seedMapUrl` | `""` | BlueMap-Adresse des Seed-Vorschau-Servers (optional) |
-| `blueMapIds` | `{}` | Leer = automatisch von BlueMap erkannt. Nur ausfüllen, wenn „In 3D zeigen“ die falsche Karte öffnet, z. B. `{"minecraft:overworld": "world"}` |
-| `maxChunksPerPlayer` | `64` | Höchstzahl Chunks pro Spieler (Admins sind ausgenommen) |
-| `maxMarkersPerPlayer` | `100` | Höchstzahl Bau-Marker pro Spieler |
-| `claimOnlyDiscovered` | `true` | Nur entdeckte Chunks dürfen geclaimt werden |
-| `discoverRadiusChunks` | `6` | Wie viele Chunks rund um jeden Spieler als „entdeckt“ gelten (höchstens die Sichtweite des Servers) |
-| `sessionDays` | `30` | Wie lange ein Web-Login gültig bleibt |
-| `showSeed` | `true` | Seed auf der Webseite anzeigen. Auf `false` stellen, wenn der Seed geheim sein soll! |
-| `showOnlinePlayers` | `true` | Positionen der Online-Spieler auf der Webseite anzeigen |
+| `blueMapIds` | `{}` | Leer = automatisch erkannt. Nur bei falscher Karte ausfüllen, z. B. `{"minecraft:overworld": "world"}` |
 | `blueMapIntegration` | `true` | Länder und öffentliche Marker in BlueMap einzeichnen |
-| `webOverrideDir` | `""` | Nur für Entwickler/Anpassungen: Webseite aus diesem Ordner statt aus der Mod laden (z. B. `/pfad/zum/repo/web`). Leer lassen! |
+| `maxChunksPerPlayer` | `64` | Höchstzahl Chunks pro Spieler (Admins ausgenommen) |
+| `claimOnlyDiscovered` | `true` | Nur entdeckte Chunks dürfen geclaimt werden |
+| `discoverRadiusChunks` | `6` | Chunks rund um jeden Spieler, die als „entdeckt“ gelten (höchstens die Sichtweite) |
+| `maxMarkersPerPlayer` | `100` | Höchstzahl Marker pro Spieler |
+| `extraMarkerTypes` | `{}` | Eigene Marker-Arten, z. B. `{"shop": "Laden"}` (Schlüssel: Kleinbuchstaben/Ziffern/_) |
+| `maxProjectsPerPlayer` | `50` | Höchstzahl Projekte, die ein Spieler anlegt |
+| `maxTeamsPerPlayer` | `1` | In wie vielen Teams man gleichzeitig sein darf (1–20) |
+| `teamInviteDays` | `7` | Nach wie vielen Tagen eine Team-Einladung abläuft |
+| `tradeUnit` | `"Diamanten"` | Einheit für Preise im Handel (nur ein Wort für die Anzeige – es wird nichts abgebucht) |
+| `tradeMinIncrement` | `1` | Standard-Mindestschritt bei Auktionen |
+| `maxActiveListingsPerPlayer` | `20` | Aktive Angebote pro Spieler |
+| `maxListingDays` | `14` | Längste Laufzeit eines Angebots |
+| `tradeActionsPerMinute` | `30` | Handels-Aktionen pro Spieler und Minute |
+| `extraTradeCategories` | `{}` | Eigene Kategorien, z. B. `{"potions": "Tränke"}` |
+| `activityLimit` | `1000` | So viele Einträge behält die Aktivitäts-Übersicht |
+| `sessionDays` | `30` | Wie lange ein Web-Login gültig bleibt |
+| `showSeed` | `true` | Seed anzeigen. Auf `false`, wenn der Seed geheim sein soll! |
+| `showOnlinePlayers` | `true` | Online-Status und Positionen der Spieler anzeigen |
+| `webOverrideDir` | `""` | Nur für Entwickler: Webseite aus diesem Ordner statt aus der Mod laden. Leer lassen! |
 
 ---
 
-## BlueMap einrichten (3D-Karte)
+## BlueMap einrichten (3D)
 
 1. BlueMap in `mods/` legen, Server starten.
-2. In `config/bluemap/core.conf` `accept-download: true` setzen. Damit erlaubst du BlueMap, die Minecraft-Texturen zu laden (das ist Teil von Mojangs EULA, lies den Kommentar in der Datei).
-3. **Nur entdeckte Gebiete zeigen:** In `config/bluemap/maps/world.conf` (und den anderen Karten) z. B.
-   ```
-   min-inhabited-time: 200
-   ```
-   setzen. Dann rendert BlueMap nur Chunks, in deren Nähe Spieler insgesamt mindestens 200 Ticks (10 Sekunden) waren.
-   Ehrlicher Hinweis: Das zählt für den **ganzen Server**. „Jeder sieht nur, wo er selbst war“ kann BlueMap nicht.
+2. In `config/bluemap/core.conf` `accept-download: true` setzen (damit erlaubst du BlueMap, die Minecraft-Texturen zu laden – Teil von Mojangs EULA).
+3. **Nur entdeckte Gebiete zeigen:** in `config/bluemap/maps/world.conf` (und den anderen Karten) z. B. `min-inhabited-time: 200`.
+   Ehrlich: Das zählt für den **ganzen Server**. „Jeder sieht nur, wo er selbst war“ kann BlueMap nicht.
 4. `/bluemap reload`. Die Karte ist dann unter `http://<server>:8100/` erreichbar.
-5. Länder erscheinen in BlueMap als Ebene **„Länder“**, öffentliche Marker als **„Bau-Planer“** (oben links im Menü ein-/ausblendbar).
+5. In BlueMap gibt es die Ebenen **„Länder“** und **„Bau-Planer“** (nur **öffentliche** Marker; private Teams erscheinen dort nicht).
 
-**So arbeiten Planer und BlueMap zusammen** (geprüft mit BlueMap 5.29):
-- Der Tab „Live-Welt 3D“ öffnet BlueMap **an der Stelle und mit dem Ausschnitt der Claim-Karte**. Hast du dich in BlueMap selbst bewegt und die Claim-Karte nicht angefasst, bleibt BlueMap, wo du warst.
-- „In 3D zeigen“ (Chunk-Infokarte) fährt nah an den Punkt (150 Blöcke Abstand).
-- Eine Hinweis-Leiste erklärt schwarze Flächen: noch nicht entdeckt, BlueMap rendert gerade, oder einfach noch nicht gerendert.
-- Ist BlueMap nicht erreichbar, steht das groß da (mit „Erneut versuchen“). Die Claim-Karte und alles andere funktionieren trotzdem.
-- Technisch nutzt der Planer nur BlueMaps eigene Adress-Schreibweise `#karte:x:y:z:abstand:…`. BlueMap übernimmt sie ohne Neuladen.
-- BlueMap zeigt den **gerenderten** Stand der Welt. Ganz frisch gebaute Blöcke erscheinen erst, wenn BlueMap den Bereich neu gerendert hat.
+**So arbeiten Karte und BlueMap zusammen** (im Code von BlueMap 5.29 nachgeprüft und mit der echten Kamera getestet):
+- „Live-Welt“ öffnet BlueMap **an der Stelle und mit dem Ausschnitt der Karte**. Hast du dich in BlueMap bewegt und die Karte nicht angefasst, bleibt BlueMap, wo du warst – ohne Neuladen.
+- „In 3D zeigen“ fährt nah an den Punkt (150 Blöcke Abstand).
+- Eine Hinweis-Leiste erklärt schwarze Flächen (noch nicht entdeckt, BlueMap rendert gerade, noch nicht gerendert).
+- Ist BlueMap nicht erreichbar, steht das groß da (mit „Erneut versuchen“). Alles andere funktioniert trotzdem.
 
-> Achtung: BlueMaps eigener Webserver ist standardmäßig **von allen Rechnern im Netzwerk** auf Port 8100 erreichbar und zeigt alles, was gerendert wurde.
+> Achtung: BlueMaps eigener Webserver ist standardmäßig **von allen Rechnern im Netzwerk** auf Port 8100 erreichbar.
 
 ## Seed-Vorschau (optional)
 
-Die Seed-Vorschau zeigt die Welt **so, wie Minecraft sie aus dem Seed erzeugt**: auch Gebiete, die noch niemand entdeckt hat, aber ohne eure Bauten.
+Zeigt die Welt **so, wie Minecraft sie aus dem Seed erzeugt** – auch Unentdecktes, aber ohne eure Bauten.
+1. Zweiten, getrennten Server-Ordner mit **derselben** Minecraft-, Fabric- und BlueMap-Version anlegen.
+2. In `server.properties` denselben `level-seed` und dieselben Welt-Einstellungen. **Nicht** die Welt-Dateien kopieren!
+3. Gebiet mit einem Chunk-Pregenerator erzeugen (nicht zu groß), BlueMap rendert es.
+4. Andere Ports (z. B. BlueMap 8101), dann `seedMapUrl` eintragen.
 
-1. Zweiten, getrennten Server-Ordner anlegen (z. B. `world-planner-vorschau`) mit **derselben** Minecraft-, Fabric- und BlueMap-Version.
-2. In `server.properties` denselben `level-seed` und dieselben Welt-Einstellungen eintragen. **Nicht** die Welt-Dateien vom echten Server kopieren!
-3. Mit einem Chunk-Pregenerator ein Gebiet erzeugen lassen (nicht zu groß, das kostet viel Zeit und Platz). BlueMap rendert es dann.
-4. Anderen Port nehmen (`server-port` und BlueMap-`port`, z. B. 8101), dann in der Planer-Config `seedMapUrl` eintragen.
-
-Ehrlich: Die Vorschau stimmt nur, wenn Seed, Version, Datapacks und Welt-Einstellungen **exakt** gleich sind. Und sie verrät allen, wo z. B. Dörfer liegen, auch in unentdeckten Gebieten.
+Ehrlich: Die Vorschau stimmt nur bei **exakt** gleichen Einstellungen, und sie verrät allen, wo z. B. Dörfer liegen.
 
 ---
 
 ## Für Freunde erreichbar machen
 
-Standardmäßig ist die Seite **nur auf dem Server-PC** erreichbar (`bind: 127.0.0.1`). Das ist Absicht und sicher.
+Standardmäßig ist die Seite **nur auf dem Server-PC** erreichbar (`bind: 127.0.0.1`). Das ist Absicht.
 
-**Im selben WLAN / LAN:** `bind` auf `"0.0.0.0"` setzen. Freunde öffnen dann `http://<IP-des-Server-PCs>:8765/`.
-Das ist okay für zu Hause, aber ohne HTTPS könnte jemand im selben Netz Login-Codes mitlesen.
+- **Im selben WLAN:** `bind` auf `"0.0.0.0"`, Freunde öffnen `http://<IP-des-Server-PCs>:8765/`. Ohne HTTPS könnte jemand im selben Netz mitlesen.
+- **Übers Internet:** **nicht** einfach Port 8765 freigeben! Nimm einen **Reverse-Proxy mit HTTPS** (Beispiel: `deploy/nginx-example.conf`),
+  `bind` bleibt `127.0.0.1`, dann `publicUrl` auf die HTTPS-Adresse setzen. Lass dir beim ersten Mal von jemandem helfen, der sich mit Servern auskennt.
 
-**Übers Internet:** Bitte **nicht** einfach Port 8765 im Router freigeben! Ohne HTTPS reisen Login-Codes und Sitzungen unverschlüsselt durchs Internet. Stattdessen:
-- einen **Reverse-Proxy mit HTTPS** nutzen (Beispiel: `deploy/nginx-example.conf`, Zertifikat z. B. von Let's Encrypt), `bind` bleibt `127.0.0.1`,
-- dann `publicUrl` auf die HTTPS-Adresse setzen.
+## Wo die Daten liegen
 
-Lass dir beim ersten Mal von jemandem helfen, der sich mit Servern auskennt. Ein falsch eingerichteter Server im Internet ist ein echtes Risiko.
-
----
-
-## Wo die Daten liegen (Backup!)
-
-Alles liegt im Weltordner unter `world/world-planner/`:
-
-| Datei | Inhalt |
-|---|---|
-| `lands.json` | Alle Länder, Besitzer, Einladungen |
-| `markers.json` | Bau-Planer-Marker |
-| `discovered.json` | Entdeckte Chunks |
-| `players.json` | Bekannte Spieler (Name ↔ UUID, OP-Status) |
-| `sessions.json` | Web-Logins (nur als Hash gespeichert, nicht das echte Token) |
-
-Gespeichert wird alle 5 Sekunden im Hintergrund (entdeckte Chunks jede Minute) und beim Stoppen. Das passiert auch, wenn der Server pausiert, weil niemand online ist. Ist eine Datei kaputt, benennt die Mod sie in `...kaputt-<Zeit>` um, statt sie zu überschreiben.
+Alles liegt im Weltordner unter `world/world-planner/` – Details und Backup-Anleitung in **[BACKUP.md](BACKUP.md)**.
+Export/Import auf der Webseite (Einstellungen) ist für **deine eigenen** Daten; ein Server-Backup sind die Dateien selbst.
 
 ---
 
 ## Was (noch) nicht geht – ehrlich
 
 - **Kein Schutz im Spiel.** Claims sind nur eine Anzeige (bewusste Entscheidung).
-- **„Entdeckt“ gilt für den ganzen Server**, nicht pro Spieler.
-- **Bestehende Welten:** Gezählt wird erst ab Installation der Mod. Alte Gebiete gelten erst als entdeckt, wenn wieder jemand dort ist.
-- **Die Claim-Karte zeigt kein Gelände**, nur entdeckt/unentdeckt, Länder, Marker und Spieler. Das echte Gelände siehst du im Tab „Live-Welt 3D“ (BlueMap).
-- **Nur Minecraft 26.3.** Für 26.2/26.4 müssen Versionen in `gradle.properties` angepasst und evtl. kleine Code-Stellen geändert werden.
-- Kein Einzelspieler/LAN-Welt-Support (nur dedizierter Server).
+- **Keine echten Transaktionen.** Es gibt keine Economy-Mod-Anbindung und keinen Team-Kontostand: Ein Kontostand, der nicht mit echten
+  Items oder einer Economy verbunden ist, würde etwas vortäuschen. Darum ist der Handel bewusst ein „Absprache-Buch“.
+- **„Entdeckt“ gilt für den ganzen Server**, nicht pro Spieler, und erst ab Installation der Mod.
+- **Die Karte zeigt kein Gelände** – dafür gibt es die Live-Welt (BlueMap).
+- **Keine Benachrichtigung im Spiel** bei Geboten oder Team-Einladungen; das Dashboard zeigt alles beim nächsten Öffnen.
+- **Teams, Handel und Projekte** gibt es nur auf der Webseite, nicht als Befehle.
+- **Nur Minecraft 26.3**, nur dedizierter Server.
 
 ## Fehlerbehebung
 
@@ -201,7 +218,10 @@ Gespeichert wird alle 5 Sekunden im Hintergrund (entdeckte Chunks jede Minute) u
 | Webseite lädt nicht | Im Server-Log nach `[World Planner]` suchen. „Port schon belegt?“ → anderen `port` nehmen. |
 | „Server nicht erreichbar“ | Läuft der Server? Stimmt die Adresse? Von einem anderen PC aus muss `bind` `0.0.0.0` sein. |
 | „Code falsch oder abgelaufen“ | Codes gelten 5 Minuten und nur einmal. Neu `/planer login` tippen. |
-| 3D-Tab bleibt leer / „Karte blockiert“ | `liveMapUrl` eintragen. Läuft die Planer-Seite über `https://`, muss BlueMap auch über `https://` laufen. |
-| „In 3D zeigen“ öffnet falsche Karte | In `blueMapIds` die richtige Karten-ID eintragen (Dateiname in `config/bluemap/maps/` ohne `.conf`). |
+| „Zu viele Handels-Aktionen“ | Die Bremse greift (`tradeActionsPerMinute`). Eine Minute warten. |
+| „Speichern fehlgeschlagen – es wurde nichts geändert“ | Die Festplatte ist voll oder schreibgeschützt. Der Handel nimmt die Aktion dann zurück, statt sie halb zu speichern. |
+| 3D bleibt leer / „Karte blockiert“ | `liveMapUrl` eintragen. Läuft die Seite über `https://`, muss BlueMap auch über `https://` laufen. |
+| „In 3D zeigen“ öffnet die falsche Karte | In `blueMapIds` die richtige Karten-ID eintragen (Dateiname in `config/bluemap/maps/` ohne `.conf`). |
 
-Mehr Technik (Aufbau, API): siehe `ARCHITEKTUR.md`. Was am Original verbessert wurde: `VERBESSERUNGEN.md`.
+Mehr Technik (Aufbau, API, Sicherheit): [ARCHITEKTUR.md](ARCHITEKTUR.md) · Tests: [tests/README.md](tests/README.md) ·
+Backup: [BACKUP.md](BACKUP.md) · Was verbessert wurde: [VERBESSERUNGEN.md](VERBESSERUNGEN.md)

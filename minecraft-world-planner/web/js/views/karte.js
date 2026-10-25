@@ -1,6 +1,8 @@
 // Ansicht „Karte“: die 2D-Claim-Karte mit Werkzeugleiste, Infokarte, Auswahl und Vorschau vor dem Claimen.
 import { api, enc } from '../api.js';
-import { blockToRegion, chunkBounds, convertForPortal, fmtCoords, parseCoords } from '../coords.js';
+import {
+  blockToChunk, blockToRegion, chunkBounds, convertForPortal, direction, distance2d, fmtCoords, fmtDistance, parseCoords, tpCommand,
+} from '../coords.js';
 import {
   DEFAULT_LAYERS, centerOn, chunkStatus, clearSelection, loadDiscovered, map, mapElement, paintChunk, requestDraw, scaleBar,
   selectionInfo, setDimension, setLayer, setSelecting, showLand, zoomBy,
@@ -29,6 +31,7 @@ function buildPane(host) {
   ui.selectBtn = el('button', { id: 'selectModeBtn', class: 'small', onclick: () => setSelecting(!map.selecting) }, '✚ Auswählen');
   ui.layersBox = el('div', { class: 'layer-list' });
   const layers = el('details', { class: 'dropdown' }, el('summary', { class: 'button small' }, 'Ebenen'), ui.layersBox);
+  const calc = el('details', { class: 'dropdown', id: 'calcBox' }, el('summary', { class: 'button small' }, 'Rechner'), calculator());
   const toolbar = el('div', { class: 'map-toolbar' },
     ui.dim, gotoForm,
     el('button', { class: 'small', id: 'centerMeBtn', onclick: centerOnMe }, '◎ Zu mir'),
@@ -36,7 +39,7 @@ function buildPane(host) {
     el('button', { class: 'small', title: 'Ansicht zurücksetzen (Spawn, normaler Zoom, Standard-Ebenen)', onclick: resetView }, '↺'),
     el('button', { class: 'small', 'aria-label': 'Herauszoomen', onclick: () => zoomBy(1 / 1.5) }, '−'),
     el('button', { class: 'small', 'aria-label': 'Hineinzoomen', onclick: () => zoomBy(1.5) }, '+'),
-    layers, ui.selectBtn);
+    layers, calc, ui.selectBtn);
   ui.hover = el('div', { id: 'hoverInfo', class: 'map-hover hidden' });
   ui.card = el('div', { id: 'chunkCard', class: 'map-card hidden', role: 'dialog', 'aria-label': 'Chunk-Info' });
   ui.selection = el('div', { id: 'selectionBar', class: 'map-selection hidden' });
@@ -53,6 +56,37 @@ function buildPane(host) {
   map.onSelection = () => updateSelection();
   map.onViewChange = () => updateScale();
   updateLayers();
+}
+
+/** Koordinaten-Rechner: eine Eingabe, alle Umrechnungen. Rechnet nur im Browser (coords.js). */
+function calculator() {
+  const input = el('input', { id: 'calcInput', placeholder: 'z. B. 100 64 -200', 'aria-label': 'Koordinaten für den Rechner', autocomplete: 'off' });
+  const out = el('div', { id: 'calcOut', class: 'calc-out' });
+  const render = () => {
+    const c = parseCoords(input.value);
+    if (!input.value.trim()) { fill(out, el('p', { class: 'muted small', text: 'Koordinaten eingeben (X Z oder X Y Z). Auch F3-Text oder /tp-Befehle gehen.' })); return; }
+    if (!c) { fill(out, el('p', { class: 'warn small', text: 'Das sind keine gültigen Koordinaten.' })); return; }
+    const cx = blockToChunk(c.x), cz = blockToChunk(c.z);
+    const b = chunkBounds(cx, cz);
+    const portal = convertForPortal(map.dim, c.x, c.z);
+    const me = myPosition();
+    const rows = [
+      ['Dimension', dimName(map.dim)],
+      ['Chunk', `${cx} / ${cz} (Blöcke X ${b.minX}…${b.maxX}, Z ${b.minZ}…${b.maxZ})`],
+      ['Region', `r.${blockToRegion(c.x)}.${blockToRegion(c.z)}.mca`],
+      portal ? [dimName(portal.dim), `X ${portal.x} · Z ${portal.z}`] : null,
+      me && me.dimension === map.dim ? ['Von dir', `${fmtDistance(distance2d(me, c))} Richtung ${direction(me, c)}`] : null,
+    ].filter(Boolean);
+    fill(out,
+      el('dl', { class: 'facts small' }, rows.map(([k, v]) => [el('dt', { text: k }), el('dd', { text: v })])),
+      el('div', { class: 'row' },
+        el('button', { class: 'small', type: 'button', onclick: () => centerOn(c.x + 0.5, c.z + 0.5, Math.max(map.view.zoom, 1)) }, 'Auf Karte'),
+        el('button', { class: 'small', type: 'button', onclick: () => copyText(tpCommand(map.dim, c.x, c.y ?? 64, c.z)) }, 'TP-Befehl'),
+        el('button', { class: 'small', type: 'button', onclick: () => openMarkerForm(null, { x: c.x, y: c.y, z: c.z, dimension: map.dim }) }, 'Marker')));
+  };
+  input.addEventListener('input', render);
+  render();
+  return el('div', { class: 'layer-list calc' }, el('strong', { text: 'Koordinaten-Rechner' }), input, out);
 }
 
 function legend() {

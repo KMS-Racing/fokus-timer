@@ -1,94 +1,134 @@
-# Aufbau und API
+# Aufbau, Sicherheit und API
 
 ## Überblick
 
 ```
 Minecraft-Server (Fabric 26.3)
  └─ World Planner Mod
-     ├─ Befehle /planer, /land          (PlannerCommands)
-     ├─ Datenspeicher (JSON im Weltordner)
-     │    PlayerDirectory, SessionStore, DiscoveryTracker, LandStore, MarkerStore
-     ├─ Webserver :8765                  (ApiServer)
-     │    ├─ /            → Webseite (index.html, app.js, style.css aus der Mod-Jar)
-     │    └─ /api/...     → JSON-API
-     └─ BlueMap-Anbindung (optional)     (BlueMapBridge + LandOutline)
+     ├─ Befehle /planer, /land                  PlannerCommands
+     ├─ Dienste (alles an einem Ort)            PlannerServices.create(...)
+     │    PlayerDirectory, SessionStore, DiscoveryTracker,
+     │    LandStore, MarkerStore, TeamStore, ProjectStore, TradeStore,
+     │    PrefsStore (Favoriten), ActivityLog, Access (Rechte-Fragen über Bereiche hinweg)
+     ├─ Webserver :8765                         ApiServer
+     │    ├─ /            → Webseite (web/ aus der Mod-Jar)
+     │    └─ /api/...     → JSON-API, verteilt auf LandRoutes, MarkerRoutes, TeamRoutes,
+     │                      ProjectRoutes, TradeRoutes, AccountRoutes (+ ImportExport)
+     └─ BlueMap-Anbindung (optional)            BlueMapBridge + LandOutline
 ```
 
-**Threads:** Minecraft-Objekte (Spieler, Welten) dürfen nur auf dem *Server-Thread* benutzt werden.
-Der Webserver läuft in eigenen Threads und benutzt deshalb nur:
-- die Datenspeicher (alle Methoden `synchronized`) und
-- Momentaufnahmen (`AtomicReference<JsonObject>`), die `WorldPlannerMod.onTick()` alle 2 Sekunden erstellt.
+**Threads:** Minecraft-Objekte dürfen nur auf dem *Server-Thread* benutzt werden. Der Webserver (8 Threads) benutzt nur
+die Datenspeicher (alle Methoden `synchronized`) und Momentaufnahmen (`AtomicReference<JsonObject>`), die `onTick()` alle
+2 Sekunden erstellt (Spieler, Welt, Spawn).
 
-**Speichern:** Jede Änderung setzt ein „dirty“-Flag. Alle 5 Sekunden (entdeckte Chunks: jede Minute) wird
-im Hintergrund-Thread gespeichert, beim Stoppen noch einmal direkt. Dateien werden erst als `.tmp` geschrieben und
-dann umbenannt, damit bei einem Absturz keine halbe Datei übrig bleibt.
+**Reihenfolge der Sperren (gegen Verklemmungen):** Handel/Projekte/Marker → Länder → Teams. Teams fragen niemanden,
+Länder fragen nur Teams. `PlannerServices.onTeamDissolved()` ruft die Bereiche nacheinander auf, nie verschachtelt.
 
-**Timer statt Ticks:** Ein leerer Server pausiert nach 60 Sekunden. Dann gibt es keine Ticks mehr. Deshalb laufen
-Speichern und BlueMap-Updates über einen eigenen Timer-Thread (`world-planner-timer`). Das BlueMap-Update liest
-Minecraft-Welten und wird darum per `server.execute()` auf den Server-Thread gereicht. Das arbeitet der Server auch in
-der Pause ab (getestet: neues Land war nach 2 s in BlueMap und nach 4 s auf der Festplatte). Über Ticks laufen nur noch
-Dinge, die Spieler brauchen (entdeckte Chunks, Spielerpositionen). Ohne Spieler sind die ohnehin egal.
+**Speichern:**
+- Länder, Marker, Teams, Projekte, Favoriten, Aktivität: Änderung setzt „dirty“, ein Timer speichert alle 5 Sekunden im
+  Hintergrund (entdeckte Chunks jede Minute), beim Stoppen noch einmal direkt.
+- **Handel:** jede Aktion wird **sofort** geschrieben, **bevor** der Server „OK“ sagt. Klappt das nicht (volle Platte),
+  wird die Änderung im Speicher zurückgenommen und die Webseite bekommt 503 „es wurde nichts geändert“.
+- Jede Datei wird als `.tmp` geschrieben, mit `fsync` auf die Platte gezwungen und dann atomar umbenannt.
+  Eine kaputte Datei wird nicht überschrieben, sondern in `…kaputt-<Zeit>` umbenannt.
+- Vor einer Umstellung auf ein neues Datenformat wird die alte Datei als `…v<alt>.bak` gesichert (siehe BACKUP.md).
 
-**BlueMap-Abgleich (Webseite):** BlueMap 5.29 liest die Adresse `#karte:x:y:z:abstand:drehung:winkel:neigung:ortho:modus`
-beim Laden und bei jedem `hashchange`. Die Kamera hat 75° Blickwinkel, von oben sieht man bei Abstand d also etwa
-1,53 × d Blöcke. Darüber rechnet `distanceForZoom()` den Zoom der Claim-Karte um (begrenzt auf 30–2000, BlueMaps Grenze
-von oben). Der Test `tests/integration/bluemap_sync_test.js` misst die echte Kamera im iframe nach.
+**Timer statt Ticks:** Ein leerer Server pausiert nach 60 Sekunden – dann gibt es keine Ticks mehr. Speichern, BlueMap und
+der **Ablauf von Auktionen** laufen deshalb über einen eigenen Timer-Thread (`world-planner-timer`, jede Sekunde für den
+Handel). Das BlueMap-Update wird per `server.execute()` auf den Server-Thread gereicht; das arbeitet der Server auch in der
+Pause ab.
 
-**Sicherheitsregel (CSP):** Die Webseite darf nur eigene Skripte laden. Als iframe und für die Erreichbarkeits-Prüfung
-sind nur die BlueMap-Adressen erlaubt (`liveMapUrl`, `seedMapUrl` oder automatisch `http://<host>:8100`).
+**Keine halben Änderungen:** Bearbeiten prüft erst alle Angaben und übernimmt sie dann (Länder, Teams, Projekte, Handel).
+Ein Fehler in einem Feld ändert also auch die anderen Felder nicht. Dafür gibt es eigene Tests.
+
+## Sicherheit
+
+| Thema | Umsetzung |
+|---|---|
+| Login | Einmal-Code aus dem Spiel (8 Zeichen, 5 Minuten, einmal). Gespeichert wird nur ein Hash des Sitzungs-Tokens. |
+| Login-Bremse | 30 Fehlversuche pro Minute **pro Absender** + 300 insgesamt; `X-Forwarded-For` zählt nur von 127.0.0.1 (Reverse-Proxy). |
+| Rechte | Jede Regel wird auf dem Server geprüft. Die Webseite bekommt pro Objekt `can: {...}` und zeigt nur erlaubte Knöpfe. |
+| Privatsphäre | Private Marker/Projekte und private Teams gibt es für Fremde nicht (**404** statt 403 – die API verrät nicht, dass es sie gibt). Land-Notizen sehen nur Besitzer. Wer geboten/gekauft hat, sieht nur die Verkäufer-Seite. |
+| Eingaben | Gemeinsame Prüfregeln (`Validate`): Namen ohne `< > & " '`, Steuer- und unsichtbare Zeichen werden entfernt, Längen, Farben `#rrggbb`, Datum, Koordinaten ±30 Mio. Falsche JSON-Datentypen → 400. Anfragen max. 256 KB (Import 4 MB). |
+| Ausgabe | Die Webseite setzt Spielertexte nur mit `textContent` ein; in BlueMap wird HTML escaped. |
+| Content-Security-Policy | Nur eigene Skripte und Styles; `connect-src`/`frame-src` nur für die BlueMap-Adressen. Keine Inline-Skripte. |
+| Dateien | Die Webseite wird nur aus einer festen Liste von Pfaden ausgeliefert (`[a-z0-9_-]+(/…)*.(html|js|css|svg)`). Keine Dateioperationen mit Benutzereingaben (Export ist ein Download aus dem Speicher, Import liest nur JSON aus dem Request). |
+| Handel | Sperre pro Aktion (`synchronized`), `requestId` gegen doppelte Ausführung (auch nach Neustart), Bremse pro Spieler, Ablauf auf dem Server. |
+| Secrets | Es gibt keine. Die Config enthält keine Passwörter; nichts wird an fremde Dienste geschickt. |
 
 ## Dateien im Code
 
 | Datei | Aufgabe |
 |---|---|
-| `WorldPlannerMod.java` | Einstieg: lädt alles, Tick-Schleife, Speichern |
-| `PlannerConfig.java` | `config/world-planner.json` |
+| `WorldPlannerMod.java` | Einstieg: Start, Timer, Ticks, Speichern, Stoppen |
+| `PlannerServices.java` | Baut und verbindet alle Speicher; Aufräumen bei gelöschten Ländern/aufgelösten Teams |
+| `PlannerConfig.java` | `config/world-planner.json` mit sicheren Grenzen |
 | `PlannerCommands.java` | Befehle im Spiel |
-| `ApiServer.java` | Webserver und API |
-| `LandStore.java` | Länder und alle Regeln (zusammenhängend, Limits, Besitzer, Einladungen) |
-| `MarkerStore.java` | Bau-Marker |
-| `DiscoveryTracker.java` | Entdeckte Chunks |
-| `SessionStore.java` | Login-Codes und Sitzungen |
-| `PlayerDirectory.java` | Bekannte Spieler, OP-Status |
-| `BlueMapBridge.java` | Zeichnet Länder/Marker in BlueMap (wird nur geladen, wenn BlueMap da ist) |
-| `LandOutline.java` | Macht aus Chunks einen Umriss (Polygon mit Löchern) |
+| `ApiServer.java`, `ApiRequest.java`, `Routes.java`, `*Routes.java` | Webserver, Anfrage-Helfer, API-Bereiche |
+| `LandStore.java` | Länder: zusammenhängend, Limits, Besitzer, Einladungen, Vorschau, Team-Zuordnung |
+| `MarkerStore.java` | Marker mit Sichtbarkeit |
+| `TeamStore.java` | Teams, Rollen, Einladungen, Bewerbungen, Übergabe, Auflösen |
+| `ProjectStore.java` | Bauprojekte mit Aufgaben und Updates |
+| `TradeStore.java` | Web-Auktionshaus (Auktion, Festpreis, Tausch), Übergabe, Streitfall |
+| `PrefsStore.java`, `ActivityLog.java`, `ImportExport.java` | Favoriten, Aktivität, Export/Import |
+| `Access.java`, `Validate.java`, `RateLimiter.java` | Rechte über Bereiche hinweg, Eingabeprüfung, Bremse |
+| `DiscoveryTracker.java`, `SessionStore.java`, `PlayerDirectory.java` | Entdeckte Chunks, Logins, bekannte Spieler |
+| `BlueMapBridge.java`, `LandOutline.java` | BlueMap-Ebenen (nur geladen, wenn BlueMap da ist), Umrisse aus Chunks |
 | `JsonStore.java`, `JsonFiles.java`, `Chunks.java`, `PlannerException.java` | Hilfsklassen |
+
+**Webseite** (`web/`, ES-Module ohne Build-Schritt):
+`js/main.js` (Start, Navigation, Aktualisieren), `api.js`, `store.js` (Datenstand + Ereignisse), `router.js` (`#/bereich/id`),
+`map.js` (Claim-Karte), `bluemap.js` (3D-Abgleich), `coords.js` (Koordinaten-Werkzeuge, ohne DOM → `node --test`),
+`search.js`, `util.js` und `views/*.js` (je ein Bereich). `window.planner` ist ein Einstieg für die Browser-Tests.
+
+**BlueMap-Abgleich:** BlueMap 5.29 liest `#karte:x:y:z:abstand:drehung:winkel:neigung:ortho:modus` beim Laden und bei jedem
+`hashchange`. Die Kamera hat 75° Blickwinkel, von oben sieht man bei Abstand d etwa 1,53 × d Blöcke. `distanceForZoom()`
+rechnet den Zoom der Karte um (30–2000 Blöcke, BlueMaps Grenze von oben). Die iframes bleiben im Dokument (nur versteckt),
+sonst würde BlueMap bei jedem Wechsel neu laden.
 
 ## API
 
-Alle Antworten sind JSON. Fehler: `{"error": "deutsche Meldung"}` mit passendem HTTP-Code (400, 401, 403, 404, 409, 413, 429).
+Alle Antworten sind JSON. Fehler: `{"error": "deutsche Meldung"}` mit HTTP-Code 400, 401, 403, 404, 409, 413, 429 oder 503.
 Außer `info` und `login` brauchen alle Anfragen `Authorization: Bearer <token>`.
-Chunk-Listen sind flach: `[x0, z0, x1, z1, ...]` (Chunk-Koordinaten, also Block / 16).
+Chunk-Listen sind flach: `[x0, z0, x1, z1, …]` (Chunk-Koordinaten = Block / 16, abgerundet).
+Handels-Aktionen (alle POST unter `/api/trades`) brauchen eine `requestId` (8–64 Zeichen `A-Z a-z 0-9 -`).
 
-| Methode | Pfad | Body | Antwort |
+| Methode | Pfad | Body | Hinweis |
 |---|---|---|---|
-| GET | `/api/info` | – | Name der App |
-| POST | `/api/login` | `{code}` | `{token, uuid, name}` |
-| POST | `/api/logout` | – | `{ok}` |
-| GET | `/api/me` | – | Name, Admin, Chunk-Verbrauch, Limits, Karten-URLs |
-| GET | `/api/world` | – | Version, Seed (Text), Weltname, Dimensionen, Spawn `{dimension, x, y, z}` |
-| GET | `/api/players` | – | Online-Spieler mit Position |
-| GET | `/api/discovered?dimension=…` | – | `{dimension, chunks:[…]}` |
-| GET | `/api/lands` | – | alle Länder (Einladungslisten nur für Besitzer/Admins) |
-| POST | `/api/lands` | `{name, dimension, chunks}` | `{ok, id}` |
-| POST | `/api/lands/{id}/chunks` | `{add?, remove?}` | `{ok, deleted?}` |
-| POST | `/api/lands/{id}/edit` | `{name?, color?, description?}` | `{ok}` |
-| POST | `/api/lands/{id}/invite` · `/uninvite` | `{player}` | `{ok}` |
-| POST | `/api/lands/{id}/accept` · `/decline` · `/leave` | – | `{ok, deleted?}` |
-| POST | `/api/lands/{id}/delete` | – | Admin: Land löschen |
-| POST | `/api/lands/{id}/remove-owner` | `{player}` | Admin: Besitzer entfernen |
-| GET | `/api/markers` | – | öffentliche + eigene private Marker |
-| POST | `/api/markers` | `{name, type, dimension, x, y, z, notes, public}` | `{ok, id}` |
-| POST | `/api/markers/{id}/edit` · `/delete` | wie oben / – | `{ok}` |
-| GET | `/api/known-players` | – | Namen für die Einladen-Vorschläge |
-| GET | `/api/bluemap-status` | – | `{available, renderQueue, renderThreads, rendering, paused}` von BlueMaps Render-Schnittstelle |
-
-Marker-Typen: `city`, `base`, `road`, `farm`, `resource`, `portal`, `other`.
+| GET | `/api/info` | – | öffentlich |
+| POST | `/api/login` · `/api/logout` | `{code}` / – | |
+| GET | `/api/me` | – | Konto, Limits, Teams, Karten |
+| GET | `/api/meta` | – | Auswahl-Listen (Typen, Rollen, Kategorien …) aus einer Quelle |
+| GET | `/api/world` · `/api/players` · `/api/known-players` · `/api/bluemap-status` | – | |
+| GET | `/api/discovered?dimension=…&since=<version>` | – | `{unchanged:true}`, wenn sich nichts geändert hat |
+| GET | `/api/people` | – | Spieler mit Rolle, online/zuletzt da, sichtbaren Teams, Ländern |
+| GET/POST | `/api/prefs` · `/api/prefs/favorite` | `{kind, id, on}` | Favoriten (lands, markers, projects, teams, listings) |
+| GET | `/api/activity?limit=50` | – | nur sichtbare Ereignisse |
+| GET/POST | `/api/export` · `/api/import` | `{data, apply}` | `apply:false` = Vorschau |
+| GET/POST | `/api/lands` | `{name, dimension, chunks, color?, description?}` | |
+| POST | `/api/lands/check` | `{dimension, chunks, landId?}` | Vorschau, ändert nichts |
+| POST | `/api/lands/{id}/chunks` | `{add?, remove?}` | `{deleted}` wenn leer |
+| POST | `/api/lands/{id}/edit` | `{name?, color?, description?, notes?}` | |
+| POST | `/api/lands/{id}/invite` · `uninvite` · `remove-owner` | `{player}` | `remove-owner` nur Admins |
+| POST | `/api/lands/{id}/accept` · `decline` · `leave` · `delete` | – | `delete`: nur als einziger Besitzer oder Admin |
+| POST | `/api/lands/{id}/team` | `{teamId}` | leer = Zuordnung lösen |
+| GET/POST | `/api/markers` | `{name, type, dimension, x, y?, z, notes, visibility, teamId?, landId?, color?, symbol?}` | alte Webseiten: `public` statt `visibility` geht noch |
+| POST | `/api/markers/{id}/edit` · `delete` | wie oben / – | |
+| GET/POST | `/api/teams` · `/api/teams/{id}` | `{name, tag, description?, color?, symbol?, visibility?, joinPolicy?}` | |
+| POST | `/api/teams/{id}/edit` · `invite {player}` · `accept` · `decline` · `apply {message}` · `withdraw-application` | | |
+| POST | `/api/teams/{id}/role {player, role}` · `kick {player}` · `leave` | | |
+| POST | `/api/teams/{id}/transfer {player, confirmName}` · `transfer-accept` · `transfer-cancel` · `dissolve {confirmName}` | | |
+| POST | `/api/teams/{id}/invites/{inv}/withdraw` · `/applications/{app}/accept` · `/decline` | | |
+| GET/POST | `/api/projects` · `/api/projects/{id}` | `{name, description, status, priority, startDate, dueDate, teamId, landId, visibility, responsible:[Namen], location, tasks:[…], notes}` | |
+| POST | `/api/projects/{id}/edit` · `delete` · `tasks {text}` · `tasks/{t}/edit {text?, done?}` · `tasks/{t}/delete` · `updates {text}` | | |
+| GET/POST | `/api/trades` · `/api/trades/{id}` | `{requestId, kind, title, category, itemName, quantity, description, startPrice, minIncrement, buyNowPrice, price, side, wants, durationHours, teamId}` | |
+| POST | `/api/trades/{id}/bid {amount}` · `buy` · `offer {text}` · `offers/{o}/withdraw` · `offers/{o}/accept` | jeweils + `requestId` | |
+| POST | `/api/trades/{id}/cancel {reason?}` · `confirm` · `dispute {reason}` · `resolve {completed, note}` | jeweils + `requestId` | `resolve` nur Admins |
 
 ## Ideen für später
 
-1. **Echter Schutz** (optional einschaltbar): Abbauen/Bauen/Kisten in fremden Ländern blocken (Fabric-Events `PlayerBlockBreakEvents`, `UseBlockCallback`, …). Ehrlich: Kolben, Explosionen, Lava usw. machen das aufwendig.
-2. **Gelände in der Claim-Karte**, z. B. aus BlueMaps Flach-Ansicht.
-3. **Welt-Check**: Vergleich von Seed/Version zwischen Live- und Vorschau-Server, damit die Vorschau sicher stimmt.
-4. **Bestehende Welten**: entdeckte Chunks aus den Region-Dateien (InhabitedTime) übernehmen.
-5. **Benachrichtigung im Spiel**, wenn dich jemand online über die Webseite einlädt.
+1. **Echter Schutz** (optional): Abbauen/Bauen in fremden Ländern blocken. Ehrlich: Kolben, Explosionen, Lava machen das aufwendig.
+2. **Benachrichtigungen im Spiel** (überboten, Team-Einladung, Übergabe) per Chat-Nachricht beim Einloggen.
+3. **Gelände in der Claim-Karte**, z. B. aus BlueMaps Flach-Ansicht.
+4. **Bestehende Welten:** entdeckte Chunks aus den Region-Dateien (InhabitedTime) übernehmen.
+5. **Economy-Anbindung**, falls der Server eine Economy-Mod bekommt – erst dann wären echte Zahlungen möglich.
