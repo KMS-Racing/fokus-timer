@@ -29,47 +29,60 @@ export function emit(key) {
   }
 }
 
-function mark(key) {
+const fingerprints = {};
+
+/**
+ * Meldet eine Änderung nur, wenn sich die Daten wirklich geändert haben. Sonst würden Seiten alle paar Sekunden
+ * neu gezeichnet – eine halb ausgefüllte Auswahl könnte dabei zurückspringen.
+ */
+function mark(key, data) {
   store.loaded[key] = Date.now();
+  const fp = JSON.stringify(data);
+  if (fingerprints[key] === fp) return;
+  fingerprints[key] = fp;
   emit(key);
 }
 
 export const load = {
-  async me() { store.me = await api('api/me'); mark('me'); },
-  async meta() { store.meta = await api('api/meta'); mark('meta'); },
-  async world() { store.world = await api('api/world'); mark('world'); },
+  async me() { store.me = await api('api/me'); mark('me', store.me); },
+  async meta() {
+    store.meta = await api('api/meta');
+    const { serverTime, ...rest } = store.meta; // die Serverzeit ändert sich bei jeder Anfrage
+    mark('meta', rest);
+  },
+  async world() { store.world = await api('api/world'); mark('world', store.world); },
   async lands() {
     const r = await api('api/lands');
     store.lands = r.lands || [];
     store.landsVersion = r.version;
-    mark('lands');
+    mark('lands', r);
   },
-  async markers() { store.markers = (await api('api/markers')).markers || []; mark('markers'); },
-  async teams() { store.teams = (await api('api/teams')).teams || []; mark('teams'); },
-  async projects() { store.projects = (await api('api/projects')).projects || []; mark('projects'); },
+  async markers() { store.markers = (await api('api/markers')).markers || []; mark('markers', store.markers); },
+  async teams() { store.teams = (await api('api/teams')).teams || []; mark('teams', store.teams); },
+  async projects() { store.projects = (await api('api/projects')).projects || []; mark('projects', store.projects); },
   async trades() {
     const r = await api('api/trades');
     store.trades = r.listings || [];
     store.tradeUnit = r.unit || '';
     store.serverOffset = (r.serverTime || Date.now()) - Date.now();
-    mark('trades');
+    mark('trades', [r.unit, r.listings]);
   },
   async people() {
     const r = await api('api/people');
     store.people = r.players || [];
     store.onlineHidden = !!r.onlineHidden;
-    mark('people');
+    mark('people', r);
   },
   async players() {
     const r = await api('api/players');
     store.players = r.players || [];
     store.playersHidden = !!r.hidden;
-    mark('players');
+    mark('players', [r.players, r.hidden]);
   },
-  async activity() { store.activity = (await api('api/activity?limit=100')).events || []; mark('activity'); },
-  async prefs() { store.prefs = await api('api/prefs'); mark('prefs'); },
-  async knownPlayers() { store.knownPlayers = (await api('api/known-players')).players || []; mark('knownPlayers'); },
-  async blueMapStatus() { store.blueMapStatus = await api('api/bluemap-status'); mark('blueMapStatus'); },
+  async activity() { store.activity = (await api('api/activity?limit=100')).events || []; mark('activity', store.activity); },
+  async prefs() { store.prefs = await api('api/prefs'); mark('prefs', store.prefs); },
+  async knownPlayers() { store.knownPlayers = (await api('api/known-players')).players || []; mark('knownPlayers', store.knownPlayers); },
+  async blueMapStatus() { store.blueMapStatus = await api('api/bluemap-status'); mark('blueMapStatus', store.blueMapStatus); },
 };
 
 /** Lädt mehrere Bereiche parallel; ein einzelner Fehler stoppt die anderen nicht. */
@@ -103,7 +116,7 @@ export function isFavorite(kind, id) {
 
 export async function toggleFavorite(kind, id) {
   store.prefs = await api('api/prefs/favorite', { kind, id, on: !isFavorite(kind, id) });
-  emit('prefs');
+  mark('prefs', store.prefs);
 }
 
 /** Typ- und Kategorie-Namen vom Server (eine Quelle für alle Auswahl-Listen). */

@@ -56,6 +56,29 @@ Ein Fehler in einem Feld ändert also auch die anderen Felder nicht. Dafür gibt
 | Handel | Sperre pro Aktion (`synchronized`), `requestId` gegen doppelte Ausführung (auch nach Neustart), Bremse pro Spieler, Ablauf auf dem Server. |
 | Secrets | Es gibt keine. Die Config enthält keine Passwörter; nichts wird an fremde Dienste geschickt. |
 
+## Datenmodell
+
+```
+Spieler (UUID, Name, OP?) ──┬── besitzt (gleichberechtigt) ──► Land ◄── teamId (optional) ── Team
+                            │                                   ▲                               │
+                            ├── ist Mitglied (Rolle) ───────────┼───────────────────────────────┘
+                            ├── legt an ──► Marker ── landId? / teamId? (für Sichtbarkeit „Land“/„Team“)
+                            ├── legt an ──► Projekt ── landId? teamId? location? ── Aufgaben, Updates, Verantwortliche
+                            ├── verkauft ──► Angebot (Listing) ── teamId? ── Gebote, Gegenangebote, Übergabe, Verlauf
+                            └── Favoriten (lands, markers, projects, teams, listings)
+Aktivität: Ereignis (Zeit, Text, Bezug, Publikum "all" | "team:<id>")
+```
+
+| Objekt | Wichtige Felder | Gelöscht/aufgelöst, was passiert mit Verknüpfungen? |
+|---|---|---|
+| **Land** | Name (eindeutig), Dimension, Chunks, Farbe, Beschreibung (öffentlich), Notizen (nur Besitzer), Besitzer, Einladungen, Team | Projekte und Marker bleiben; Marker „nur Land-Besitzer“ werden privat |
+| **Marker** | Name, Typ, Dimension, X, Y (optional), Z, Notizen, Sichtbarkeit (privat/Team/Land/alle), Farbe, Symbol | – |
+| **Team** | Name, Kürzel (beide eindeutig), Beschreibung, Farbe, Symbol, öffentlich/privat, Beitritt (Einladung/Bewerbung), Mitglieder mit Rolle, Einladungen (mit Ablauf), Bewerbungen, offene Übergabe | Länder bleiben (ohne Team); Projekte und Marker bleiben – „nur Team“ wird zu privat (Ersteller und Beteiligte); Angebote laufen im Namen des Erstellers weiter |
+| **Projekt** | Name, Beschreibung, Status, Priorität, Start/Ziel, Sichtbarkeit (alle/Team/Beteiligte), Land, Team, Ort, Verantwortliche, Aufgaben (erledigt von/wann), Updates, Notizen | – |
+| **Angebot** | Art (Auktion/Festpreis/Tausch), Biete/Suche, Titel, Kategorie, Item, Menge, Preise, Laufzeit, Team, Status (aktiv/verkauft/nicht verkauft/abgebrochen), Gebote, Gegenangebote, Übergabe (offen/bestätigt/Streit/geklärt), Verlauf | Angebote werden nie automatisch gelöscht |
+
+Alle Dateien haben eine `schemaVersion`. Länder und Marker sind auf Version 2 (0.3), alle neuen Bereiche auf Version 1.
+
 ## Dateien im Code
 
 | Datei | Aufgabe |
