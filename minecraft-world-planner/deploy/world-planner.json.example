@@ -34,5 +34,6 @@
   "statistics": true,
   "timeZone": "Europe/Berlin",
   "afkMinutes": 5,
-  "races": true
+  "events": true,
+  "maxEventsPerPlayer": 5
 }

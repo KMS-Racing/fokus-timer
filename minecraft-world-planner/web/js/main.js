@@ -6,29 +6,30 @@ import * as coords from './coords.js';
 import * as mapModule from './map.js';
 import { navigate, onRoute, parseHash } from './router.js';
 import { setupSearch, searchAll } from './search.js';
-import { emit, load, loadAll, myTeams, on, store } from './store.js';
+import { eventTodos } from './eventfmt.js';
+import { emit, load, loadAll, myTeams, on, serverNow, store } from './store.js';
 import { $, el, fill, safeUrl, toast } from './util.js';
 import claims from './views/claims.js';
 import dashboard, { todoItems } from './views/dashboard.js';
+import events from './views/events.js';
 import karte, { centerOnSpawn } from './views/karte.js';
 import live from './views/live.js';
 import markers from './views/markers.js';
 import players from './views/players.js';
 import projects from './views/projects.js';
 import settings, { applyTheme } from './views/settings.js';
-import races from './views/races.js';
 import stats, { rankings } from './views/stats.js';
 import teams from './views/teams.js';
 import trade from './views/trade.js';
 
 const VIEWS = {
-  dashboard, karte, live, seed: live, claims, marker: markers, teams, handel: trade, projekte: projects, spieler: players, statistik: stats, ranglisten: rankings, rennen: races,
+  dashboard, karte, live, seed: live, claims, marker: markers, teams, handel: trade, projekte: projects, events, spieler: players, statistik: stats, ranglisten: rankings,
   einstellungen: settings,
 };
 const NAV = [
   ['dashboard', 'Dashboard', '⌂'], ['karte', 'Karte', '▦'], ['live', 'Live-Welt', '◈'], ['claims', 'Claims', '⚑'], ['marker', 'Marker', '◆'],
-  ['teams', 'Teams', '⚔'], ['handel', 'Handel', '⚖'], ['projekte', 'Projekte', '⚒'], ['spieler', 'Spieler', '☺'], ['statistik', 'Statistik', '★'],
-  ['ranglisten', 'Ranglisten', '♛'], ['rennen', 'Rennen', '⏱'],
+  ['teams', 'Teams', '⚔'], ['handel', 'Handel', '⚖'], ['projekte', 'Projekte', '⚒'], ['events', 'Events', '◷'], ['spieler', 'Spieler', '☺'], ['statistik', 'Statistik', '★'],
+  ['ranglisten', 'Ranglisten', '♛'],
   ['einstellungen', 'Einstellungen', '⚙'],
 ];
 
@@ -54,7 +55,7 @@ function buildNav() {
 /** Bereiche, die der Server-Admin abgeschaltet hat, verschwinden aus der Navigation. */
 function updateNavVisibility() {
   const features = (store.meta && store.meta.gameFeatures) || {};
-  for (const [route, key] of [['statistik', 'statistics'], ['ranglisten', 'statistics'], ['rennen', 'races']]) {
+  for (const [route, key] of [['statistik', 'statistics'], ['ranglisten', 'statistics'], ['events', 'events']]) {
     const link = document.querySelector(`.nav-link[data-route="${route}"]`);
     if (link) link.classList.toggle('hidden', features[key] === false);
   }
@@ -70,6 +71,7 @@ function updateBadges() {
       || (l.status === 'sold' && l.handover && l.handover.status === 'pending' && ((l.mine && !l.handover.sellerConfirmedAt) || (l.iWon && !l.handover.buyerConfirmedAt)))
       || (me.admin && l.handover && l.handover.status === 'disputed')).length,
     dashboard: 0,
+    events: eventTodos(store.events, serverNow(), (store.meta && store.meta.timeZone) || 'Europe/Berlin').filter(t => t.kind === 'invite').length,
   };
   counts.dashboard = todoItems().length;
   for (const b of document.querySelectorAll('[data-badge]')) {
@@ -177,7 +179,7 @@ async function startApp() {
     } else await centerOnSpawn();
   }
   mapModule.loadDiscovered(true).catch(() => {});
-  Promise.allSettled([load.projects(), load.trades(), load.people(), load.activity(), load.blueMapStatus()]);
+  Promise.allSettled([load.projects(), load.trades(), load.people(), load.activity(), load.blueMapStatus(), load.events()]);
   startPolling();
   started = true;
   await show(parseHash());
@@ -195,7 +197,7 @@ function startPolling() {
   every(10000, () => Promise.all([load.lands(), load.markers()]));
   every(5000, () => (visible('handel') ? load.trades() : null));
   every(30000, () => (visible('handel') ? null : load.trades()));
-  every(20000, () => Promise.all([load.teams(), load.projects(), load.me()]));
+  every(20000, () => Promise.all([load.teams(), load.projects(), load.me(), visible('events') ? null : load.events()]));
   every(30000, () => (visible('dashboard', 'claims') ? load.activity() : null));
   every(5000, () => (visible('live') ? load.blueMapStatus().then(() => bluemap.updateMapStatus('live')) : null));
   every(60000, () => Promise.all([mapModule.loadDiscovered(), load.people(), load.knownPlayers(), load.blueMapStatus(), load.world()]));
@@ -220,7 +222,7 @@ function setupUi() {
   $('navBackdrop').addEventListener('click', () => document.body.classList.remove('nav-open'));
   $('sideNav').addEventListener('click', e => { if (e.target.closest('a')) document.body.classList.remove('nav-open'); });
   setupSearch($('searchInput'), $('searchResults'));
-  for (const k of ['lands', 'teams', 'trades', 'projects', 'me']) on(k, updateBadges);
+  for (const k of ['lands', 'teams', 'trades', 'projects', 'me', 'events']) on(k, updateBadges);
   on('meta', updateNavVisibility);
   // Daten der Karte nach einem Dimensionswechsel
   mapModule.map.onDimension = () => { if (current === 'live' || current === 'seed') bluemap.openBlueMap(current); emit('discovered'); };

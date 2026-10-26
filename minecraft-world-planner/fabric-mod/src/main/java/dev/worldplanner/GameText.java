@@ -189,6 +189,26 @@ final class GameText {
         return out;
     }
 
+    /** /planer events: die nächsten Events, je mit Knöpfen zum Antworten. */
+    static Component events(List<EventStore.Note> next, java.time.ZoneId zone, String publicUrl) {
+        MutableComponent out = message();
+        if (next.isEmpty()) {
+            return out.append(text("Keine Events geplant. Anlegen kannst du sie auf der Webseite unter Events.", ChatFormatting.GRAY))
+                    .append(webLink(publicUrl, "#/events", " [Events]"));
+        }
+        out.append(text("Nächste Events (Knopf anklicken, dann Enter):", ChatFormatting.WHITE));
+        for (EventStore.Note e : next) {
+            out.append("\n ").append(text(EventStore.when(e.start(), zone) + " ", ChatFormatting.YELLOW))
+                    .append(text("»" + e.title() + "«", ChatFormatting.WHITE))
+                    .append(text(" · " + EventStore.KINDS.get(e.kind()) + " · " + Notices.plural(e.coming(), "kommt", "kommen")
+                            + (e.myAnswer() == null ? "" : " · du: " + EventStore.ANSWERS.get(e.myAnswer())), ChatFormatting.GRAY));
+            String base = "/planer event " + e.id() + " ";
+            out.append(command(" [Komme]", base + "ja", ChatFormatting.GREEN)).append(command(" [Vielleicht]", base + "vielleicht", ChatFormatting.AQUA))
+                    .append(command(" [Nein]", base + "nein", ChatFormatting.RED)).append(webLink(publicUrl, "#/events/" + e.id(), " [Öffnen]"));
+        }
+        return out;
+    }
+
     private static String ago(long ms) {
         if (ms < 90_000) return "gerade eben";
         return "vor " + StatValues.duration(ms);

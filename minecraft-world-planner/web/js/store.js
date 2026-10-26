@@ -5,7 +5,7 @@ import { api, enc } from './api.js';
 export const store = {
   me: null, meta: null, world: null,
   lands: [], landsVersion: -1,
-  markers: [], teams: [], projects: [],
+  markers: [], teams: [], projects: [], events: [], recap: null,
   trades: [], tradeUnit: '', serverOffset: 0, // serverOffset = Serverzeit - Browserzeit
   people: [], onlineHidden: false,
   players: [], playersHidden: false,
@@ -60,6 +60,12 @@ export const load = {
   async markers() { store.markers = (await api('api/markers')).markers || []; mark('markers', store.markers); },
   async teams() { store.teams = (await api('api/teams')).teams || []; mark('teams', store.teams); },
   async projects() { store.projects = (await api('api/projects')).projects || []; mark('projects', store.projects); },
+  async recap() { store.recap = await api('api/recap'); const { from, to, ...rest } = store.recap; mark('recap', rest); },
+  async events() {
+    if (store.meta && store.meta.gameFeatures && store.meta.gameFeatures.events === false) { store.events = []; mark('events', []); return; }
+    store.events = (await api('api/events')).events || [];
+    mark('events', store.events);
+  },
   async trades() {
     const r = await api('api/trades');
     store.trades = r.listings || [];

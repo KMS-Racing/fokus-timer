@@ -30,15 +30,15 @@ async function dialogSubmit(page) {
     for (const l of planner.store.lands) {
       if (l.name.startsWith('Testland ') && l.owners.length === 1 && l.owners[0].uuid === me) await planner.api(`api/lands/${l.id}/delete`, {});
     }
-    await planner.load.lands();
+    await Promise.all([planner.load.lands(), planner.load.me()]); // auch den Chunk-Zähler, wie die Seite nach dem Löschen
   });
   const nameA = await page.evaluate(() => planner.store.me.name);
   check('Name oben rechts', (await page.textContent('#accountBox')).includes(nameA));
   check('Kein "null" im Kopfbereich', !(await page.textContent('#accountBox')).includes('null'));
   check('Dashboard ist die Startseite', (await page.textContent('#viewRoot h1')).includes('Hallo'));
   const routes = await page.$$eval('#sideNav .nav-link', as => as.map(a => a.dataset.route));
-  check('Hauptnavigation mit allen 13 Bereichen (seit 0.5 mit Statistik und Rennen, seit 0.5.1 Ranglisten eigenständig)', JSON.stringify(routes) === JSON.stringify(
-    ['dashboard', 'karte', 'live', 'claims', 'marker', 'teams', 'handel', 'projekte', 'spieler', 'statistik', 'ranglisten', 'rennen', 'einstellungen']), routes.join(','));
+  check('Hauptnavigation mit allen 13 Bereichen (seit 0.6 mit Events, ohne Rennen)', JSON.stringify(routes) === JSON.stringify(
+    ['dashboard', 'karte', 'live', 'claims', 'marker', 'teams', 'handel', 'projekte', 'events', 'spieler', 'statistik', 'ranglisten', 'einstellungen']), routes.join(','));
   await page.click('#sideNav a[data-route=einstellungen]');
   await page.waitForSelector('#seedValue');
   check('Seed angezeigt (Einstellungen)', /^-?\d+$/.test(await page.textContent('#seedValue')), await page.textContent('#seedValue'));

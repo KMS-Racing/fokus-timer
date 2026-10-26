@@ -76,11 +76,7 @@ public final class WorldPlannerMod implements ModInitializer {
     @Override
     public void onInitialize() {
         PlannerCommands commands = new PlannerCommands(() -> services, game);
-        RaceCommands raceCommands = new RaceCommands(() -> services, game);
-        CommandRegistrationCallback.EVENT.register((dispatcher, buildContext, selection) -> {
-            commands.register(dispatcher);
-            raceCommands.register(dispatcher);
-        });
+        CommandRegistrationCallback.EVENT.register((dispatcher, buildContext, selection) -> commands.register(dispatcher));
         ServerLifecycleEvents.SERVER_STARTING.register(this::onStarting);
         ServerLifecycleEvents.SERVER_STARTED.register(this::onStarted);
         ServerLifecycleEvents.SERVER_STOPPING.register(this::onStopping);
@@ -101,7 +97,6 @@ public final class WorldPlannerMod implements ModInitializer {
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
             if (!(entity instanceof ServerPlayer player)) return;
             if (stats != null) stats.died(player, source);
-            game.races.stop(player, "gestorben");
             onPlayerDeath(player);
         });
         ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) -> {
@@ -340,7 +335,6 @@ public final class WorldPlannerMod implements ModInitializer {
                 LOGGER.debug("[World Planner] Land-Anzeige für {}: {}", player.getGameProfile().name(), msg.getString());
             }
         }
-        if (s.config().races()) game.races.tick(server, s, game.actionBar, tick); // Zeitmessung braucht jeden Tick
         if (tick % 10 == 5) { // zweimal pro Sekunde, versetzt zur Land-Anzeige
             updateWaypoints(server);
             showBorders(server);

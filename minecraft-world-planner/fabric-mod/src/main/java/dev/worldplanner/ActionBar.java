@@ -5,14 +5,13 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Die Actionbar (die Zeile über der Hotbar) teilen sich Rennen, Land-Anzeige und Navigation. Wichtigeres hat Vorrang:
- * Solange eine Rundenzeit oder ein Land-Name gerade angezeigt wird, überschreibt die Navigation sie nicht.
+ * Die Actionbar (die Zeile über der Hotbar) teilen sich Land-Anzeige und Navigation. Wichtigeres hat Vorrang:
+ * Solange ein Land-Name gerade angezeigt wird, überschreibt die Navigation ihn nicht.
  * Nur Server-Thread.
  */
 final class ActionBar {
     static final int NAVIGATION = 1;
     static final int LAND = 2;
-    static final int RACE = 3;
 
     private record Held(int priority, long untilTick) {}
 

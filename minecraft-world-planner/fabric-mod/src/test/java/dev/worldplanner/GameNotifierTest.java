@@ -202,4 +202,31 @@ class GameNotifierTest {
         w.lands.invite(alice, land("Hafen", 3), bob);
         assertTrue(poll(bob).isEmpty());
     }
+
+    @Test
+    void eventsAskOnceAndRemindTenMinutesBefore() {
+        notifier.joined(bob);
+        notifier.joined(carl);
+        poll(bob);
+        poll(bob);
+        w.prefs.setGame(carl, "notify", false);
+        JsonObject data = new JsonObject();
+        data.addProperty("title", "Bauabend");
+        data.addProperty("start", now.get() + 3_600_000L);
+        String id = w.services.events().create(alice, false, data, now.get());
+        List<String> ask = poll(bob);
+        assertEquals(1, ask.size(), ask.toString());
+        assertTrue(ask.getFirst().startsWith("[Planer] ✉ Event: »Bauabend« am ") && ask.getFirst().endsWith("– kommst du? [Komme]"), ask.getFirst());
+        assertTrue(poll(bob).isEmpty(), "nur einmal");
+        assertTrue(poll(carl).isEmpty(), "Nachrichten aus = keine Einladung");
+        w.services.events().answer(bob, id, "yes", now.get());
+        assertTrue(poll(bob).isEmpty(), "beantwortet: nichts Neues");
+        now.addAndGet(50 * 60_000L);
+        assertEquals(List.of("[Planer] ⚠ In 10 Minuten: »Bauabend«"), poll(bob), "Erinnerung (ohne Treffpunkt kein Knopf)");
+        assertTrue(poll(bob).isEmpty(), "die Erinnerung kommt nur einmal");
+        now.addAndGet(10 * 60_000L);
+        assertEquals(List.of("[Planer] • Jetzt: »Bauabend« beginnt"), poll(bob));
+        assertTrue(poll(carl).isEmpty(), "Carl hat nicht zugesagt (und Nachrichten aus)");
+    }
+
 }

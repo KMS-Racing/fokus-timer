@@ -5,7 +5,7 @@ Die Mod bringt ihre Webseite selbst mit – kein extra Webhosting nötig.
 
 | Bereich | Was er kann |
 |---|---|
-| 🏠 **Dashboard** | „Zu erledigen“ (Einladungen, überboten, Übergaben, Bewerbungen, überfällige Projekte), deine Zahlen, Server-Status, was zuletzt passiert ist |
+| 🏠 **Dashboard** | „Zu erledigen“ (Einladungen, überboten, Übergaben, Bewerbungen, überfällige Projekte, Events), deine Zahlen, Server-Status, **nächste Events**, **Rückblick auf die letzten 7 Tage**, was zuletzt passiert ist |
 | 🗺️ **Karte** | Nur **entdeckte** Gebiete, Länder, Marker, Projekte, Spieler, Spawn · Gehe zu Koordinaten · Ebenen · Legende · Maßstab · Regionen · **Messen** (Entfernung, Richtung, Strecke durch den Nether) |
 | 🧊 **Live-Welt** | BlueMap (3D) an derselben Stelle wie die Karte · optional Seed-Vorschau |
 | ⚑ **Claims** | Chunks anklicken → **Vorschau** (frei? entdeckt? zusammenhängend? Limit?) → Land erstellen · Mitbesitzer · Notizen · Team-Zuordnung |
@@ -13,10 +13,10 @@ Die Mod bringt ihre Webseite selbst mit – kein extra Webhosting nötig.
 | ⚔ **Teams** | Rollen Owner / Admin / Moderator / Mitglied / Anwärter · Einladung oder Bewerbung (**nie ohne Zustimmung**) · bestätigte Übergabe · Auflösen ohne Datenverlust · **Kürzel im Spiel**: `[KMS] Alice` im Chat, in der Tab-Liste und über dem Kopf |
 | ⚖ **Handel** | Auktion, Sofortkauf, Festpreis, Tausch und **Hilfe** (Bauen, Kämpfen …) · Gebote, Gegenangebote, Übergabe-Bestätigung, Streitfall |
 | ⚒ **Projekte** | Bauprojekte mit Aufgaben, Fortschritt, Verantwortlichen, Updates, Land/Team/Ort |
+| ◷ **Events** | Bauwettbewerb, Treffen, Party … mit **Kalender** (Liste und Monat), Treffpunkt (Land oder Koordinaten), Zusagen „Komme / Vielleicht / Komme nicht“ · Einladung im Spiel-Chat mit [Komme], **Erinnerung 10 Minuten vorher** und zum Start · Absagen und Verschieben mit Nachricht · auch nur fürs Team |
 | ☺ **Spieler** | Wer ist online, wer war zuletzt da, Teams, Länder |
 | ★ **Statistik** | Wie bei CraftAttack: der Server in Zahlen, „Wann ist am meisten los?“, Rekorde, Verlauf mit Toden und Meilensteinen, eine Seite pro Spieler |
 | ♛ **Ranglisten** | **16 Ranglisten** wie bei CraftAttack (Dauerzocker, Friedhof, Diamantenbank, Abrissbirne …) gesamt / 7 Tage / gestern / heute – **alle Spieler, für alle sichtbar**, nur auf der Webseite |
-| ⏱ **Rennen** | Rennstrecken im Spiel bauen (Tore), **Zeitmessung** mit Abschnitten in F1-Farben (lila/grün/gelb), Bestenliste, Fahrzeug-Regel (zu Fuß, Boot, Pferd, Elytra) |
 | ⚙ **Einstellungen** | Hell/Dunkel, Schalter fürs Spiel, **angemeldete Geräte**, Favoriten, **Export/Import** mit Vorschau, Server-Infos |
 | 🎮 **Im Spiel** | Kurz nach dem Einloggen „Zu erledigen“ im Chat, danach Neues sofort (Einladung, überboten, verkauft …) · Land-Name über der Hotbar beim Betreten · **Wegweiser** zu Markern, Ländern und zum Todespunkt · **Land-Grenzen** als Partikel · **Todespunkt** als privater Marker · **Team-Chat** `/tc` · Nachricht bei neuem Web-Login · alles einzeln abschaltbar |
 
@@ -68,6 +68,9 @@ Fertig ist die Datei `fabric-mod/build/libs/world-planner-0.5.0.jar` (die `...-s
    Favoriten, Spiel-Schalter, Aktivität und Web-Logins waren nach dem Update von 0.4 auf 0.5 genau gleich.
    Neu kommen `stats.json` und `races.json` dazu. Beim ersten Start übernimmt 0.5 Minecrafts eigene Statistik-Dateien
    (`world/players/stats/`) der Spieler, die der Planer schon kennt – Log: `Statistik von 4 Spieler(n) … übernommen`.
+   **Update auf 0.6:** Rennen gibt es nicht mehr. `races.json` bleibt unangetastet liegen (0.6 liest sie nicht) – du kannst
+   sie löschen oder aufheben. Neu ist `events.json`. In der Config verschwinden `races` und `maxTracksPerPlayer`, dazu kommen
+   `events` und `maxEventsPerPlayer`. Alles andere bleibt gleich (getestet mit einem Update von 0.5.1 auf 0.6.0).
 
 ## 3. Webseite öffnen und einloggen
 
@@ -93,6 +96,7 @@ Ist `publicUrl` eingetragen, gibt es im Chat einen Link, der direkt einloggt. We
 | `/planer marker <Name>` | Privater Marker an deiner Position (teilen und bearbeiten auf der Webseite) |
 | `/planer weg <Ziel>` | **Wegweiser**: Pfeil über der Hotbar zu einem Marker, Land oder `todespunkt` – gedreht nach deiner Blickrichtung, mit Entfernung (kein Teleport). `/planer weg aus` beendet ihn |
 | `/planer statistik [Spieler]` | Spielzeit, Tode, Blöcke … (die Ranglisten gibt es nur auf der Webseite) |
+| `/planer events` | Die nächsten 5 Events mit Zeit, wer kommt, deiner Antwort und Knöpfen [Komme] [Vielleicht] [Nein] (Knopf anklicken, dann Enter) |
 | `/tc <Nachricht>` (lang: `/teamchat`) | **Team-Chat** – nur Mitglieder deines Teams lesen mit, auch bei privaten Teams |
 | `/land` oder `/land info` | Wem gehört der Chunk, in dem ich stehe? |
 | `/land neu <Name>` | Neues Land aus dem Chunk, in dem du stehst |
@@ -104,12 +108,6 @@ Ist `publicUrl` eingetragen, gibt es im Chat einen Link, der direkt einloggt. We
 | `/land annehmen <Land>` / `ablehnen <Land>` | Einladung annehmen / ablehnen |
 | `/land verlassen <Land>` | Austreten. Als letzter Besitzer wird das Land frei. |
 | `/land admin loeschen <Land>` · `/land admin entfernen <Land> <Spieler>` | **Nur OPs** |
-| `/rennen neu <Name> [runde\|sprint] [beliebig\|zu_fuss\|boot\|pferd\|elytra]` | Neue Rennstrecke anfangen (Rundkurs oder Sprint von A nach B, Fahrzeug-Regel) |
-| `/rennen tor [Breite]` | Tor hier, quer zu deiner Blickrichtung (Standard 12 Blöcke). Das erste Tor ist Start/Ziel. `/rennen tor weg` nimmt das letzte zurück |
-| `/rennen fertig` · `/rennen abbrechen` | Strecke fertig (Rundkurs: mind. 3 Tore, Sprint: 2) / Bauen abbrechen |
-| `/rennen bearbeiten <Strecke>` | Tore neu setzen (nur wer sie angelegt hat oder OPs). Alte Zeiten kommen ins Archiv |
-| `/rennen start <Strecke>` · `/rennen stop` | Zeitmessung: Die Uhr läuft ab der Startlinie (fliegender Start) / beenden |
-| `/rennen zeiten [Strecke]` · `/rennen liste` · `/rennen zeigen [Strecke]` | Bestenliste · alle Strecken · Tore 20 Sekunden als Partikel |
 
 Namen mit Leerzeichen in Anführungszeichen: `/land neu "Kims Base"`. Mit **Tab** werden Namen vervollständigt.
 Teams gründen, Handel und Projekte gehen nur auf der Webseite – im Spiel bekommst du dazu aber Nachrichten (siehe Regeln).
@@ -171,7 +169,7 @@ Teams gründen, Handel und Projekte gehen nur auf der Webseite – im Spiel beko
   funktionieren. Das ist Minecraft-Standard; mit Fake-Spielern ließ es sich hier nicht prüfen.
 - Jeder Spieler kann Nachrichten, Land-Anzeige und Todespunkt **für sich** abschalten: im Spiel mit `/planer einstellungen`
   oder auf der Webseite unter Einstellungen → „Im Spiel“.
-- **Wegweiser** (`/planer weg`, auf der Webseite „🧭 Im Spiel hinführen“ bei Markern, Ländern und Rennstrecken): ein Pfeil über
+- **Wegweiser** (`/planer weg`, auf der Webseite „🧭 Im Spiel hinführen“ bei Markern, Ländern und Events mit Treffpunkt): ein Pfeil über
   der Hotbar, gedreht nach deiner Blickrichtung, mit Entfernung und Höhe. Liegt das Ziel in der Oberwelt und du bist im Nether
   (oder umgekehrt), führt der Pfeil zur passenden Stelle für ein Portal (Nether = Oberwelt ÷ 8). Am Ziel endet er von selbst.
   Er teleportiert nicht und zeigt nur, was du auch auf der Webseite sehen darfst (private Marker anderer nicht).
@@ -198,27 +196,34 @@ Teams gründen, Handel und Projekte gehen nur auf der Webseite – im Spiel beko
   Monsterjäger, Weltenbummler, Unsterblich, Kampfmaschine, Vielfraß, Angelprofi, Tierfreund, Händler, Handwerker, Flummi –
   jeweils gesamt, letzte 7 Tage, gestern und heute (Zuwachs zählt ab der Installation). Gleiche Werte = gleicher Platz.
 - **Für alle sichtbar:** Wie bei CraftAttack stehen alle Spieler in den Ranglisten, und jeder eingeloggte Spieler sieht jede
-  Spielerseite (Spielzeit, AFK, Tode, Sitzungen …) – auch in Renn-Bestenlisten steht immer der Name. Ausblenden gibt es nicht
+  Spielerseite (Spielzeit, AFK, Tode, Sitzungen …). Ausblenden gibt es nicht
   (nur 0.5.0 hatte das; ein dort gespeichertes „aus“ wird ab 0.5.1 überlesen). Sag das deinen Mitspielern, bevor du updatest.
   Die Ranglisten stehen nur auf der Webseite (Reiter **Ranglisten**), im Spiel gibt es dafür keinen Befehl mehr.
 - Platziert = benutzte Block-Items, Gegessen = benutzte Essen-Items plus Kuchenstücke. Karotten, Kartoffeln und Beeren zählen
   bei keinem von beiden – Minecraft zählt dort Pflanzen und Essen in **einer** Zahl, die Mod kann sie nicht trennen.
 
-**Rennen** (`races`, Standard an)
-- Eine Strecke besteht aus **Toren**: Linien quer zur Fahrtrichtung, die du im Spiel setzt (`/rennen tor`). Beim Rundkurs ist das erste
-  Tor Start und Ziel; mindestens zwei Tore dazwischen verhindern, dass man an der Linie hin und her fährt. Beim Sprint ist das letzte
-  Tor das Ziel. Ein Tor zählt nur **vorwärts** und bis 10 Blöcke darüber oder darunter.
-- **Zeitmessung:** `/rennen start <Strecke>` – die Uhr läuft ab der Startlinie (fliegender Start), Runde für Runde. Über der Hotbar
-  stehen Rundenzeit und Abschnitte in F1-Farben: **lila** = schnellster Abschnitt von allen, **grün** = deine Bestzeit, **gelb** =
-  langsamer. Das nächste Tor leuchtet grün. Im Chat: Rundenzeit, Abstand zur Bestzeit, Platz, Streckenrekord.
-- **Genauigkeit:** Minecraft kennt Positionen nur alle 0,05 Sekunden. Der Server rechnet aus, wann zwischen zwei Ticks du die Linie
-  überquert hast – die Hundertstel sind also **geschätzt**, nicht gemessen (etwa ±0,05 s). Gemessen wird in Echtzeit; ruckelt der
-  Server (ein Tick über 0,25 s), heißt die Runde „ungenau“ und kommt nicht in die Bestenliste.
-- **Eine Runde zählt nicht** bei: ausgelassenem Tor, falschem Fahrzeug, Kreativ-/Zuschauermodus oder Fliegen ohne Elytra,
-  Teleport (über 12 Blöcke in einem Tick), Dimension gewechselt, Tod, über 30 Minuten.
-- Werden Tore oder die Fahrzeug-Regel geändert, bekommt die Strecke eine **neue Version**: Die alten Bestzeiten bleiben im Archiv,
-  zählen aber nicht mehr. Ändern und löschen darf nur, wer die Strecke angelegt hat (oder ein Admin); löschen nur mit eingetipptem Namen.
-- Höchstens `maxTracksPerPlayer` Strecken pro Spieler. Neue Streckenrekorde stehen in der Aktivität.
+**Events** (`events`, Standard an)
+- Auf der Webseite unter **Events**: anlegen mit Titel, Art (Bauwettbewerb, Treffen, Party, Markt, Gemeinsam bauen, Sonstiges),
+  Tag, Uhrzeit, Dauer (15 Minuten bis 24 Stunden), optional Treffpunkt (ein Land oder Koordinaten) und Beschreibung.
+  „Nur Team“ geht für Mitglieder eines Teams – dann sieht es nur das Team. Ansicht als **Liste** (nach Tagen) oder **Kalender**.
+- **Alle Zeiten gelten in der Zeitzone des Servers** (`timeZone`), auf der Webseite genauso wie im Chat – damit alle dieselbe
+  Uhrzeit sehen. Wer woanders wohnt, muss umrechnen (die Webseite schreibt die Zeitzone dazu).
+- **Zusagen:** „Komme“, „Vielleicht“ oder „Komme nicht“ – auf der Webseite oder im Spiel (`/planer events`). Jeder nur für sich.
+  Wer einlädt, kommt automatisch (kann es ändern).
+- **Im Spiel** (wie alle Nachrichten mit `/planer nachrichten aus` abschaltbar): Ein neues Event kommt als Nachricht mit [Komme]
+  und steht bei „Zu erledigen“, bis du antwortest (ab 7 Tagen vorher). Wer „Komme“ oder „Vielleicht“ gesagt hat, bekommt
+  **10 Minuten vorher** eine Erinnerung (bei einem Land als Treffpunkt mit [Hinführen] zum Wegweiser) und **zum Start** eine
+  Nachricht. Absagen und Verschieben bekommen nur die mit „Komme“ oder „Vielleicht“ mit.
+- Ändern, Absagen und Löschen darf nur, wer eingeladen hat (oder ein Admin). Absagen ist meist besser als Löschen: Das Event
+  bleibt als „abgesagt“ sichtbar. Höchstens `maxEventsPerPlayer` anstehende Events pro Spieler.
+- Wird ein Team aufgelöst, werden seine anstehenden Team-Events abgesagt – und für die früheren Mitglieder verschwinden sie
+  (das Team gibt es ja nicht mehr; nur wer eingeladen hat, sieht sie noch). Wird ein Land gelöscht, bleibt der Treffpunkt als
+  Koordinate stehen.
+
+**Rückblick auf dem Dashboard** – die letzten 7 Tage, nur aus echten Daten: Spielzeit und aktive Spieler (derselbe Zuwachs wie die
+Rangliste „7 Tage“), höchstens gleichzeitig online, die Spitze von sechs Ranglisten, Meilensteine, neue Länder, abgeschlossene
+Projekte und erledigte Aufgaben, vergangene Events (mit „N hatten zugesagt“ – wer wirklich kam, weiß der Planer nicht) und wie
+viele in den nächsten 7 Tagen anstehen. Projekte, die schon vor 0.6 abgeschlossen waren, zählen nicht (das Datum fehlt).
 
 ---
 
@@ -259,8 +264,8 @@ Datei: `config/world-planner.json` (Server neu starten nach Änderungen). Unsinn
 | `statistics` | `true` | Statistik und Ranglisten (für alle sichtbar; `false` = für alle aus) |
 | `timeZone` | `"Europe/Berlin"` | Zeitzone für „Heute“, „Gestern“ und „Wann ist am meisten los“ |
 | `afkMinutes` | `5` | So viele Minuten ohne Bewegung und ohne Umschauen = AFK (1–60) |
-| `races` | `true` | Rennstrecken mit Zeitmessung (`/rennen`) |
-| `maxTracksPerPlayer` | `5` | Höchstzahl Rennstrecken pro Spieler (Admins ausgenommen) |
+| `events` | `true` | Events mit Kalender, Erinnerungen im Spiel und `/planer events` |
+| `maxEventsPerPlayer` | `5` | So viele anstehende Events darf ein Spieler gleichzeitig angelegt haben (Admins ausgenommen) |
 | `sessionDays` | `30` | Wie lange ein Web-Login gültig bleibt |
 | `showSeed` | `true` | Seed anzeigen. Auf `false`, wenn der Seed geheim sein soll! |
 | `showOnlinePlayers` | `true` | Online-Status und Positionen der Spieler anzeigen |
@@ -327,9 +332,9 @@ Export/Import auf der Webseite (Einstellungen) ist für **deine eigenen** Daten;
   auf einem echten Server geprüft. Wie Farben, Klick-Links, Partikel und die Anzeige über der Hotbar in deinem Spiel **aussehen**,
   konnte ich ohne echten Minecraft-Client nicht ansehen. Auch der Hinweis **nach dem Wiederbeleben** ist nur per Unit-Test geprüft
   (Fake-Spieler werden beim Tod entfernt statt wiederbelebt).
-- **Rennen mit echten Fahrzeugen:** Die Zeitmessung ist auf dem Server mit einem Fake-Spieler geprüft, der in vielen kleinen
-  Schritten über die Tore teleportiert wird (so bewegt er sich zuverlässig). Ob die Fahrzeug-Regel im **Boot, auf dem Pferd oder
-  mit Elytra** richtig erkennt, ist nur per Unit-Test geprüft – Fake-Spieler können nicht lenken.
+- **Events-Erinnerungen** kommen nur, wenn du gerade online bist (keine Nachrichten auf Vorrat). Loggst du dich in den
+  10 Minuten vor dem Start ein, steht die Erinnerung bei „Zu erledigen“. Ob jemand wirklich dabei war, weiß der Planer nicht –
+  im Rückblick steht deshalb „hatten zugesagt“. Events gehen nicht in den persönlichen Export (sie sind an Zeit und Server gebunden).
 - **Statistik:** Minecrafts Zahlen gehen bis zum ersten Login zurück, alles Selbstgemessene (AFK, Wann online, Zuwachs, Verlauf)
   erst ab 0.5. Spieler, die seit der Installation des Planers nie online waren, erscheinen erst nach ihrem nächsten Login.
   Blöcke und Mobs haben deutsche Namen, soweit sie in der Mod stehen; seltene erscheinen mit ihrem englischen Namen aus der ID

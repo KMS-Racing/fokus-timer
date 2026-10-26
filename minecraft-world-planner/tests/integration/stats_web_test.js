@@ -1,7 +1,6 @@
-// Browser-Test der Seiten aus 0.5: Statistik (Server, Spielerseite), Ranglisten (eigener Reiter, für alle sichtbar) und Rennen.
+// Browser-Test der Seiten aus 0.5: Statistik (Server, Spielerseite) und Ranglisten (eigener Reiter, für alle sichtbar).
 // Vergleicht, was die Seite zeigt, mit dem, was die API liefert – es wird nichts erfunden. Läuft gegen einen echten Testserver.
 // Aufruf: node stats_web_test.js <code-spielerA>
-// Für den Rennen-Teil muss es eine fertige Strecke mit Zeiten geben (z. B. nach race_test.py mit RACE_KEEP=1), sonst wird er übersprungen.
 'use strict';
 const path = require('path');
 const { launch, makeChecker, collectProblems, login, waitUntil } = require('./lib');
@@ -89,38 +88,9 @@ const SHOTS = process.env.SHOT_DIR || null;
   const gameSwitches = await page.$$eval('#gameSettings input[data-game]', els => els.map(e => e.dataset.game));
   check('„Im Spiel“ hat weiter genau drei Schalter', JSON.stringify(gameSwitches) === JSON.stringify(['notify', 'landEnter', 'deathMarker']), gameSwitches.join(','));
 
-  // 5) Rennen (nur wenn es eine Strecke mit Zeiten gibt)
-  const races = await page.evaluate(() => planner.api('api/races'));
-  const track = races.tracks.find(t => t.ready && t.record);
-  if (!track) {
-    console.log('(Rennen übersprungen: keine fertige Strecke mit Zeiten)');
-  } else {
-    await page.evaluate(() => planner.navigate('#/rennen'));
-    await page.waitForSelector('#raceList');
-    const listed = await page.$$eval('#raceList .race-card', els => els.map(e => e.dataset.track));
-    check('Rennen: alle Strecken in der Liste', races.tracks.every(t => listed.includes(t.name)), listed.join(','));
-    await page.click(`#raceList .race-card[data-track="${track.name}"]`);
-    await page.waitForSelector('#raceBoard');
-    const detail = await page.evaluate(id => planner.api('api/races/' + id), track.id);
-    const names = await page.$$eval('#raceBoard tbody th a', as => as.map(a => a.textContent));
-    check('Bestenliste wie die API', JSON.stringify(names) === JSON.stringify(detail.leaderboard.map(l => l.name)), names.join(','));
-    const first = await page.$eval('#raceBoard tbody tr td.lap-best', td => td.textContent);
-    const fmt = ms => {
-      const cs = Math.round(ms / 10), m = Math.floor(cs / 6000), s = Math.floor(cs / 100) % 60, h = cs % 100;
-      return `${m > 0 ? `${m}:${String(s).padStart(2, '0')}` : s},${String(h).padStart(2, '0')}`;
-    };
-    check('Rekordzeit wie in der API, mit Hundertsteln (z. B. 6,05)', first === fmt(detail.leaderboard[0].ms), `${first} vs ${fmt(detail.leaderboard[0].ms)}`);
-    const purple = await page.$$eval('#raceBoard td.sector-best', els => els.length);
-    check('Lila Abschnitte nur, wo die API den schnellsten Abschnitt hat', purple === detail.leaderboard.reduce((n, l) =>
-      n + (l.sectors || []).filter((s, i) => s === detail.bestSectors[i]).length, 0), purple);
-    const gates = await page.$$eval('#racePlanCard line.race-gate', els => els.length);
-    check('Streckenplan: ein Strich pro Tor', gates === detail.gates.length, gates);
-    if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'rennen-strecke.png'), fullPage: true });
-  }
-
   // 6) Handy: nichts ragt seitlich heraus
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const hash of ['#/statistik', '#/ranglisten', '#/statistik/spieler/' + me.uuid].concat(track ? ['#/rennen/' + track.id] : [])) {
+  for (const hash of ['#/statistik', '#/ranglisten', '#/statistik/spieler/' + me.uuid]) {
     await page.evaluate(h => planner.navigate(h), hash);
     await page.waitForTimeout(1200);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -130,5 +100,5 @@ const SHOTS = process.env.SHOT_DIR || null;
 
   check('Keine Fehler in der Browser-Konsole', problems.length === 0, problems.join(' | '));
   await browser.close();
-  process.exit(summary('Statistik und Rennen im Browser') ? 1 : 0);
+  process.exit(summary('Statistik und Ranglisten im Browser') ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

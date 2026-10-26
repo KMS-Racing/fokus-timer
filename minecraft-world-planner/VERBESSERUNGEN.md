@@ -251,3 +251,73 @@ CraftAttack. Auf einem Server unter Freunden passt das; sag es deinen Mitspieler
 |---|---|---|
 | Test-Fehler: Der Browser-Test ließ bei jedem Lauf ein Land mit 3 Chunks stehen – nach vielen Läufen war Alices Grenze von 64 Chunks voll, und zwei Tests brachen ab | voller Testlauf (Spiel-Integration und Browser-Kern abgebrochen: „höchstens 64 Chunks“) | Der Test heißt sein Land „Testland …“ und räumt alte eigene Testländer am Anfang auf (nur ohne Mitbesitzer) |
 | Test-Fehler: Der BlueMap-Test setzte einen künstlichen Status und las ihn erst danach – holte die Seite (alle 5 s) dazwischen den echten Status, war der Test rot | voller Testlauf (1 von 22 rot) | Setzen und Lesen in einem Schritt im Browser – kein Zeitfenster mehr |
+
+# Version 0.6: Events mit Kalender, Wochen-Rückblick – und keine Rennen mehr
+
+Deine Wünsche: „Events mit Kalender, Wochen-Rückblick“ und „Gar nichts mit Rennen, nur Minecraft-Sachen“.
+
+- **Rennen sind komplett raus:** kein `/rennen`, keine Strecken-Seite, kein `/api/races`, keine Rennanzeige über der Hotbar.
+  `races.json` bleibt unangetastet liegen (0.6 liest und schreibt sie nicht) – nichts von deinen alten Daten wird gelöscht.
+- **Events (◷ Events):** Bauwettbewerb, Treffen, Party, Markt, Gemeinsam bauen oder Sonstiges, mit Datum, Uhrzeit, Dauer,
+  Treffpunkt (ein Land oder Koordinaten) und optional nur für ein Team. Liste nach Tagen und Kalender-Monatsansicht, Zusagen
+  „Komme / Vielleicht / Komme nicht“ mit Namen, Absagen mit Grund, Verschieben.
+- **Im Spiel:** Einladung im Chat mit Knopf [Komme] (höchstens 7 Tage vorher, einmal), `/planer events` und
+  `/planer event <id> ja|vielleicht|nein`, Erinnerung 10 Minuten vorher und zum Start für alle, die zugesagt oder „Vielleicht“
+  gesagt haben (ist der Treffpunkt ein Land, mit [Hinführen]). Verschieben und Absagen erfahren nur die, die „Komme“ oder
+  „Vielleicht“ gesagt haben – wer „Komme nicht“ gesagt hat, wird nicht mehr gestört.
+- **Wochen-Rückblick** auf dem Dashboard: Spielzeit, aktive Spieler und Spitze online der letzten 7 Tage, Wochen-Spitzenreiter
+  (dieselben Zahlen wie „7 Tage“ in den Ranglisten), Meilensteine, neue Länder, abgeschlossene Projekte und Aufgaben, Events.
+  Daneben „Nächste Events“. Alles aus echten Daten; Leeres wird weggelassen statt mit Nullen aufgefüllt.
+
+**Ehrlich – was Events nicht können:**
+- Erinnerungen kommen nur, wenn du **online** bist. Wer offline ist, bekommt nichts (kein Handy, keine Mail) – nur auf dem
+  Dashboard steht es beim nächsten Öffnen.
+- Alle Zeiten sind in der **Zeitzone des Servers** (Config `timeZone`), im Spiel und auf der Webseite gleich. Wer woanders wohnt,
+  sieht trotzdem Server-Zeit – das steht im Formular dabei.
+- „Zugesagt“ heißt nicht „war da“. Der Rückblick schreibt deshalb „N hatten zugesagt“, nicht „N kamen“ – die Mod prüft nicht,
+  wer wirklich am Treffpunkt war.
+- Keine wiederkehrenden Events, keine Erinnerung zu einer selbst gewählten Zeit.
+- Events sind (noch) nicht im Export der Webseite und kommen auch nicht in einen Import.
+- Projekte, die **vor** 0.6 abgeschlossen wurden, haben kein Datum – sie fehlen im Rückblick der ersten Woche.
+- Wird ein Team aufgelöst, verschwinden seine Team-Events für die früheren Mitglieder ganz – auch die Absage sehen sie nicht
+  (nur wer eingeladen hat). Beim Durchsehen gefunden; ich habe es so gelassen, weil sich ohne Team nicht mehr sagen lässt, wer
+  das private Event sehen darf.
+
+## Fehler, die beim Bauen und Testen von 0.6 gefunden und behoben wurden
+
+| Fehler | Gefunden durch | Behoben |
+|---|---|---|
+| Ein laufendes Event ließ sich nicht bearbeiten: Die Seite zeigte „Bearbeiten“, aber Speichern scheiterte immer mit „Der Beginn muss in der Zukunft liegen“ – auch wenn man nur die Beschreibung änderte (das Formular schickt den alten Beginn mit) | Code-Durchsicht nach dem vollen Testlauf | Bleibt der Beginn gleich, wird er nicht mehr geprüft (Server und Webseite). Ein neuer Beginn in der Vergangenheit geht weiterhin nicht. Neuer Unit-Test |
+| Die Erinnerung zeigte zwei Symbole: „⚠ ⏰ In 10 Minuten“ | Chat-Zeile im Server-Log | Das Symbol kommt nur noch von der Art des Hinweises (⚠) |
+| Wegweiser zu einem Event hieß „Wegweiser zu »Event »Bauabend««“ – doppelte Anführungszeichen | Integrationstest | Das Ziel heißt einfach wie das Event |
+| Auf der Detailseite klebten Texte zusammen: „Alicelädt ein“, „2 kommendu: Komme“ | Screenshot | Leerzeichen zwischen Name und Markierung |
+| Test-Fehler: Ein Kalender-Unit-Test nahm an, der Februar 2026 beginne an einem Montag (es ist ein Sonntag) – der Code war richtig | Unit-Test rot | Test korrigiert (5 Wochen), dazu Februar 2027, der wirklich genau 4 Wochen hat |
+| Test-Fehler: Ein Unit-Test erwartete „nicht online“ (409) für ein Event ohne Treffpunkt – richtig ist „kein Treffpunkt“ (400) | Unit-Test rot | Erwartung korrigiert, dazu ein Event **mit** Treffpunkt für den 409-Fall |
+| Test-Fehler: Der Browser-Kern-Test räumt das Testland vom letzten Lauf weg (3 Chunks), lud danach aber den Chunk-Zähler nicht neu – er erwartete 17, die Seite zeigte richtig 14 | voller Testlauf (2 von 48 rot) | Der Test lädt nach dem Aufräumen auch den Zähler neu, so wie die Seite selbst nach dem Löschen |
+| Test-Fehler: Der Browser-Test prüfte das Löschen mit einem Abruf des gelöschten Events – der erzeugte selbst den Konsolen-Fehler 404, den der Test dann als Fehler meldete | Browser-Test rot | Prüft das Löschen über die Liste |
+
+## So wurde 0.6 getestet
+
+Auf demselben echten Minecraft-26.3-Server (Fabric API, BlueMap 5.29, Carpet, vier Fake-Spieler, einer OP):
+- **167** Java-Unit-Tests: 13 neu (Events: Regeln, Rechte, Team-Events, Zusagen, Verschieben, Erinnerungen nur für „Komme“ und
+  „Vielleicht“, Einladung, Land als Treffpunkt, Neustart, Server-Zeitzone, API; Rückblick: nur echte Daten der letzten 7 Tage und
+  nur Sichtbares; Erinnerung im Chat). Die 12 Rennen-Tests sind mit den Rennen gelöscht – sie testeten Code, den es nicht mehr gibt.
+- **17** Web-Unit-Tests (neu: Event-Zeiten in Server-Zeitzone auch über die Zeitumstellung, Kalender-Wochen, Event-Hinweise wie
+  im Spiel; die 2 Rennen-Tests sind weg)
+- Voller Testlauf, alle grün: API **59** Kern + **85** SMP + **46** Handel, Chat-Kürzel **10**, Spiel-Integration **36** + **20**
+  Webseite, Statistik **41** + **23** Browser (vorher 26, der Rennen-Teil ist weg), Browser **48** Kern + **33** SMP + **22** BlueMap
+- Neu auf dem Server: **30** Events (Einladung im Chat, `/planer events`, Zusage per Befehl, Verschieben, Absagen, Erinnerung und
+  Start mit einem Event in gut 2 Minuten, Wegweiser, Rückblick, `/rennen` und `/api/races` gibt es nicht mehr), **31** Browser
+  (Formular, Liste, Kalender, Zusagen, Dashboard-Text = Spiel-Text, Verschieben, Absagen, Löschen, Handy)
+- Im ersten vollen Lauf waren 2 von 48 Browser-Kern-Prüfungen rot (Test-Fehler, siehe oben). Nach den beiden Korrekturen liefen
+  Events, Events im Browser und Browser-Kern mit der neuen Jar noch einmal: 30/30, 31/31, 48/48. Das laufende Event habe ich
+  zusätzlich von Hand im Browser bearbeitet.
+- Update von 0.5.1 auf 0.6.0: **19/19** – Länder, Marker, Teams, Projekte, Angebote, Favoriten, Spiel-Schalter, Aktivität und
+  Logins gleich. `races.json` danach Byte für Byte gleich (gleiche Prüfsumme, gleiche Änderungszeit), Config umgeschrieben
+  (`races` weg, `events` da), Spielzeit keines Spielers kleiner, `/api/races` → 404.
+- Neustart mit 0.6.0: **21/21**, jetzt auch mit einem Team-Event (Treffpunkt, zwei Zusagen)
+
+**Nicht geprüft** (ehrlich): wie Einladung und Knöpfe in einem echten Minecraft-Fenster aussehen (Fake-Spieler haben keinen
+Bildschirm – geprüft ist der Text im Server-Log); eine Erinnerung genau 10 Minuten vorher mit echter Wartezeit (der Test nimmt
+2 Minuten, die Grenze prüft ein Unit-Test mit fester Uhr); der Rückblick über eine echte Woche mit vielen Spielern; zurück von
+0.6 auf 0.5.1.

@@ -148,8 +148,12 @@ final class AccountRoutes extends Routes {
         game.addProperty("deathMarker", c.deathMarkers());
         game.addProperty("teamChat", c.teamChat());
         game.addProperty("statistics", c.statistics());
-        game.addProperty("races", c.races());
+        game.addProperty("events", c.events());
         o.add("gameFeatures", game);
+        o.add("eventKinds", map(EventStore.KINDS));
+        o.add("eventVisibility", map(EventStore.VISIBILITY));
+        o.add("eventAnswers", map(EventStore.ANSWERS));
+        o.addProperty("maxEventsPerPlayer", c.maxEventsPerPlayer());
         JsonArray cats = new JsonArray();
         for (StatValues.Category cat : StatValues.CATEGORIES) cats.add(StatsStore.category(cat));
         o.add("statCategories", cats);
@@ -159,8 +163,6 @@ final class AccountRoutes extends Routes {
         o.add("statUnits", units);
         o.addProperty("timeZone", c.timeZone());
         o.addProperty("afkMinutes", c.afkMinutes());
-        o.add("raceTypes", map(RaceStore.TYPES));
-        o.add("raceVehicles", map(RaceStore.VEHICLES));
         o.addProperty("serverTime", System.currentTimeMillis());
         return o;
     }

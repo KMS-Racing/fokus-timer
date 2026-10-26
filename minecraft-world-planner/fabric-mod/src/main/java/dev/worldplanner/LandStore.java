@@ -210,6 +210,12 @@ final class LandStore extends JsonStore {
         return new Shape(land.id, land.name, land.dimension, land.color, chunks, Chunks.x(best) * 16 + 8, Chunks.z(best) * 16 + 8);
     }
 
+    /** Seit from angelegte Länder, neueste zuerst (für den Wochen-Rückblick – Länder sieht jeder auf der Karte). */
+    synchronized List<Ref> createdSince(long from) {
+        return lands.values().stream().filter(l -> l.createdAt >= from).sorted((a, b) -> Long.compare(b.createdAt, a.createdAt))
+                .map(l -> new Ref(l.id, l.name)).toList();
+    }
+
     /** Länder, zu denen der Spieler als Mitbesitzer eingeladen ist. */
     synchronized List<Ref> invitesFor(UUID uuid) {
         return lands.values().stream().filter(l -> l.invites.contains(uuid)).map(l -> new Ref(l.id, l.name)).toList();

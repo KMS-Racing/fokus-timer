@@ -591,6 +591,43 @@ final class StatsStore extends JsonStore {
         return -1;
     }
 
+    /** Spitzen der Woche im Rückblick: diese Ranglisten (wenn jemand in den letzten 7 Tagen etwas dazubekommen hat). */
+    static final List<String> WEEK_TOPS = List.of("dauerzocker", "abrissbirne", "baumeister", "diamantenbank", "monsterjaeger", "friedhof");
+
+    /**
+     * Wochen-Rückblick: Spielzeit und aktive Spieler der letzten 7 Tage (derselbe Zuwachs wie in der Rangliste "7 Tage"),
+     * höchstens gleichzeitig online, die Spitze ausgewählter Ranglisten und die Meilensteine seit from.
+     */
+    synchronized JsonObject weekJson(LocalDate today, long from, Function<UUID, String> names) {
+        JsonObject o = new JsonObject();
+        o.addProperty("since", since);
+        List<Entry> play = ranking(StatValues.category("dauerzocker"), "week", today);
+        o.addProperty("playTime", play.stream().mapToLong(Entry::value).sum());
+        o.addProperty("activePlayers", play.size());
+        int peak = 0;
+        for (Day d : days.tailMap(today.minusDays(6).toString(), true).values()) peak = Math.max(peak, d.peak());
+        o.addProperty("peakOnline", peak);
+        JsonArray tops = new JsonArray();
+        for (String id : WEEK_TOPS) {
+            StatValues.Category c = StatValues.category(id);
+            List<Entry> list = ranking(c, "week", today);
+            if (list.isEmpty()) continue;
+            JsonObject x = category(c);
+            x.add("leader", entry(list.getFirst(), 1, names));
+            tops.add(x);
+        }
+        o.add("tops", tops);
+        List<JsonObject> reached = new ArrayList<>();
+        players.forEach((id, p) -> {
+            for (Event ev : p.events) if (ev.kind().equals("milestone") && ev.at() >= from) reached.add(event(ev, id, names));
+        });
+        reached.sort(Comparator.comparingLong((JsonObject x) -> x.get("at").getAsLong()).reversed());
+        JsonArray milestones = new JsonArray();
+        reached.stream().limit(8).forEach(milestones::add);
+        o.add("milestones", milestones);
+        return o;
+    }
+
     /** Für /planer statistik: Werte und Zuwachs heute (Ranglisten gibt es nur auf der Webseite). */
     record Summary(Map<String, Long> values, Map<String, Long> today, long updated) {}
 

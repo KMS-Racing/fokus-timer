@@ -109,8 +109,9 @@ class NavigationAndSecurityTest {
         ActionBar bar = new ActionBar();
         assertTrue(bar.claim(alice, ActionBar.LAND, 40, 100));
         assertFalse(bar.claim(alice, ActionBar.NAVIGATION, 0, 110), "Land-Name bleibt 2 Sekunden stehen");
-        assertTrue(bar.claim(alice, ActionBar.RACE, 10, 110), "Rennzeit ist wichtiger");
-        assertTrue(bar.claim(alice, ActionBar.NAVIGATION, 0, 141), "danach wieder der Wegweiser");
+        assertTrue(bar.claim(alice, ActionBar.LAND, 40, 110), "gleich wichtig darf immer: das nächste Land sofort");
+        assertFalse(bar.claim(alice, ActionBar.NAVIGATION, 0, 141), "…und hält wieder 2 Sekunden");
+        assertTrue(bar.claim(alice, ActionBar.NAVIGATION, 0, 151), "danach wieder der Wegweiser");
         assertTrue(bar.claim(bob, ActionBar.NAVIGATION, 0, 110), "andere Spieler sind unabhängig");
     }
 

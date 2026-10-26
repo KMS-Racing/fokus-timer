@@ -71,7 +71,8 @@ final class ApiServer {
         routes.put("projects", new ProjectRoutes(services));
         routes.put("trades", new TradeRoutes(services));
         routes.put("stats", new StatsRoutes(services));
-        routes.put("races", new RaceRoutes(services));
+        routes.put("events", new EventRoutes(services));
+        routes.put("recap", new RecapRoutes(services));
     }
 
     void start() throws IOException {

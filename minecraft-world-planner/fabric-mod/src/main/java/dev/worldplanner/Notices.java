@@ -123,6 +123,7 @@ final class Notices {
         for (ProjectStore.Overdue p : s.projects().overdueFor(player, today)) {
             out.add(todo("overdue:" + p.id(), Level.WARN, "Projekt überfällig: »" + p.name() + "«", "#/projekte/" + p.id(), null));
         }
+        if (s.config().events()) eventNotices(s, player, now, out);
         for (TeamStore.ChatTag t : teams.memberships()) {
             out.add(news("member:" + t.teamId(), Level.INFO, "Du bist jetzt im Team [" + t.tag() + "] " + t.name(), "#/teams/" + t.teamId(), null));
         }
@@ -133,6 +134,46 @@ final class Notices {
                     "#/einstellungen", "/planer abmelden", null, "[Überall abmelden]", true));
         }
         return out;
+    }
+
+    /**
+     * Events: "Kommst du?" (neu, noch nicht beantwortet, in den nächsten 7 Tagen), Erinnerung 10 Minuten vorher und zum Start,
+     * abgesagt und verschoben – die letzten vier nur für alle, die "Komme" oder "Vielleicht" gesagt haben.
+     */
+    private static void eventNotices(PlannerServices s, UUID player, long now, List<Notice> out) {
+        java.time.ZoneId zone = s.config().zone();
+        for (EventStore.Note e : s.events().notesFor(player, now)) {
+            String href = "#/events/" + e.id();
+            String title = "»" + e.title() + "«";
+            String when = EventStore.when(e.start(), zone);
+            boolean going = "yes".equals(e.myAnswer()) || "maybe".equals(e.myAnswer());
+            long until = e.start() - now;
+            if (e.cancelled()) {
+                if (going && until > 0) {
+                    out.add(todo("event-cancelled:" + e.id(), Level.WARN, "Abgesagt: " + title + " (" + when + ")"
+                            + (e.cancelReason().isEmpty() ? "" : " – " + e.cancelReason()), href, null));
+                }
+                continue;
+            }
+            String where = e.landName() != null ? " – Treffpunkt: Land »" + e.landName() + "«"
+                    : e.place() != null ? " – Treffpunkt: " + e.place().x() + " " + (e.place().y() == null ? "~" : e.place().y()) + " " + e.place().z() : "";
+            String way = e.landName() != null ? "/planer weg " + StringArgumentType.escapeIfRequired(e.landName()) : null;
+            if (going && until > 0 && until <= EventStore.SOON_MS) {
+                String in = EventStore.inMinutes(until);
+                out.add(new Notice("event-soon:" + e.id() + ":" + e.start(), true, true, Level.WARN,
+                        Character.toUpperCase(in.charAt(0)) + in.substring(1) + ": " + title + where, href, way, null, "[Hinführen]", false));
+            } else if (going && until <= 0 && -until < EventStore.JUST_STARTED_MS) {
+                out.add(new Notice("event-now:" + e.id() + ":" + e.start(), true, true, Level.INFO, "Jetzt: " + title + " beginnt" + where,
+                        href, way, null, "[Hinführen]", false));
+            } else if (e.myAnswer() == null && !e.organizer() && until > 0 && until <= EventStore.ASK_AHEAD_MS) {
+                out.add(new Notice("event-ask:" + e.id(), true, true, Level.INVITE, "Event: " + title + " am " + when + " – kommst du?",
+                        href, "/planer event " + e.id() + " ja", "events", "[Komme]", false));
+            }
+            if (going && e.movedAt() > 0 && now - e.movedAt() < EventStore.MOVED_NOTICE_MS && until > EventStore.SOON_MS) {
+                out.add(news("event-moved:" + e.id() + ":" + e.start(), Level.WARN, "Verschoben: " + title + " jetzt am " + when
+                        + " (vorher " + EventStore.when(e.previousStart(), zone) + ")", href, null));
+            }
+        }
     }
 
     /** Für /api/todo: nur "Zu erledigen", in derselben Reihenfolge wie im Spiel. */

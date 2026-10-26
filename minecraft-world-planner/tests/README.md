@@ -3,7 +3,7 @@
 | Art | Wo | Braucht | Aufruf |
 |---|---|---|---|
 | **Java-Unit-Tests** (Regeln, Rechte, Handel inkl. gleichzeitiger Zugriffe, Speichern, Umstellung von 0.2) | `fabric-mod/src/test/java` | Java 25 | `cd fabric-mod && ./gradlew test` |
-| **Web-Unit-Tests** (Koordinaten, Messen, Statistik-Zahlen und -Tage, Rundenzeiten, Streckenplan) | `tests/web` | Node.js 22 | `node --test tests/web/*.test.mjs` |
+| **Web-Unit-Tests** (Koordinaten, Messen, Statistik-Zahlen und -Tage, Event-Zeiten in Server-Zeitzone, Kalender, Event-Hinweise) | `tests/web` | Node.js 22 | `node --test tests/web/*.test.mjs` |
 | **Integrationstests** (echter Server, echte API, echter Browser) | `tests/integration` | Testserver + Python 3 + Playwright | siehe unten |
 
 Die Integrationstests prüfen nicht nur, ob Knöpfe da sind. Sie schauen nach, was der Server wirklich gespeichert hat,
@@ -21,9 +21,10 @@ schicken gleichzeitige Anfragen (Gebote, Käufe) und messen, wo die BlueMap-Kame
 | `game_integration_test.py` | Spiel-Integration: Nachrichten (live, beim Einloggen, abgeschaltet), Land-Anzeige, Todespunkt, `/planer`, `/tc`, „überboten“ – liest die DEBUG-Zeilen der Mod im Server-Log |
 | `game_web_test.js` | Schalter „Im Spiel“ in den Einstellungen, Dashboard-Liste = Liste im Spiel (`/api/todo`, wörtlich), Mess-Werkzeug, Handy |
 | `stats_test.py` | Statistik mit echten Aktionen von Fake-Spielern (Blöcke setzen, springen, Diamanterz abbauen, an Fallschaden sterben): Zahlen, Ranglisten, Todesursache, alle für alle sichtbar (Ausblenden → 400), `/planer statistik` ohne Ränge, `/planer top` und `/planer ranglisten` gibt es nicht mehr. Außerdem 20 s künstlicher Lag (`/tick rate 10`): Aktiv + AFK muss genauso wachsen wie Minecrafts Spielzeit |
-| `race_test.py` | Rennstrecke im Spiel bauen (`/rennen neu`, `tor`, `fertig`), Runden fahren (viele kleine Teleports), Abschnitte, Bestenliste, ausgelassenes Tor, Teleport, Fahrzeug-Regel, Rechte. `RACE_KEEP=1` lässt die Strecke stehen |
-| `stats_web_test.js` | Statistik- und Rennen-Seiten zeigen dasselbe wie die API (Kacheln, Wärmekarte mit leeren Feldern ohne Messung, Pfeiltasten, Tabellen-Ansicht, Ranglisten als eigener Reiter, alter Link leitet um, kein „Mich ausblenden“, Einstellungen mit Hinweis statt Schalter, Bestenliste mit lila Abschnitten), Handy |
-| `restart_check.py` | Alle Daten vor und nach einem Server-Neustart vergleichen (`save`, Server neu starten, `compare`) |
+| `events_test.py` | Events auf dem Server: Einladung im Chat mit [Komme], `/planer events`, `/planer event <id> ja`, Verschieben und Absagen (nur wer zugesagt hat), Erinnerung („In 2 Minuten“) und Start („Jetzt“) – ein Event beginnt dafür in gut 2 Minuten. Außerdem: `/api/races` und `/rennen` gibt es nicht mehr |
+| `stats_web_test.js` | Statistik- und Ranglisten-Seiten zeigen dasselbe wie die API (Kacheln, Wärmekarte mit leeren Feldern ohne Messung, Pfeiltasten, Tabellen-Ansicht, Ranglisten als eigener Reiter, alter Link leitet um, kein „Mich ausblenden“, Einstellungen mit Hinweis statt Schalter), Handy |
+| `events_web_test.js` | Events im Browser: Formular (Uhrzeit = Server-Zeit), Liste, Kalender, Zusagen umschalten, Bob sieht auf dem Dashboard wörtlich denselben Text wie `/api/todo` im Spiel, Verschieben, Absagen, Löschen; Rückblick-Zahlen = API; Handy |
+| `restart_check.py` | Alle Daten vor und nach einem Server-Neustart vergleichen (`save`, Server neu starten, `compare`) – ab 0.6 auch ein Team-Event mit Treffpunkt und Zusage. Taugt auch für Updates: Kennt der alte Server noch keine Events, fehlt nur dieser Teil |
 | `crash_check.py` | Absturz: wartet, bis der Planer neuer gespeichert hat als Minecraft (`wait`), dann `kill -9`, Neustart, `compare` – Statistik-Verlauf, Zuwachs gestern und Aktiv ≤ Spielzeit müssen stimmen |
 
 ## Integrationstests vorbereiten
@@ -55,15 +56,16 @@ schicken gleichzeitige Anfragen (Gebote, Käufe) und messen, wo die BlueMap-Kame
    python3 tests/integration/game_integration_test.py $($T code Alice) $($T code Bob) $($T code Dana) $($T code Chef)
    node tests/integration/game_web_test.js     $($T code Alice) $($T code Bob)
    python3 tests/integration/stats_test.py     $($T code Alice) $($T code Bob) $($T code Dana)   # dauert 3–4 Minuten
-   RACE_KEEP=1 python3 tests/integration/race_test.py $($T code Alice) $($T code Bob)
-   node tests/integration/stats_web_test.js    $($T code Alice)   # Rennen-Teil braucht die Strecke von oben
+   node tests/integration/stats_web_test.js    $($T code Alice)
+   python3 tests/integration/events_test.py    $($T code Alice) $($T code Bob) $($T code Dana)   # dauert gut 2 Minuten
+   node tests/integration/events_web_test.js   $($T code Alice) $($T code Bob)
    ```
 
 Umgebungsvariablen: `PLANNER_URL` (Standard `http://127.0.0.1:8765/`), `CHROMIUM` (Pfad zu Chromium, sonst der von Playwright),
 `PLAYWRIGHT_MODULE`, `SHOT_DIR` (Ordner für Screenshots).
 
 Die Tests legen Daten mit zufälligen Namen an (z. B. „Base QWER“), suchen sich freie Chunks selbst und räumen Teams früherer,
-abgebrochener Läufe auf (nur Teams, die mit „Testteam “ beginnen, und Alices Strecken, die mit „Testkurs “ beginnen). Sie funktionieren also auch, wenn schon Daten auf dem
+abgebrochener Läufe auf (nur Teams, die mit „Testteam “ beginnen, Alices Länder mit „Testland “ ohne Mitbesitzer und Alices Events mit „Test-“). Sie funktionieren also auch, wenn schon Daten auf dem
 Testserver liegen. Der Handels-Test hält sich an die Bremse von 30 Aktionen pro Minute – zwei Läufe direkt hintereinander gehen.
 
 **Warum DEBUG-Zeilen?** Minecraft schreibt Nachrichten an einzelne Spieler (Chat, Actionbar) nirgends hin. Mit
@@ -77,13 +79,11 @@ die Zeilen enthalten private Dinge (z. B. wer geboten hat).
 - Den Hinweis **nach dem Wiederbeleben**: Carpet entfernt Fake-Spieler, wenn sie sterben, statt sie wiederzubeleben.
   Der Text ist per Unit-Test geprüft, das Ereignis selbst nicht auf dem Server.
 - Minecrafts eigenes `/teammsg`: Über `execute as` von der Konsole aus gibt es weder Ausgabe noch Fehlermeldung.
-- **Rennen mit echten Fahrzeugen:** Fake-Spieler können weder lenken noch Boot fahren. Der Rennen-Test bewegt sie deshalb mit
-  vielen kleinen Teleports (1 Block pro Schritt) über die Tore. Ob die Fahrzeug-Regel ein Boot, ein Pferd oder Elytra richtig
-  erkennt, ist per Unit-Test geprüft (`RaceTimer.modeProblem`), aber nicht mit einem echten Boot auf dem Server.
+- **Event-Erinnerung 10 Minuten vorher** mit einem Event, das wirklich in 10 Minuten beginnt: Der Test nimmt ein Event in gut
+  2 Minuten (dieselbe Regel „höchstens 10 Minuten vorher“), damit er nicht 10 Minuten warten muss. Die genaue Grenze prüfen die
+  Unit-Tests mit einer festen Uhr.
 - **Abmelden echter Spieler:** Bei Carpet-Fake-Spielern kommt Fabrics Abmelde-Ereignis nicht; die Mod bemerkt den Logout dann eine
   Sekunde später selbst (das prüft `stats_test.py`). Dass das Ereignis bei echten Spielern sofort kommt, ließ sich hier nicht prüfen.
-- **Teleport ganz genau auf eine Linie:** Minecraft setzt `tp` mit ganzen Zahlen auf die Blockmitte (+0,5). Die Tore im Rennen-Test
-  stehen deshalb auf der Blockmitte, und jede Testrunde endet ein Stück hinter der Ziellinie.
 - Den Ablauf einer Auktion vorspulen (kürzeste Laufzeit 1 Stunde). Er ist in den Java-Unit-Tests mit einer austauschbaren
   Uhr geprüft; auf dem echten Server kann man ihn prüfen, indem man eine 1-Stunden-Auktion anlegt und nach Ablauf in
   `trades.json` nachsieht (ohne die Seite zu öffnen) – dann muss der Timer sie beendet haben.

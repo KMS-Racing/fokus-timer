@@ -59,16 +59,18 @@ record PlannerConfig(
         Map<String, String> extraTradeCategories,
         // Aktivitäts-Übersicht
         int activityLimit,
-        // Statistik und Rennen
-        /** Statistik wie bei CraftAttack (Zahlen aus Minecrafts eigener Statistik) und Ranglisten. Jeder kann sich ausblenden. */
+        // Statistik
+        /** Statistik wie bei CraftAttack (Zahlen aus Minecrafts eigener Statistik) und Ranglisten – für alle sichtbar. */
         boolean statistics,
         /** Zeitzone für "Heute", "Gestern" und "Wann ist am meisten los" – z. B. Europe/Berlin. */
         String timeZone,
         /** So viele Minuten ohne Bewegung und ohne Umschauen = AFK. */
         int afkMinutes,
-        /** Rennstrecken mit Zeitmessung (/rennen). */
-        boolean races,
-        int maxTracksPerPlayer
+        // Events
+        /** Events mit Kalender (Webseite, Erinnerungen im Spiel, /planer events). */
+        boolean events,
+        /** So viele anstehende Events darf ein Spieler gleichzeitig angelegt haben. */
+        int maxEventsPerPlayer
 ) {
     private static final Pattern EXTRA_ID = Pattern.compile("[a-z0-9_]{2,24}");
     private static final String DEFAULT_ZONE = "Europe/Berlin";
@@ -137,8 +139,8 @@ record PlannerConfig(
                 bool(json, "statistics", true),
                 zone(str(json, "timeZone", DEFAULT_ZONE)),
                 clamp(integer(json, "afkMinutes", 5), 1, 60),
-                bool(json, "races", true),
-                clamp(integer(json, "maxTracksPerPlayer", 5), 0, 100)
+                bool(json, "events", true),
+                clamp(integer(json, "maxEventsPerPlayer", 5), 0, 100)
         );
     }
 
@@ -179,8 +181,8 @@ record PlannerConfig(
         o.addProperty("statistics", statistics);
         o.addProperty("timeZone", timeZone);
         o.addProperty("afkMinutes", afkMinutes);
-        o.addProperty("races", races);
-        o.addProperty("maxTracksPerPlayer", maxTracksPerPlayer);
+        o.addProperty("events", events);
+        o.addProperty("maxEventsPerPlayer", maxEventsPerPlayer);
         return o;
     }
 

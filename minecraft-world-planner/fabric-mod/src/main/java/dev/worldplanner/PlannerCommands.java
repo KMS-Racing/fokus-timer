@@ -33,6 +33,7 @@ import java.util.function.Supplier;
  *   /planer marker <Name>    privaten Marker an deiner Position setzen
  *   /planer weg <Ziel>       Pfeil über der Hotbar zu einem Marker, Land oder zum Todespunkt (/planer weg aus = beenden)
  *   /planer statistik [Spieler]  Spielzeit, Tode, Blöcke … (die Ranglisten gibt es nur auf der Webseite)
+ *   /planer events           die nächsten Events – zusagen per Klick (/planer event <id> ja|vielleicht|nein)
  *   /tc <Nachricht>          Team-Chat (auch /teamchat) – nur Mitglieder deines Teams lesen mit
  *   /land [info]             wem gehört dieser Chunk?
  *   /land neu <Name>         neues Land mit dem Chunk, in dem du stehst
@@ -74,7 +75,13 @@ final class PlannerCommands {
                 .then(Commands.literal("statistik")
                         .executes(ctx -> stats(ctx, null))
                         .then(Commands.argument("spieler", StringArgumentType.word()).suggests(knownPlayers())
-                                .executes(ctx -> stats(ctx, StringArgumentType.getString(ctx, "spieler"))))));
+                                .executes(ctx -> stats(ctx, StringArgumentType.getString(ctx, "spieler")))))
+                .then(Commands.literal("events").executes(this::events))
+                .then(Commands.literal("event")
+                        .then(Commands.argument("id", StringArgumentType.word())
+                                .then(Commands.literal("ja").executes(ctx -> answerEvent(ctx, "yes")))
+                                .then(Commands.literal("vielleicht").executes(ctx -> answerEvent(ctx, "maybe")))
+                                .then(Commands.literal("nein").executes(ctx -> answerEvent(ctx, "no"))))));
 
         var teamChat = dispatcher.register(Commands.literal("teamchat")
                 .then(Commands.argument("nachricht", StringArgumentType.greedyString()).executes(this::teamChat)));
@@ -197,6 +204,7 @@ final class PlannerCommands {
                 {"/planer weg ", "Pfeil zu einem Marker, Land oder „todespunkt“ (Ziel dahinter)"},
                 {"/land grenzen", "Rand des Landes als Partikel zeigen"},
                 {"/planer statistik", "deine Statistik (oder die eines anderen: Name dahinter)"},
+                {"/planer events", "die nächsten Events – zusagen mit einem Klick"},
                 {"/land", "wem gehört dieser Chunk? Außerdem: neu, erweitern, abgeben, liste, einladen"},
                 {"/tc ", "Team-Chat – nur dein Team liest mit (Nachricht dahinter)"},
                 {"/planer abmelden", "auf allen Geräten von der Webseite abmelden"},
@@ -299,6 +307,30 @@ final class PlannerCommands {
             s.markers().create(player.getUUID(), playerIsAdmin(player), data);
             return "Marker »" + name.strip() + "« gesetzt bei " + player.getBlockX() + " / " + player.getBlockY() + " / " + player.getBlockZ()
                     + " (privat). Teilen und bearbeiten kannst du ihn auf der Webseite unter Marker.";
+        });
+    }
+
+    // ------------------------------------------------------------------ Events
+
+    private int events(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        PlannerServices s = services.get();
+        if (s == null) return notReady(ctx);
+        if (!s.config().events()) return fail(ctx, "Events sind auf diesem Server ausgeschaltet.");
+        long now = System.currentTimeMillis();
+        List<EventStore.Note> next = s.events().notesFor(player.getUUID(), now).stream()
+                .filter(e -> !e.cancelled() && e.start() + e.minutes() * 60_000L > now).limit(5).toList();
+        Component msg = GameText.events(next, s.config().zone(), s.config().publicUrl());
+        ctx.getSource().sendSuccess(() -> msg, false);
+        return 1;
+    }
+
+    private int answerEvent(CommandContext<CommandSourceStack> ctx, String answer) throws CommandSyntaxException {
+        return withPlayer(ctx, (player, s) -> {
+            if (!s.config().events()) throw PlannerException.notFound("Events sind auf diesem Server ausgeschaltet.");
+            String id = StringArgumentType.getString(ctx, "id");
+            s.events().answer(player.getUUID(), id, answer, System.currentTimeMillis());
+            return "Gespeichert: »" + s.events().titleOf(player.getUUID(), id) + "« – " + EventStore.ANSWERS.get(answer) + ".";
         });
     }
 

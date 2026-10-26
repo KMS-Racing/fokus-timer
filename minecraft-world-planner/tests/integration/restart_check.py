@@ -1,4 +1,4 @@
-"""Neustart-Test: Bleiben Teams, Projekte, Handel, Favoriten, Spiel-Schalter, Aktivität, Länder, Marker und Logins erhalten?
+"""Neustart-Test: Bleiben Teams, Projekte, Handel, Favoriten, Spiel-Schalter, Aktivität, Länder, Marker, Events und Logins erhalten?
 
 Ablauf:
   1. python3 restart_check.py save <datei> <code-A> <code-B>   (legt Testdaten an und merkt sich den Stand)
@@ -10,6 +10,7 @@ Die Datei enthält Sitzungs-Tokens des Testservers – nicht weitergeben, nicht 
 import json
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from apilib import Checker, call, cleanup_test_teams, login, rid, suffix  # noqa: E402
@@ -25,6 +26,9 @@ def snapshot(token):
         if st != 200:
             raise SystemExit(f"{area}: {st} {r}")
         out[area] = r
+    st, r = call("api/events", token=token)  # Events gibt es erst seit 0.6 (vorher 404) – dann fehlt der Bereich einfach
+    if st == 200:
+        out["events"] = r
     return out
 
 
@@ -39,6 +43,10 @@ def normalize(snap):
     n["prefs"] = {k: sorted(v) for k, v in snap["prefs"]["favorites"].items()}
     n["game"] = snap["prefs"].get("game")  # Schalter fürs Spiel (seit 0.4)
     n["activity"] = [e["id"] for e in snap["activity"]["events"]]
+    if "events" in snap:
+        n["events"] = sorted((e["id"], e["title"], e["kind"], e["start"], e["minutes"], e["visibility"], e.get("teamId"), e.get("place"),
+                              e.get("cancelReason"), tuple(sorted((x["uuid"], x["answer"]) for x in e["answers"])))
+                             for e in snap["events"]["events"])
     return n
 
 
@@ -67,7 +75,17 @@ if mode == "save":
     listing = r["id"]
     bid_request = rid()
     call(f"api/trades/{listing}/bid", {"requestId": bid_request, "amount": 2}, b)
-    json.dump({"a": a, "b": b, "bidRequest": bid_request, "listing": listing, "team": team, "project": project,
+    event = None
+    if call("api/events", token=a)[0] == 200:
+        for e in call("api/events", token=a)[1]["events"]:  # Reste abgebrochener Läufe (Grenze: 5 anstehende pro Spieler)
+            if e["mine"] and e["title"].startswith("Test-Neustart "):
+                call(f"api/events/{e['id']}/delete", {}, a)
+        st, r = call("api/events", {"title": "Test-Neustart " + run, "kind": "build", "start": int(time.time() * 1000) + 2 * 24 * 3600_000,
+                                    "minutes": 90, "visibility": "team", "teamId": team,
+                                    "place": {"dimension": "minecraft:overworld", "x": 5, "y": 64, "z": -7}}, a)
+        event = r["id"]
+        call(f"api/events/{event}/answer", {"answer": "maybe"}, b)
+    json.dump({"a": a, "b": b, "bidRequest": bid_request, "listing": listing, "team": team, "project": project, "event": event,
                "before": {"a": normalize(snapshot(a)), "b": normalize(snapshot(b))}}, open(path, "w"))
     print(f"Gespeichert in {path}. Jetzt den Server neu starten und 'compare' aufrufen.")
     sys.exit(0)
@@ -90,6 +108,9 @@ if mode == "compare":
                 continue
             same = json.loads(json.dumps(before[area])) == json.loads(json.dumps(after[area]))
             check(f"{who.upper()}: {area} unverändert", same, f"vorher {before[area]} nachher {after[area]}" if not same else "")
+        if "events" in before and "events" in after:  # nur, wenn der Server vorher und nachher Events kennt
+            same = json.loads(json.dumps(before["events"])) == json.loads(json.dumps(after["events"]))
+            check(f"{who.upper()}: events unverändert", same, f"vorher {before['events']} nachher {after['events']}" if not same else "")
         # Nach einem Update können neue Schalter dazukommen – die alten müssen gleich bleiben, neue stehen auf "an" (Standard).
         # Absichtlich entfernt: "rankings" (aus Ranglisten ausblenden, nur in 0.5.0) – der muss dann weg sein.
         bg, ag = before.get("game"), after.get("game") or {}
@@ -103,6 +124,8 @@ if mode == "compare":
     # Aufräumen
     team = call(f"api/teams/{saved['team']}", token=saved["a"])[1]
     call(f"api/projects/{saved['project']}/delete", {}, saved["a"])
+    if saved.get("event"):
+        call(f"api/events/{saved['event']}/delete", {}, saved["a"])
     if "name" in team:
         call(f"api/teams/{saved['team']}/dissolve", {"confirmName": team["name"]}, saved["a"])
     sys.exit(check.done())

@@ -6,20 +6,19 @@
 Minecraft-Server (Fabric 26.3)
  └─ World Planner Mod
      ├─ Befehle /planer, /land, /tc             PlannerCommands
-     ├─ Befehle /rennen                         RaceCommands
      ├─ Im Spiel                                GameNotifier (Nachrichten), LandEnterTracker (Actionbar),
      │                                          DeathPoints (Todespunkt), GameText (Texte), Notices ("Zu erledigen"),
-     │                                          GameState (Actionbar-Vorrang, Wegweiser, Land-Grenzen, Rennen),
-     │                                          StatsCollector (Statistik), RaceManager (Zeitmessung)
+     │                                          GameState (Actionbar-Vorrang, Wegweiser, Land-Grenzen),
+     │                                          StatsCollector (Statistik)
      ├─ Dienste (alles an einem Ort)            PlannerServices.create(...)
      │    PlayerDirectory, SessionStore, DiscoveryTracker,
      │    LandStore, MarkerStore, TeamStore, ProjectStore, TradeStore,
-     │    PrefsStore (Favoriten, Schalter fürs Spiel), ActivityLog, StatsStore, RaceStore,
+     │    PrefsStore (Favoriten, Schalter fürs Spiel), ActivityLog, StatsStore, EventStore,
      │    Access (Rechte-Fragen über Bereiche hinweg)
      ├─ Webserver :8765                         ApiServer
      │    ├─ /            → Webseite (web/ aus der Mod-Jar)
      │    └─ /api/...     → JSON-API, verteilt auf LandRoutes, MarkerRoutes, TeamRoutes,
-     │                      ProjectRoutes, TradeRoutes, StatsRoutes, RaceRoutes, AccountRoutes (+ ImportExport)
+     │                      ProjectRoutes, TradeRoutes, StatsRoutes, EventRoutes, RecapRoutes, AccountRoutes (+ ImportExport)
      └─ BlueMap-Anbindung (optional)            BlueMapBridge + LandOutline
 ```
 
@@ -27,12 +26,13 @@ Minecraft-Server (Fabric 26.3)
 die Datenspeicher (alle Methoden `synchronized`) und Momentaufnahmen (`AtomicReference<JsonObject>`), die `onTick()` alle
 2 Sekunden erstellt (Spieler, Welt, Spawn).
 
-**Reihenfolge der Sperren (gegen Verklemmungen):** Handel/Projekte/Marker → Länder → Teams. Teams fragen niemanden,
+**Reihenfolge der Sperren (gegen Verklemmungen):** Handel/Projekte/Marker/Events → Länder → Teams. Teams fragen niemanden,
 Länder fragen nur Teams. `PlannerServices.onTeamDissolved()` ruft die Bereiche nacheinander auf, nie verschachtelt.
-`StatsStore` und `RaceStore` fragen keinen anderen Speicher (nur `PlayerDirectory` für Namen – der fragt niemanden).
+`StatsStore` fragt keinen anderen Speicher (nur `PlayerDirectory` für Namen – der fragt niemanden). `EventStore` fragt Länder
+(Treffpunkt) und Teams (Sichtbarkeit), wie Projekte; niemand fragt Events. `RecapRoutes` fragt die Bereiche nacheinander.
 
 **Speichern:**
-- Länder, Marker, Teams, Projekte, Favoriten, Aktivität, Rennen: Änderung setzt „dirty“, ein Timer speichert alle 5 Sekunden im
+- Länder, Marker, Teams, Projekte, Favoriten, Aktivität, Events: Änderung setzt „dirty“, ein Timer speichert alle 5 Sekunden im
   Hintergrund (entdeckte Chunks und Statistik jede Minute, ohne Einrückung – die beiden sind am größten), beim Stoppen noch einmal direkt.
 - **Handel:** jede Aktion wird **sofort** geschrieben, **bevor** der Server „OK“ sagt. Klappt das nicht (volle Platte),
   wird die Änderung im Speicher zurückgenommen und die Webseite bekommt 503 „es wurde nichts geändert“.
@@ -71,7 +71,7 @@ und Koordinaten geändert. `ServerPlayerEvents.AFTER_RESPAWN` (nur nach einem To
 **Wegweiser und Land-Grenzen:** `Waypoints.render()` rechnet nur (Pfeil nach Blickrichtung: Minecraft-Drehung 0° = Süden,
 90° = Westen; Oberwelt ↔ Nether ÷ 8), `WorldPlannerMod` schickt zweimal pro Sekunde die Actionbar. Von der Webseite gestartete
 Wegweiser landen in einer Warteschlange (`PlannerServices.waypointRequests`), die der Server-Thread abholt – die HTTP-Threads
-fassen keine Spieler an. `ActionBar` regelt den Vorrang (Rennen > Land-Name > Wegweiser), damit sich nichts überschreibt.
+fassen keine Spieler an. `ActionBar` regelt den Vorrang (Land-Name > Wegweiser), damit sich nichts überschreibt.
 `LandBorders` baut die Randlinien aus `LandOutline` (wie BlueMap) und schickt Staub-Partikel nur an den einen Spieler, nur im
 Umkreis von 40 Blöcken, alle 2 Blöcke.
 
@@ -92,14 +92,19 @@ der eigene Stand – nur lesen, nie schreiben.
 
 **Logout:** Fabrics `DISCONNECT` kommt nicht in jedem Fall (bei Carpet-Fake-Spielern nie). `WorldPlannerMod.checkPresence()`
 vergleicht deshalb jede Sekunde die Spielerliste mit den gemerkten Spielern; wer fehlt, wird genau einmal abgemeldet
-(Statistik ein letztes Mal lesen, Wegweiser und Zeitmessung beenden).
+(Statistik ein letztes Mal lesen, Wegweiser beenden).
 
-**Rennen:** `RaceTimer` ist reine Rechnung: Jeden Tick kommt die Position; ein Tor ist eine Linie quer zur Fahrtrichtung, gezählt
-wird nur vorwärts (Vorzeichenwechsel des Abstands zur Linie, Kreuzungspunkt innerhalb der Breite, ±10 Blöcke Höhe). Der Zeitpunkt
-wird zwischen den beiden Ticks linear geschätzt (Echtzeit `System.nanoTime()` pro Tick). Teleport = über 12 Blöcke in einem Tick
-und schneller als 100 Blöcke/s; ein Tick über 250 ms macht die Runde „ungenau“. `RaceManager` (Server-Thread) füttert die
-Zeitmesser, trägt Runden in `RaceStore` ein und zeigt Actionbar, Chat und Partikel. Eine Runde zählt nur für die Version der
-Strecke, auf der sie gestartet wurde.
+
+**Events:** `EventStore` speichert Beginn (Millisekunden, UTC), Dauer, Treffpunkt und Zusagen. Erinnerungen brauchen keinen
+eigenen Zeitplaner: `Notices` berechnet bei jeder Abfrage (alle 2 Sekunden für Online-Spieler) aus der Uhrzeit, ob ein Event in den
+nächsten 10 Minuten beginnt oder gerade begonnen hat – die id enthält den Beginn, `GameNotifier` schickt jede id genau einmal.
+Verschieben merkt sich `movedAt`/`previousStart` (die Nachricht kommt einen Tag lang). Uhrzeiten im Chat und auf der Webseite
+in der Zeitzone des Servers (`timeZone`) – `eventfmt.js` rechnet im Browser mit `Intl` genauso, damit „Zu erledigen“ auf dem
+Dashboard denselben Text hat wie im Spiel.
+
+**Rückblick:** `/api/recap` nimmt die letzten 7 Tage: Statistik-Zuwachs „7 Tage“ (`StatsStore.weekJson`), Länder mit `createdAt`,
+Projekte mit `doneAt` (neu in 0.6, ältere zählen nicht) und Aufgaben mit `doneAt`, Events mit Beginn in dem Zeitraum (ohne
+abgesagte). Jeder Bereich nur mit dem, was der Spieler auch sonst sieht.
 
 **Keine halben Änderungen:** Bearbeiten prüft erst alle Angaben und übernimmt sie dann (Länder, Teams, Projekte, Handel).
 Ein Fehler in einem Feld ändert also auch die anderen Felder nicht. Dafür gibt es eigene Tests.
@@ -118,7 +123,7 @@ Ein Fehler in einem Feld ändert also auch die anderen Felder nicht. Dafür gibt
 | Dateien | Die Webseite wird nur aus einer festen Liste von Pfaden ausgeliefert (`[a-z0-9_-]+(/…)*.(html|js|css|svg)`). Keine Dateioperationen mit Benutzereingaben (Export ist ein Download aus dem Speicher, Import liest nur JSON aus dem Request). |
 | Handel | Sperre pro Aktion (`synchronized`), `requestId` gegen doppelte Ausführung (auch nach Neustart), Bremse pro Spieler, Ablauf auf dem Server. |
 | Secrets | Es gibt keine. Die Config enthält keine Passwörter; nichts wird an fremde Dienste geschickt. |
-| Statistik | Liest nur Minecrafts eigene Statistik-Dateien in einem festen Ordner (Name muss eine UUID sein), schreibt dort nie. Ausgeblendete Spieler: 404 für andere, nicht in Summen und Verlauf. |
+| Statistik | Liest nur Minecrafts eigene Statistik-Dateien in einem festen Ordner (Name muss eine UUID sein), schreibt dort nie. Seit 0.5.1 für alle eingeloggten Spieler sichtbar (kein Ausblenden mehr); `statistics: false` schaltet alles ab. |
 | Geräte | Pro Login nur „Browser · System“ (kein User-Agent, keine IP gespeichert). Abmelden einzelner Geräte über eine kurze Hash-Kennung, nie über das Token. |
 
 ## Datenmodell
@@ -131,9 +136,9 @@ Spieler (UUID, Name, OP?) ──┬── besitzt (gleichberechtigt) ──► L
                             ├── legt an ──► Projekt ── landId? teamId? location? ── Aufgaben, Updates, Verantwortliche
                             ├── verkauft ──► Angebot (Listing) ── teamId? ── Gebote, Gegenangebote, Übergabe, Verlauf
                             ├── Favoriten (lands, markers, projects, teams, listings)
-                            ├── Schalter fürs Spiel (Nachrichten, Land-Anzeige, Todespunkt, in Ranglisten sichtbar) + id des Todespunkt-Markers
+                            ├── Schalter fürs Spiel (Nachrichten, Land-Anzeige, Todespunkt) + id des Todespunkt-Markers
                             ├── Statistik (Minecrafts Zahlen, Tagesstände, Sitzungen, Aktiv/AFK, Wann online, Verlauf)
-                            └── legt an ──► Rennstrecke ── Tore, Version ── beste Runde je Fahrer, Abschnitte, letzte Runden, Archiv
+                            └── lädt ein ──► Event ── landId? teamId? place? ── Zusagen je Spieler, abgesagt?, verschoben?
 Aktivität: Ereignis (Zeit, Text, Bezug, Publikum "all" | "team:<id>")
 ```
 
@@ -144,7 +149,7 @@ Aktivität: Ereignis (Zeit, Text, Bezug, Publikum "all" | "team:<id>")
 | **Team** | Name, Kürzel (beide eindeutig), Beschreibung, Farbe, Symbol, öffentlich/privat, Beitritt (Einladung/Bewerbung), Mitglieder mit Rolle, Einladungen (mit Ablauf), Bewerbungen, offene Übergabe | Länder bleiben (ohne Team); Projekte und Marker bleiben – „nur Team“ wird zu privat (Ersteller und Beteiligte); Angebote laufen im Namen des Erstellers weiter |
 | **Projekt** | Name, Beschreibung, Status, Priorität, Start/Ziel, Sichtbarkeit (alle/Team/Beteiligte), Land, Team, Ort, Verantwortliche, Aufgaben (erledigt von/wann), Updates, Notizen | – |
 | **Angebot** | Art (Auktion/Festpreis/Tausch), Biete/Suche, Titel, Kategorie, Item, Menge, Preise, Laufzeit, Team, Status (aktiv/verkauft/nicht verkauft/abgebrochen), Gebote, Gegenangebote, Übergabe (offen/bestätigt/Streit/geklärt), Verlauf | Angebote werden nie automatisch gelöscht |
-| **Rennstrecke** | Name (eindeutig), Dimension, Rundkurs/Sprint, Fahrzeug-Regel, Tore (Mitte, Fahrtrichtung, Breite), Version, beste Runde je Fahrer mit Abschnitten, beste Abschnitte je Fahrer, letzte 100 Runden, Archiv alter Versionen | Löschen nur mit eingetipptem Namen; Tore/Fahrzeug ändern = neue Version, alte Bestzeiten ins Archiv |
+| **Event** | Titel, Art, Beginn, Dauer, Beschreibung, Sichtbarkeit (alle/Team), Team, Treffpunkt (Land oder Koordinate), Veranstalter, Zusagen (Komme/Vielleicht/Komme nicht), abgesagt (wann, Grund), verschoben (wann, vorher) | Land gelöscht: Treffpunkt bleibt als Koordinate. Team aufgelöst: anstehende Team-Events werden abgesagt und sind danach nur noch für den Veranstalter sichtbar |
 | **Statistik** (`stats.json`) | je Spieler: Werte, Top-Listen, Tagesstände, Sitzungen, Aktiv/AFK, Wann online, Todesursachen, Verlauf (100) · Server: Rekorde, Wann ist am meisten los, Tage (60) | Wird nie gelöscht |
 
 Alle Dateien haben eine `schemaVersion`. Länder und Marker sind auf Version 2 (0.3), alle neuen Bereiche auf Version 1.
@@ -174,14 +179,14 @@ Alle Dateien haben eine `schemaVersion`. Länder und Marker sind auf Version 2 (
 | `LandEnterTracker.java`, `DeathPoints.java` | Land-Anzeige beim Betreten, Todespunkt-Marker |
 | `GameState.java`, `ActionBar.java`, `Waypoints.java`, `LandBorders.java` | Was im Spiel gerade läuft: Actionbar-Vorrang, Wegweiser, Land-Grenzen als Partikel |
 | `StatValues.java`, `StatNames.java`, `StatReader.java`, `StatsCollector.java`, `ActivityTracker.java`, `StatsStore.java`, `StatsRoutes.java` | Statistik: Kennzahlen, deutsche Namen, Lesen aus Minecraft, Sammeln, AFK, Speichern, API |
-| `RaceTimer.java`, `RaceStore.java`, `RaceManager.java`, `RaceText.java`, `RaceCommands.java`, `RaceRoutes.java` | Rennen: Zeitmessung (reine Rechnung), Strecken und Zeiten, Ablauf im Spiel, Texte, Befehle, API |
+| `EventStore.java`, `EventRoutes.java`, `RecapRoutes.java` | Events (Speicher, Rechte, Hinweise), API, Wochen-Rückblick |
 | `JsonStore.java`, `JsonFiles.java`, `Chunks.java`, `PlannerException.java` | Hilfsklassen |
 
 **Webseite** (`web/`, ES-Module ohne Build-Schritt):
 `js/main.js` (Start, Navigation, Aktualisieren), `api.js`, `store.js` (Datenstand + Ereignisse), `router.js` (`#/bereich/id`),
 `map.js` (Claim-Karte, Messlinie), `bluemap.js` (3D-Abgleich), `coords.js` (Koordinaten-Werkzeuge und Messen, ohne DOM → `node --test`),
 `search.js`, `util.js`, `charts.js` (Wärmekarte, Säulen, Balken-Listen als SVG/HTML, mit Tooltip, Pfeiltasten und Tabellen-Ansicht),
-`statfmt.js` und `racefmt.js` (Zahlen, Zeiten, Tage, Streckenplan – ohne DOM → `node --test`) und `views/*.js` (je ein Bereich).
+`statfmt.js` und `eventfmt.js` (Zahlen, Zeiten, Tage, Kalender, Event-Hinweise – ohne DOM → `node --test`) und `views/*.js` (je ein Bereich).
 `window.planner` ist ein Einstieg für die Browser-Tests.
 
 **BlueMap-Abgleich:** BlueMap 5.29 liest `#karte:x:y:z:abstand:drehung:winkel:neigung:ortho:modus` beim Laden und bei jedem
@@ -209,12 +214,14 @@ Handels-Aktionen (alle POST unter `/api/trades`) brauchen eine `requestId` (8–
 | POST | `/api/prefs/game` | `{key, on}` | Schalter: `notify`, `landEnter`, `deathMarker` (`/api/meta` → `gameFeatures`: was der Server anbietet; `rankings` gab es nur in 0.5.0 → 400) |
 | GET | `/api/sessions` | – | Eigene Geräte: `{sessions: [{id, device, created, lastUsed, current}]}` – nie die Tokens |
 | POST | `/api/sessions/{id}/logout` · `/api/sessions/logout-others` | – | Ein Gerät / alle anderen abmelden |
-| POST | `/api/markers/{id}/navigate` · `/api/lands/{id}/navigate` · `/api/races/{id}/navigate` | – | Wegweiser im Spiel starten (409, wenn du nicht online bist) |
-| GET | `/api/stats/server` | – | Summen (ohne Ausgeblendete), Rekorde, `heat` [7][24] (null = keine Messung), Tage, Todesursachen, Verlauf |
+| POST | `/api/markers/{id}/navigate` · `/api/lands/{id}/navigate` · `/api/events/{id}/navigate` | – | Wegweiser im Spiel starten (409, wenn du nicht online bist) |
+| GET | `/api/stats/server` | – | Summen, Rekorde, `heat` [7][24] (null = keine Messung), Tage, Todesursachen, Verlauf |
 | GET | `/api/stats/rankings?range=all\|week\|yesterday\|today` | – | 16 Ranglisten mit Top 10, `me` = dein Platz, `available` |
 | GET | `/api/stats/players` · `/api/stats/players/{uuid}` | – | Spielerseite: Werte, Zuwachs, pro Stunde, Plätze, Wann online, Top-Listen, Verlauf – für alle sichtbar (404 nur, wenn der Spieler noch nie online war) |
-| GET | `/api/races` · `/api/races/{id}` | – | Strecken; Detail mit Toren, Bestenliste, besten Abschnitten, letzten Runden |
-| POST | `/api/races/{id}/rename {name}` · `vehicle {vehicle}` · `delete {confirmName}` | | Nur wer die Strecke angelegt hat oder Admins; Tore setzt man im Spiel |
+| GET | `/api/events` · `/api/events/{id}` | – | Events, die du sehen darfst; je mit `state` (upcoming/running/past/cancelled), Zusagen, `myAnswer`, `canEdit` |
+| POST | `/api/events` | `{title, kind, start, minutes, description?, visibility?, teamId?, landId?, place?: {dimension, x, y?, z}}` | `start` in ms; höchstens `maxEventsPerPlayer` anstehende |
+| POST | `/api/events/{id}/answer {answer}` · `edit {…}` · `cancel {reason?}` · `delete` | | `answer`: yes/maybe/no/null; ändern, absagen, löschen nur Veranstalter oder Admins |
+| GET | `/api/recap` | – | Rückblick auf die letzten 7 Tage (Statistik, neue Länder, Projekte, Events) |
 | GET | `/api/todo` | – | „Zu erledigen“ wie im Spiel: `{items: [{id, kind, text, href}]}` |
 | GET | `/api/activity?limit=50` | – | nur sichtbare Ereignisse |
 | GET/POST | `/api/export` · `/api/import` | `{data, apply}` | `apply:false` = Vorschau |
@@ -241,7 +248,7 @@ Handels-Aktionen (alle POST unter `/api/trades`) brauchen eine `requestId` (8–
 ## Ideen für später
 
 1. **Echter Schutz** (optional): Abbauen/Bauen in fremden Ländern blocken. Ehrlich: Kolben, Explosionen, Lava machen das aufwendig.
-2. **Rennen gegeneinander** (gemeinsamer Start mit Countdown, Platzierung im Ziel) und ein Geister-Fahrer der Bestzeit als Partikel.
+2. **Wiederkehrende Events** (z. B. jeden Samstag 20 Uhr) – heute muss man jedes einzeln anlegen.
 3. **Befehle für Handel und Teams im Spiel** (z. B. Einladung annehmen per Klick) – heute gibt es dazu nur Nachrichten.
 4. **Gelände in der Claim-Karte**, z. B. aus BlueMaps Flach-Ansicht.
 5. **Bestehende Welten:** entdeckte Chunks aus den Region-Dateien (InhabitedTime) übernehmen.

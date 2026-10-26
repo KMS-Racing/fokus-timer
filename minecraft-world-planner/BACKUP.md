@@ -12,7 +12,8 @@ entsprechend `<welt>/world-planner/`). Die Einstellungen liegen in **`config/wor
 | `trades.json` | Handel: Angebote, Gebote, Gegenangebote, Übergaben, Verlauf, zuletzt verarbeitete `requestId`s | ja |
 | `players.json` | Bekannte Spieler (Name ↔ UUID, OP-Status, zuletzt gesehen) | ja |
 | `discovered.json` | Entdeckte Chunks | ja (sonst ist die Karte wieder dunkel) |
-| `races.json` | Rennstrecken (Tore, Versionen), Bestzeiten, letzte Runden, Archiv | ja |
+| `events.json` | Events: Zeit, Treffpunkt, Zusagen, Absagen (seit 0.6) | ja |
+| `races.json` | Rennstrecken aus 0.5 – seit 0.6 nicht mehr benutzt, die Mod lässt die Datei unangetastet liegen | nur falls du zurück auf 0.5 willst |
 | `stats.json` | Statistik: was der Planer selbst misst (Tagesstände, Aktiv/AFK, Sitzungen, Wann online, Verlauf, Rekorde). Minecrafts eigene Zahlen liegen ohnehin in `world/players/stats/` | nett zu haben |
 | `prefs.json` | Favoriten und Schalter (Nachrichten, Land-Anzeige, Todespunkt, in Ranglisten sichtbar) | nett zu haben |
 | `activity.json` | Aktivitäts-Übersicht (die letzten `activityLimit` Einträge) | nett zu haben |
@@ -50,6 +51,14 @@ Wer ganz sicher gehen will, nimmt das Backup bei gestopptem Server.
   bekommt jeder Spieler beim ersten Ändern den Schalter „in Ranglisten sichtbar“ (fehlt er, gilt „an“).
 - Zurück auf 0.4 (nicht ausprobiert): Server stoppen, 0.4-Jar einsetzen. 0.4 kennt `stats.json` und `races.json` nicht und lässt
   sie liegen; den Schalter „in Ranglisten sichtbar“ und die Geräte-Namen der Web-Logins vergisst es beim nächsten Speichern.
+
+## Update von 0.5 auf 0.6
+
+- Rennen gibt es nicht mehr. `races.json` bleibt liegen, wie sie ist (0.6 liest und schreibt sie nicht). Neu kommt `events.json`.
+- In `config/world-planner.json` verschwinden beim ersten Start `races` und `maxTracksPerPlayer`; `events` und `maxEventsPerPlayer`
+  kommen dazu. Projekte bekommen beim nächsten Abschließen ein Datum (`doneAt`) für den Rückblick.
+- Zurück auf 0.5.1 (nicht ausprobiert): Server stoppen, 0.5.1-Jar einsetzen. 0.5.1 liest `races.json` wieder (die Strecken sind
+  noch da), kennt `events.json` nicht und lässt sie liegen.
 
 ## Export/Import auf der Webseite ist kein Server-Backup
 

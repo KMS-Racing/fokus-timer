@@ -87,7 +87,7 @@ for who in (b_name, d_name):
 # ------------------------------------------------------------------ Grundlagen
 st, meta = call("api/meta", token=a)
 check("Server bietet die Spiel-Funktionen an", meta.get("gameFeatures") == {"notify": True, "landEnter": True, "deathMarker": True, "teamChat": True,
-                                                                         "statistics": True, "races": True},
+                                                                         "statistics": True, "events": True},
       meta.get("gameFeatures"))
 for tok in (a, b, d):
     for key in ("notify", "landEnter", "deathMarker"):

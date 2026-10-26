@@ -58,7 +58,8 @@ final class ProjectStore extends JsonStore {
         final List<Update> updates = new ArrayList<>();
         final UUID createdBy;
         final long createdAt;
-        long updatedAt;
+        /** doneAt: wann es zuletzt auf "Abgeschlossen" gesetzt wurde (0 = nicht abgeschlossen oder vor 0.6 abgeschlossen). */
+        long updatedAt, doneAt;
 
         Project(String id, UUID createdBy, long createdAt) {
             this.id = id;
@@ -85,6 +86,7 @@ final class ProjectStore extends JsonStore {
             c.tasks.addAll(tasks); // Aufgaben ändert apply() nicht, nur beim Anlegen kommen welche dazu
             c.updates.addAll(updates);
             c.updatedAt = updatedAt;
+            c.doneAt = doneAt;
             return c;
         }
     }
@@ -130,6 +132,7 @@ final class ProjectStore extends JsonStore {
         long now = System.currentTimeMillis();
         Project p = new Project(UUID.randomUUID().toString(), actor, now);
         apply(p, actor, data, true);
+        if (p.status.equals("done")) p.doneAt = now;
         projects.put(p.id, p);
         changed();
         return p.id;
@@ -140,6 +143,8 @@ final class ProjectStore extends JsonStore {
         requireEdit(p, actor, admin);
         Project edited = p.copy();
         apply(edited, actor, data, false);
+        if (!edited.status.equals("done")) edited.doneAt = 0;
+        else if (!p.status.equals("done")) edited.doneAt = System.currentTimeMillis();
         projects.put(id, edited);
         touch(edited);
     }
@@ -258,6 +263,26 @@ final class ProjectStore extends JsonStore {
             }
         }
         return out;
+    }
+
+    /** Für den Wochen-Rückblick: seit from abgeschlossene Projekte und erledigte Aufgaben – nur Projekte, die der Spieler sieht. */
+    synchronized JsonObject weekJson(UUID viewer, long from) {
+        JsonArray done = new JsonArray();
+        int tasks = 0;
+        for (Project p : projects.values()) {
+            if (!canView(p, viewer)) continue;
+            if (p.status.equals("done") && p.doneAt >= from) {
+                JsonObject x = new JsonObject();
+                x.addProperty("id", p.id);
+                x.addProperty("name", p.name);
+                done.add(x);
+            }
+            for (Task t : p.tasks) if (t.done && t.doneAt >= from) tasks++;
+        }
+        JsonObject o = new JsonObject();
+        o.add("done", done);
+        o.addProperty("tasksDone", tasks);
+        return o;
     }
 
     /** Nur Projekte, die der Spieler selbst angelegt hat (für den Export). */
@@ -478,6 +503,7 @@ final class ProjectStore extends JsonStore {
         o.addProperty("createdBy", p.createdBy.toString());
         o.addProperty("createdAt", p.createdAt);
         o.addProperty("updatedAt", p.updatedAt);
+        if (p.doneAt > 0) o.addProperty("doneAt", p.doneAt);
         return o;
     }
 
@@ -498,6 +524,7 @@ final class ProjectStore extends JsonStore {
             p.location = new Location(l.get("dimension").getAsString(), l.get("x").getAsInt(), l.get("z").getAsInt());
         }
         p.updatedAt = o.has("updatedAt") ? o.get("updatedAt").getAsLong() : p.createdAt;
+        p.doneAt = o.has("doneAt") ? o.get("doneAt").getAsLong() : 0;
         if (o.has("responsible")) o.getAsJsonArray("responsible").forEach(e -> p.responsible.add(UUID.fromString(e.getAsString())));
         if (o.has("tasks")) for (JsonElement e : o.getAsJsonArray("tasks")) {
             JsonObject t = e.getAsJsonObject();

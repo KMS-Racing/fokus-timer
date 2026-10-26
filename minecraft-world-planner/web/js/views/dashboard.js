@@ -1,12 +1,72 @@
 // Dashboard: was gibt es zu tun, was ist los auf dem Server? Alles aus echten Server-Daten berechnet.
+import { dayKey, eventTodos, fmtWhen } from '../eventfmt.js';
+import { fmtDuration, fmtValue } from '../statfmt.js';
 import { map } from '../map.js';
 import { load, myTeams, serverNow, store } from '../store.js';
-import { dimName, el, fill, fmtAgo, fmtLeft, fmtNum, pill, plural, progressBar } from '../util.js';
+import { dimName, el, fill, fmtAgo, fmtDate, fmtLeft, fmtNum, pill, plural, progressBar } from '../util.js';
 import { bind, stat } from './common.js';
 import { openMarkerForm } from './markers.js';
+import { createEvent } from './events.js';
 import { createProject } from './projects.js';
 
 const enc = encodeURIComponent;
+const tz = () => (store.meta && store.meta.timeZone) || 'Europe/Berlin';
+
+/** Rückblick auf die letzten 7 Tage – alles vom Server (/api/recap), nichts geschätzt. */
+function recapCard() {
+  const r = store.recap;
+  const head = el('h2', { text: 'Rückblick: letzte 7 Tage' });
+  if (!r) return el('section', { class: 'card', id: 'recapCard' }, head, el('p', { class: 'muted', text: 'Lädt …' }));
+  const s = r.stats, p = r.projects || { done: [], tasksDone: 0 }, ev = r.events, lands = r.lands || { count: 0, latest: [] };
+  const facts = [];
+  if (s) {
+    facts.push([fmtDuration(s.playTime), 'gespielt'], [fmtNum(s.activePlayers), 'Spieler aktiv']);
+    if (s.peakOnline) facts.push([fmtNum(s.peakOnline), 'höchstens gleichzeitig']);
+  }
+  facts.push([fmtNum(lands.count), lands.count === 1 ? 'neues Land' : 'neue Länder']);
+  const lines = [];
+  if (s && s.tops.length) {
+    lines.push(el('h3', { text: 'Spitze der Woche' }), el('ul', { class: 'mini-list', id: 'recapTops' }, s.tops.map(t => el('li', {},
+      el('strong', { text: t.rank + ': ' }), el('a', { href: '#/statistik/spieler/' + enc(t.leader.uuid), text: t.leader.name }),
+      el('small', { class: 'muted', text: ` (${fmtValue(t.unit, t.leader.value)})` })))));
+  }
+  if (s && s.milestones.length) {
+    lines.push(el('h3', { text: 'Meilensteine' }), el('ul', { class: 'mini-list' }, s.milestones.slice(0, 4).map(m => el('li', {},
+      el('span', { text: `★ ${m.name}: ${m.text}` }), el('small', { class: 'muted', text: ' · ' + fmtAgo(m.at) })))));
+  }
+  if (p.done.length || p.tasksDone) {
+    lines.push(el('h3', { text: 'Projekte' }), el('p', {},
+      p.done.length ? ['Fertig: ', ...p.done.flatMap((x, i) => [i ? ', ' : '', el('a', { href: '#/projekte/' + enc(x.id), text: x.name })]), '. '] : null,
+      p.tasksDone ? `${plural(p.tasksDone, 'Aufgabe', 'Aufgaben')} erledigt.` : null));
+  }
+  if (ev && (ev.past.length || ev.upcoming)) {
+    lines.push(el('h3', { text: 'Events' }), el('ul', { class: 'mini-list' },
+      ev.past.map(x => el('li', {}, el('a', { href: '#/events/' + enc(x.id), text: x.title }),
+        el('small', { class: 'muted', text: ` · ${fmtWhen(x.start, tz())} · ${plural(x.coming, 'hatte', 'hatten')} zugesagt` }))),
+      ev.upcoming ? el('li', {}, el('a', { href: '#/events', text: `${plural(ev.upcoming, 'Event', 'Events')} in den nächsten 7 Tagen` })) : null));
+  }
+  const quiet = !lines.length && (!s || !s.playTime) && !lands.count;
+  return el('section', { class: 'card', id: 'recapCard' }, head,
+    el('div', { class: 'recap-facts' }, facts.map(([v, t]) => el('div', { class: 'recap-fact' }, el('strong', { text: v }), el('span', { text: t })))),
+    quiet ? el('p', { class: 'muted', text: 'Diese Woche war es ruhig.' }) : lines,
+    s && s.since > r.from ? el('p', { class: 'muted small', text: `Spielzeit und Spitzen zählen erst seit ${fmtDate(s.since)} – da kam der Planer dazu.` }) : null);
+}
+
+/** Die nächsten Events (nicht abgesagt, nicht vorbei) – mit deiner Antwort. */
+function nextEventsCard() {
+  if (store.meta && store.meta.gameFeatures && store.meta.gameFeatures.events === false) return null;
+  const now = serverNow();
+  const next = store.events.filter(e => e.state !== 'cancelled' && e.end > now).slice(0, 4);
+  const today = dayKey(now, tz());
+  return el('section', { class: 'card', id: 'nextEvents' },
+    el('div', { class: 'row between' }, el('h2', { text: 'Nächste Events' }), el('a', { href: '#/events', text: 'alle' })),
+    next.length ? el('ul', { class: 'mini-list' }, next.map(e => el('li', {},
+      el('a', { href: '#/events/' + enc(e.id), text: e.title }),
+      el('small', { class: 'muted', text: ` · ${e.state === 'running' ? 'läuft gerade' : dayKey(e.start, tz()) === today ? 'heute ' + fmtWhen(e.start, tz()).slice(-5) : fmtWhen(e.start, tz())}`
+        + ` · ${e.counts.yes} ${e.counts.yes === 1 ? 'kommt' : 'kommen'}` }),
+      e.myAnswer ? [' ', pill('du: ' + ((store.meta.eventAnswers || {})[e.myAnswer] || e.myAnswer), e.myAnswer === 'no' ? 'muted' : 'ok')] : null)))
+      : el('p', { class: 'muted', text: 'Nichts geplant.' }, ' ', el('button', { class: 'small', onclick: () => createEvent() }, '+ Event')));
+}
 
 /**
  * Alle offenen Punkte für den Spieler – nur aus Daten, die der Server geliefert hat.
@@ -50,13 +110,14 @@ export function todoItems() {
   for (const p of store.projects.filter(x => x.mine && x.status !== 'done' && x.dueDate && x.dueDate < today)) {
     items.push({ kind: 'warn', text: `Projekt überfällig: »${p.name}«`, href: '#/projekte/' + enc(p.id) });
   }
+  items.push(...eventTodos(store.events, serverNow(), tz()));
   return items;
 }
 
 export default {
   title: 'Dashboard',
   render(root) {
-    Promise.allSettled([load.teams(), load.trades(), load.projects(), load.activity(), load.people()]);
+    Promise.allSettled([load.teams(), load.trades(), load.projects(), load.activity(), load.people(), load.events(), load.recap()]);
     const draw = () => {
       const me = store.me || {};
       const w = store.world || {};
@@ -74,6 +135,7 @@ export default {
             el('a', { class: 'button primary', href: '#/karte' }, 'Karte öffnen'),
             el('button', { onclick: () => openMarkerForm() }, '+ Marker'),
             el('button', { onclick: () => createProject() }, '+ Projekt'),
+            el('button', { onclick: () => createEvent() }, '+ Event'),
             el('a', { class: 'button', href: '#/handel' }, 'Handel'))),
         el('div', { class: 'stats' },
           stat(`${me.usedChunks ?? 0}/${me.maxChunks ?? '?'}`, 'Chunks', '#/claims'),
@@ -111,12 +173,13 @@ export default {
                 el('a', { href: '#/handel/' + enc(l.id), text: l.title }), el('small', { class: 'muted', text: ' · endet in ' + fmtLeft(l.endsAt - serverNow()) }))))
                 : el('p', { class: 'muted', text: 'Gerade keine aktiven Angebote.' });
             })())),
+        el('div', { class: 'grid two' }, nextEventsCard(), recapCard()),
         el('section', { class: 'card' },
           el('div', { class: 'row between' }, el('h2', { text: 'Was ist passiert?' }), pill('nur echte Aktionen', 'muted')),
           store.activity.length ? el('ul', { class: 'timeline', id: 'activityList' }, store.activity.slice(0, 12).map(e => el('li', {},
             el('span', { text: e.text }), el('small', { class: 'muted', text: ' · ' + fmtAgo(e.at) }))))
             : el('p', { class: 'muted', text: 'Noch keine Aktivität.' })));
     };
-    return bind(root, ['me', 'world', 'lands', 'teams', 'trades', 'projects', 'activity', 'players', 'blueMapStatus', 'discovered'], draw);
+    return bind(root, ['me', 'meta', 'world', 'lands', 'teams', 'trades', 'projects', 'events', 'recap', 'activity', 'players', 'blueMapStatus', 'discovered'], draw);
   },
 };

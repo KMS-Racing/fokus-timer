@@ -23,7 +23,7 @@ record PlannerServices(
         PrefsStore prefs,
         ActivityLog activity,
         StatsStore stats,
-        RaceStore races,
+        EventStore events,
         Access access,
         AtomicReference<JsonObject> worldSnapshot,
         AtomicReference<JsonObject> playersSnapshot,
@@ -45,14 +45,15 @@ record PlannerServices(
         PrefsStore prefs = new PrefsStore(data.resolve("prefs.json"), logger);
         ActivityLog activity = new ActivityLog(data.resolve("activity.json"), logger, config.activityLimit());
         StatsStore stats = new StatsStore(data.resolve("stats.json"), logger);
-        RaceStore races = new RaceStore(data.resolve("races.json"), logger, config);
+        EventStore events = new EventStore(data.resolve("events.json"), logger, players, lands, config);
         Access access = new Access(lands, teams);
         lands.setTeams(teams);
         markers.setAccess(access);
         projects.setAccess(access);
         trades.setAccess(access);
+        events.setAccess(access);
         return new PlannerServices(config, players, sessions, discovery, lands, markers, teams, projects, trades, prefs, activity,
-                stats, races, access, new AtomicReference<>(new JsonObject()), new AtomicReference<>(emptyPlayers()),
+                stats, events, access, new AtomicReference<>(new JsonObject()), new AtomicReference<>(emptyPlayers()),
                 new AtomicReference<>(Map.of()), new AtomicReference<>(blueMapUnavailable()),
                 new java.util.concurrent.ConcurrentLinkedQueue<>());
     }
@@ -61,6 +62,7 @@ record PlannerServices(
         lands.setKnownDimensions(dimensions);
         markers.setKnownDimensions(dimensions);
         projects.setKnownDimensions(dimensions);
+        events.setKnownDimensions(dimensions);
     }
 
     /**
@@ -68,7 +70,7 @@ record PlannerServices(
      * und sind am größten). Der Handel fehlt hier absichtlich: Er speichert jede Aktion sofort selbst (bevor der Server "OK" sagt).
      */
     JsonStore[] stores() {
-        return new JsonStore[]{players, sessions, discovery, lands, markers, teams, projects, prefs, activity, stats, races};
+        return new JsonStore[]{players, sessions, discovery, lands, markers, teams, projects, prefs, activity, stats, events};
     }
 
     boolean savedEveryMinute(JsonStore store) {
@@ -87,6 +89,7 @@ record PlannerServices(
     /** Ein Land wurde gelöscht: Projekte und Marker behalten, nur die Verknüpfung lösen. */
     void onLandDeleted(String landId) {
         projects.detachLand(landId);
+        events.detachLand(landId);
         markers.detachLand(landId);
     }
 
@@ -94,6 +97,7 @@ record PlannerServices(
     void onTeamDissolved(TeamStore.Dissolved team) {
         lands.dropTeam(team.id());
         projects.detachTeam(team.id());
+        events.detachTeam(team.id(), System.currentTimeMillis());
         markers.detachTeam(team.id());
         trades.detachTeam(team.id());
     }
