@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
@@ -227,6 +228,30 @@ class GameNotifierTest {
         now.addAndGet(10 * 60_000L);
         assertEquals(List.of("[Planer] • Jetzt: »Bauabend« beginnt"), poll(bob));
         assertTrue(poll(carl).isEmpty(), "Carl hat nicht zugesagt (und Nachrichten aus)");
+    }
+
+    @Test
+    void todosMostUrgentFirstEverywhere() {
+        List<Notices.Notice> all = List.of(
+                note("handover:1", Notices.Level.WARN, true),
+                note("applications:t", Notices.Level.INFO, true),
+                note("land-invite:l", Notices.Level.INVITE, true),
+                note("member:t", Notices.Level.INFO, false),
+                note("handover:2", Notices.Level.WARN, true),
+                note("event-soon:e:1", Notices.Level.WARN, true),
+                note("dispute:3", Notices.Level.DANGER, true),
+                note("event-ask:f", Notices.Level.INVITE, true),
+                note("event-now:g:2", Notices.Level.INFO, true));
+        List<String> expected = List.of("event-soon:e:1", "event-now:g:2", "dispute:3", "land-invite:l", "event-ask:f", "handover:1", "handover:2",
+                "applications:t");
+        assertEquals(expected, Notices.todos(all).stream().map(Notices.Notice::id).toList(), "gleicher Rang bleibt in der Reihenfolge");
+        List<String> api = new ArrayList<>();
+        Notices.toApiJson(all).getAsJsonArray("items").forEach(i -> api.add(i.getAsJsonObject().get("id").getAsString()));
+        assertEquals(expected, api, "/api/todo (und damit das Dashboard) in derselben Reihenfolge wie im Spiel");
+    }
+
+    private static Notices.Notice note(String id, Notices.Level level, boolean todo) {
+        return new Notices.Notice(id, todo, true, level, id, "#/", null, null);
     }
 
 }

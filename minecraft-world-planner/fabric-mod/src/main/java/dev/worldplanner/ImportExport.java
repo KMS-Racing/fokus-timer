@@ -208,7 +208,7 @@ final class ImportExport {
                     sum.skip(label, problem);
                     continue;
                 }
-                if (apply) s.projects().create(user, admin, clean);
+                if (apply) s.projects().create(user, admin, clean, true);
                 sum.create(label);
             } catch (PlannerException e) {
                 sum.skip(label, e.getMessage());

@@ -6,6 +6,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -179,8 +180,7 @@ final class Notices {
     /** Für /api/todo: nur "Zu erledigen", in derselben Reihenfolge wie im Spiel. */
     static JsonObject toApiJson(List<Notice> notices) {
         JsonArray arr = new JsonArray();
-        for (Notice n : notices) {
-            if (!n.todo()) continue;
+        for (Notice n : todos(notices)) {
             JsonObject o = new JsonObject();
             o.addProperty("id", n.id());
             o.addProperty("kind", n.level().id);
@@ -193,8 +193,23 @@ final class Notices {
         return o;
     }
 
+    /**
+     * "Zu erledigen", das Dringendste zuerst – im Spiel, in /api/todo und auf dem Dashboard gleich (dashboard.js: todoRank).
+     * Wichtig, weil Spiel und Dashboard nur die ersten Einträge zeigen: Ein Event in 10 Minuten darf nicht hinter 20 Übergaben stehen.
+     */
     static List<Notice> todos(List<Notice> notices) {
-        return notices.stream().filter(Notice::todo).toList();
+        return notices.stream().filter(Notice::todo).sorted(Comparator.comparingInt(Notices::rank)).toList(); // stabil: gleicher Rang bleibt in Reihenfolge
+    }
+
+    /** 0 = Event beginnt gleich oder gerade, 1 = Streitfall, 2 = Einladung, 3 = Warnung, 4 = Info. */
+    static int rank(Notice n) {
+        if (n.id().startsWith("event-soon:") || n.id().startsWith("event-now:")) return 0;
+        return switch (n.level()) {
+            case DANGER -> 1;
+            case INVITE -> 2;
+            case WARN -> 3;
+            case INFO -> 4;
+        };
     }
 
     private static Notice todo(String id, Level level, String text, String href, String command) {

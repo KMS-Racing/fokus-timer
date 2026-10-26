@@ -169,6 +169,18 @@ class EventsTest {
         assertNull(find(bob, "event-moved:", NOW + 25 * HOUR), "nach einem Tag nicht mehr");
     }
 
+    @Test
+    void theListKeepsSixtyDaysOfPastEvents() {
+        long longAgo = NOW - 70L * 24 * HOUR, recently = NOW - 20L * 24 * HOUR;
+        String old = ev.create(alice, false, event("Altes Fest", longAgo + HOUR), longAgo);
+        String recent = ev.create(alice, false, event("Neulich", recently + HOUR), recently);
+        List<String> listed = new ArrayList<>();
+        ev.listJson(bob, false, NOW).forEach(x -> listed.add(x.getAsJsonObject().get("title").getAsString()));
+        assertEquals(List.of("Neulich"), listed, "älter als 60 Tage: nicht mehr in der Liste");
+        assertEquals("Altes Fest", ev.eventJson(old, bob, false, NOW).get("title").getAsString(), "…aber noch gespeichert und per Link erreichbar");
+        assertNotNull(recent);
+    }
+
     // ------------------------------------------------------------------ Hinweise und Erinnerungen
 
     @Test

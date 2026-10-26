@@ -1,11 +1,11 @@
 // Events mit Kalender: Bauwettbewerb, Treffen, Party … – zusagen mit einem Klick, Erinnerung im Spiel kommt vom Server.
 // Alle Zeiten in der Zeitzone des Servers (wie im Spiel-Chat), damit alle dieselbe Uhrzeit sehen.
 import { api, enc } from '../api.js';
-import { dayKey, fmtDayHead, fmtTime, fmtWhen, monthGrid, monthName, zoned, zonedToEpoch } from '../eventfmt.js';
+import { dayKey, eventIcs, fmtDayHead, fmtTime, fmtWhen, icsFileName, monthGrid, monthName, nextWeekSameTime, zoned, zonedToEpoch } from '../eventfmt.js';
 import { showPoint } from '../map.js';
 import { navigate } from '../router.js';
 import { load, myTeams, serverNow, store } from '../store.js';
-import { act, confirmDialog, dimName, el, empty, fill, fmtLeft, formDialog, pill, plural } from '../util.js';
+import { act, confirmDialog, dimName, downloadFile, el, empty, fill, fmtLeft, formDialog, pill, plural, toast } from '../util.js';
 import { bind, pageHead, segmented } from './common.js';
 import { myPosition, navigateButton } from './markers.js';
 
@@ -17,6 +17,8 @@ const tz = () => (store.meta && store.meta.timeZone) || 'Europe/Berlin';
 const kindName = k => (store.meta && store.meta.eventKinds && store.meta.eventKinds[k]) || k;
 const answerName = a => (store.meta && store.meta.eventAnswers && store.meta.eventAnswers[a]) || a;
 const off = () => store.meta && store.meta.gameFeatures && store.meta.gameFeatures.events === false;
+/** Für Knöpfe auf anderen Seiten („Event hier planen“): Events sind nicht ausgeschaltet. */
+export const eventsOn = () => !off();
 
 function timeRange(e) {
   const sameDay = dayKey(e.start, tz()) === dayKey(e.end - 1, tz());
@@ -108,8 +110,9 @@ const positionTool = { label: '📍 Meine Position', onClick: inputs => {
   inputs.z.value = Math.floor(p.z);
 } };
 
-export async function createEvent() {
-  const v = await formDialog({ title: 'Neues Event', fields: eventFields(), validate: validateEvent, submitLabel: 'Einladen',
+/** Neues Event; prefill füllt das Formular vor (Treffpunkt von einem Land, Marker oder Projekt – oder ein Event noch einmal). */
+export async function createEvent(prefill = {}) {
+  const v = await formDialog({ title: 'Neues Event', fields: eventFields(prefill), validate: validateEvent, submitLabel: 'Einladen',
     intro: 'Alle, die es sehen dürfen, bekommen im Spiel eine Nachricht mit [Komme] – und wer zusagt, eine Erinnerung 10 Minuten vorher.',
     tools: myPosition() ? [positionTool] : [] });
   if (!v) return;
@@ -138,6 +141,19 @@ async function deleteEvent(e) {
     text: e.state === 'upcoming' ? 'Tipp: „Absagen“ ist meist besser – dann sehen alle, dass es ausfällt. Löschen entfernt es ganz.' : 'Das Event wird ganz entfernt.' });
   if (!ok) return;
   if (await act(() => api(`api/events/${enc(e.id)}/delete`, {}), 'Gelöscht.')) { await load.events(); navigate('#/events'); }
+}
+
+/** Kalender-Datei fürs Handy: Erinnerung 10 Minuten vorher, auch wenn man nicht im Spiel ist. */
+function calendarFile(e) {
+  const url = location.origin + location.pathname + '#/events/' + enc(e.id);
+  downloadFile(icsFileName(e.title), eventIcs(e, { now: serverNow(), url, kind: kindName(e.kind), dimLabel: dimName }), 'text/calendar;charset=utf-8');
+  toast('Kalender-Datei gespeichert – öffne sie, dann übernimmt dein Kalender das Event.');
+}
+
+/** Dasselbe Event zur selben Uhrzeit nächste Woche (oder dem nächsten Termin, der noch kommt) – erst im Formular prüfen, dann einladen. */
+function planAgain(e) {
+  createEvent({ title: e.title, kind: e.kind, minutes: e.minutes, description: e.description, visibility: e.visibility, teamId: e.teamId,
+    landId: e.landName ? e.landId : null, place: e.place, start: nextWeekSameTime(e.start, tz(), serverNow() + 60000) });
 }
 
 // ------------------------------------------------------------------ Liste
@@ -233,6 +249,9 @@ function detailView(e) {
   return [
     el('a', { class: 'back', href: '#/events', text: '← Alle Events' }),
     pageHead(e.title, `${kindName(e.kind)} · ${timeRange(e)} · lädt ein: ${e.organizer.name}`,
+      e.state === 'upcoming' || e.state === 'running' ? el('button', { class: 'small', id: 'eventIcs', title: 'Als .ics-Datei für Handy oder PC – mit Erinnerung 10 Minuten vorher',
+        onclick: () => calendarFile(e) }, '📅 In meinen Kalender') : null,
+      e.mine ? el('button', { class: 'small', id: 'eventAgain', onclick: () => planAgain(e) }, '🔁 Nochmal planen') : null,
       e.canEdit ? el('button', { class: 'small', onclick: () => editEvent(e) }, 'Bearbeiten') : null,
       e.canEdit ? el('button', { class: 'small', onclick: () => cancelEvent(e) }, 'Absagen') : null,
       e.canDelete ? el('button', { class: 'small danger', onclick: () => deleteEvent(e) }, 'Löschen') : null),
@@ -270,12 +289,22 @@ export default {
   render(root, route) {
     const id = route.id;
     const head = el('div'), body = el('div', { class: 'events-page' });
+    // Die Liste enthält Vergangenes nur 60 Tage lang – ein älteres Event (Link) wird einzeln geholt. Stand es schon in der Liste
+    // und ist jetzt weg (gelöscht, Team verlassen), wird nicht nachgefragt.
+    let single = null, singleState = 'idle', seen = false;
     const draw = () => {
       if (off()) { fill(head); fill(body, empty('Events sind auf diesem Server ausgeschaltet.')); return; }
       if (id) {
-        const e = store.events.find(x => x.id === id);
+        const listed = store.events.find(x => x.id === id);
+        if (listed) seen = true;
+        const e = listed || single;
+        if (!e && store.loaded.events && !seen && singleState === 'idle') {
+          singleState = 'loading';
+          api(`api/events/${enc(id)}`).then(x => { single = x; }).catch(() => {}).finally(() => { singleState = 'done'; draw(); });
+        }
         fill(head);
-        fill(body, e ? detailView(e) : store.loaded.events ? empty('Dieses Event gibt es nicht (mehr) – oder du darfst es nicht sehen.') : el('p', { class: 'muted', text: 'Lädt …' }));
+        fill(body, e ? detailView(e) : store.loaded.events && (seen || singleState === 'done')
+          ? empty('Dieses Event gibt es nicht (mehr) – oder du darfst es nicht sehen.') : el('p', { class: 'muted', text: 'Lädt …' }));
         return;
       }
       fill(head, pageHead('Events', 'Bauwettbewerb, Treffen, Party … Zusagen mit einem Klick – wer kommt, wird im Spiel 10 Minuten vorher erinnert.',

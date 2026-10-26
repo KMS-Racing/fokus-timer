@@ -50,7 +50,9 @@ Der Timer prüft jede Sekunde, ob sich Teams oder Spielernamen geändert haben (
 `server.execute()` auf den Server-Thread. Angefasst werden nur Teams, deren Name mit `wpt_` beginnt.
 
 **Nachrichten im Spiel:** `Notices.collect()` berechnet für einen Spieler die Hinweise **aus dem echten Zustand** der Speicher –
-„Zu erledigen“ (dieselben Regeln wie `todoItems()` im Dashboard, ein Browser-Test vergleicht beide Listen wörtlich) und
+„Zu erledigen“ (dieselben Regeln wie `todoItems()` im Dashboard, ein Browser-Test vergleicht beide Listen wörtlich und in
+derselben Reihenfolge; `Notices.todos()` und `todoRank` sortieren gleich und stabil: Event gleich/gerade, Streitfall, Einladung,
+Warnung, Info – Spiel und Dashboard zeigen nur die ersten Zeilen, also muss das Dringendste oben stehen) und
 Neuigkeiten (neues Gebot, Gegenangebot, Streitfall, Mitgliedschaft …). Jeder Hinweis hat eine id, die sich nur ändert, wenn
 etwas Neues passiert (z. B. `outbid:<Angebot>:<Gebot>`). `GameNotifier.poll()` läuft alle 2 Sekunden im **Timer-Thread**,
 nicht auf dem Server-Thread: Der Handel schreibt unter seiner Sperre auf die Platte, und darauf soll das Spiel nie warten.
@@ -100,7 +102,10 @@ eigenen Zeitplaner: `Notices` berechnet bei jeder Abfrage (alle 2 Sekunden für 
 nächsten 10 Minuten beginnt oder gerade begonnen hat – die id enthält den Beginn, `GameNotifier` schickt jede id genau einmal.
 Verschieben merkt sich `movedAt`/`previousStart` (die Nachricht kommt einen Tag lang). Uhrzeiten im Chat und auf der Webseite
 in der Zeitzone des Servers (`timeZone`) – `eventfmt.js` rechnet im Browser mit `Intl` genauso, damit „Zu erledigen“ auf dem
-Dashboard denselben Text hat wie im Spiel.
+Dashboard denselben Text hat wie im Spiel. `eventfmt.js` baut auch die Kalender-Datei (`eventIcs`, RFC 5545: Zeiten in UTC,
+Zeilen ≤ 75 Bytes gefaltet, Erinnerung `TRIGGER:-PT10M`) – im Browser, ohne Server. „Nochmal planen“ rechnet mit
+`nextWeekSameTime` in Server-Zeit, nicht + 168 Stunden (sonst verrutscht die Uhrzeit über die Zeitumstellung). Die Liste
+(`/api/events`) enthält vergangene Events nur 60 Tage lang (`LIST_PAST_MS`); gespeichert bleiben alle.
 
 **Rückblick:** `/api/recap` nimmt die letzten 7 Tage: Statistik-Zuwachs „7 Tage“ (`StatsStore.weekJson`), Länder mit `createdAt`,
 Projekte mit `doneAt` (neu in 0.6, ältere zählen nicht) und Aufgaben mit `doneAt`, Events mit Beginn in dem Zeitraum (ohne
@@ -218,11 +223,11 @@ Handels-Aktionen (alle POST unter `/api/trades`) brauchen eine `requestId` (8–
 | GET | `/api/stats/server` | – | Summen, Rekorde, `heat` [7][24] (null = keine Messung), Tage, Todesursachen, Verlauf |
 | GET | `/api/stats/rankings?range=all\|week\|yesterday\|today` | – | 16 Ranglisten mit Top 10, `me` = dein Platz, `available` |
 | GET | `/api/stats/players` · `/api/stats/players/{uuid}` | – | Spielerseite: Werte, Zuwachs, pro Stunde, Plätze, Wann online, Top-Listen, Verlauf – für alle sichtbar (404 nur, wenn der Spieler noch nie online war) |
-| GET | `/api/events` · `/api/events/{id}` | – | Events, die du sehen darfst; je mit `state` (upcoming/running/past/cancelled), Zusagen, `myAnswer`, `canEdit` |
+| GET | `/api/events` · `/api/events/{id}` | – | Events, die du sehen darfst (die Liste: alles Kommende und Vergangenes der letzten 60 Tage); je mit `state` (upcoming/running/past/cancelled), Zusagen, `myAnswer`, `canEdit` |
 | POST | `/api/events` | `{title, kind, start, minutes, description?, visibility?, teamId?, landId?, place?: {dimension, x, y?, z}}` | `start` in ms; höchstens `maxEventsPerPlayer` anstehende |
 | POST | `/api/events/{id}/answer {answer}` · `edit {…}` · `cancel {reason?}` · `delete` | | `answer`: yes/maybe/no/null; ändern, absagen, löschen nur Veranstalter oder Admins |
 | GET | `/api/recap` | – | Rückblick auf die letzten 7 Tage (Statistik, neue Länder, Projekte, Events) |
-| GET | `/api/todo` | – | „Zu erledigen“ wie im Spiel: `{items: [{id, kind, text, href}]}` |
+| GET | `/api/todo` | – | „Zu erledigen“ wie im Spiel, das Dringendste zuerst: `{items: [{id, kind, text, href}]}` |
 | GET | `/api/activity?limit=50` | – | nur sichtbare Ereignisse |
 | GET/POST | `/api/export` · `/api/import` | `{data, apply}` | `apply:false` = Vorschau |
 | GET/POST | `/api/lands` | `{name, dimension, chunks, color?, description?}` | |
@@ -248,7 +253,7 @@ Handels-Aktionen (alle POST unter `/api/trades`) brauchen eine `requestId` (8–
 ## Ideen für später
 
 1. **Echter Schutz** (optional): Abbauen/Bauen in fremden Ländern blocken. Ehrlich: Kolben, Explosionen, Lava machen das aufwendig.
-2. **Wiederkehrende Events** (z. B. jeden Samstag 20 Uhr) – heute muss man jedes einzeln anlegen.
+2. **Wiederkehrende Events** (z. B. jeden Samstag 20 Uhr) – heute gibt es „Nochmal planen“ (eine Woche später), aber keine Serie.
 3. **Befehle für Handel und Teams im Spiel** (z. B. Einladung annehmen per Klick) – heute gibt es dazu nur Nachrichten.
 4. **Gelände in der Claim-Karte**, z. B. aus BlueMaps Flach-Ansicht.
 5. **Bestehende Welten:** entdeckte Chunks aus den Region-Dateien (InhabitedTime) übernehmen.

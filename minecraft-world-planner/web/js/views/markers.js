@@ -7,6 +7,8 @@ import { navigate } from '../router.js';
 import { load, myTeams, options, store, label } from '../store.js';
 import { act, confirmDialog, copyText, dimName, el, fill, formDialog, pill, toast } from '../util.js';
 import { bind, favButton, pageHead, searchInput, segmented, selectInput, teamBadgeById } from './common.js';
+import { eventTitle } from '../eventfmt.js';
+import { createEvent, eventsOn } from './events.js';
 
 const state = { filter: 'all', type: '', dim: '', q: '', sort: 'name' };
 
@@ -115,6 +117,8 @@ export function markerItem(m, compact = false) {
       el('button', { class: 'small', onclick: () => copyText(tpCommand(m.dimension, m.x, m.y ?? 64, m.z)) }, 'TP-Befehl'),
       el('button', { class: 'small', onclick: () => copyText(`${m.x} ${m.y ?? '~'} ${m.z}`) }, 'Koordinaten'),
       myPosition() ? navigateButton(`api/markers/${enc(m.id)}/navigate`) : null,
+      !compact && eventsOn() ? el('button', { class: 'small marker-event', onclick: () => createEvent({ title: eventTitle(`Treffen: ${m.name}`),
+        place: { dimension: m.dimension, x: m.x, y: m.y ?? null, z: m.z } }) }, '📅 Event hier') : null,
       m.canEdit ? el('button', { class: 'small', onclick: () => openMarkerForm(m) }, 'Bearbeiten') : null,
       m.canEdit ? el('button', { class: 'small danger-text', onclick: () => deleteMarker(m) }, 'Löschen') : null));
 }

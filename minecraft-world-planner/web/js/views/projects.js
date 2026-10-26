@@ -5,6 +5,8 @@ import { navigate } from '../router.js';
 import { landById, load, myTeams, options, projectById, store, label } from '../store.js';
 import { act, confirmDialog, dimName, el, fill, fmtAgo, fmtDate, formDialog, pill, progressBar } from '../util.js';
 import { bind, favButton, pageHead, playerDatalist, searchInput, segmented, selectInput, teamBadgeById } from './common.js';
+import { eventTitle } from '../eventfmt.js';
+import { createEvent, eventsOn } from './events.js';
 import { myPosition } from './markers.js';
 
 const state = { filter: 'open', q: '', sort: 'due' };
@@ -185,6 +187,14 @@ function updatesSection(p) {
       : el('p', { class: 'muted', text: 'Noch keine Updates.' }));
 }
 
+/** „Bauabend planen“: Gemeinsam bauen am Ort des Projekts. Ein Team-Projekt wird ein Team-Event (im Formular änderbar). */
+function projectEvent(p, land) {
+  const team = p.teamId && myTeams().some(t => t.id === p.teamId) ? p.teamId : null;
+  return { kind: 'together', title: eventTitle(`Bauabend: ${p.name}`), description: `Wir bauen weiter an »${p.name}«.`,
+    landId: land ? land.id : null, place: p.location ? { dimension: p.location.dimension, x: p.location.x, z: p.location.z } : null,
+    visibility: team && p.visibility !== 'public' ? 'team' : 'all', teamId: team };
+}
+
 function renderDetail(root, id) {
   const draw = () => {
     const p = projectById(id);
@@ -201,6 +211,7 @@ function renderDetail(root, id) {
           pill(label('projectVisibility', p.visibility), 'muted'), favButton('projects', p.id))),
         el('div', { class: 'row' },
           p.location ? el('button', { onclick: () => { navigate('#/karte'); showPoint(p.location.dimension, p.location.x + 0.5, p.location.z + 0.5, 1.5); } }, 'Auf Karte') : null,
+          eventsOn() && p.status !== 'done' ? el('button', { id: 'projectEvent', onclick: () => createEvent(projectEvent(p, land)) }, '📅 Bauabend planen') : null,
           p.can.edit ? el('button', { class: 'primary', onclick: async () => {
             const v = await formDialog({ title: 'Projekt bearbeiten', fields: projectFields(p), validate: validateProject });
             if (v) await projectAction(p, 'edit', toBody(v), 'Gespeichert.');

@@ -110,6 +110,15 @@ export function debounce(fn, ms) {
 // ------------------------------------------------------------------ Rückmeldungen
 
 let toastTimer;
+/** Eine Datei im Browser speichern lassen – nichts geht an einen Server. */
+export function downloadFile(name, content, type) {
+  const blob = new Blob([content], { type });
+  const a = el('a', { href: URL.createObjectURL(blob), download: name });
+  document.body.append(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
 export function toast(msg, isError = false) {
   const t = $('toast');
   if (!t) return;

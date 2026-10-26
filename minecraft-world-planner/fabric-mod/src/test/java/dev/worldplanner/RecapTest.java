@@ -56,6 +56,15 @@ class RecapTest {
         w.projects.update(carl, false, secret, json("status", "done"));
         w.projects.update(alice, false, reopened, json("status", "done"));
         w.projects.update(alice, false, reopened, json("status", "in_progress"));
+        // Aus einem Export importiert: fertig und mit erledigter Aufgabe – aber wann, weiß niemand. Zählt nicht als „diese Woche“.
+        JsonObject old = json("name", "Alte Mühle", "status", "done");
+        JsonArray oldTasks = new JsonArray();
+        JsonObject oldTask = new JsonObject();
+        oldTask.addProperty("text", "Flügel");
+        oldTask.addProperty("done", true);
+        oldTasks.add(oldTask);
+        old.add("tasks", oldTasks);
+        w.projects.create(alice, false, old, true);
         String task = w.projects.addTask(alice, false, bridge, "Geländer");
         w.projects.editTask(alice, false, bridge, task, null, true);
         w.projects.addTask(alice, false, bridge, "Laternen");
@@ -87,7 +96,8 @@ class RecapTest {
         assertEquals("Neustadt", r.getAsJsonObject("lands").getAsJsonArray("latest").get(0).getAsJsonObject().get("name").getAsString());
 
         JsonObject projects = r.getAsJsonObject("projects");
-        assertEquals(List.of("Brücke"), names(projects.getAsJsonArray("done"), "name"), "Carls privates Projekt sieht Alice nicht, der Turm ist wieder offen");
+        assertEquals(List.of("Brücke"), names(projects.getAsJsonArray("done"), "name"),
+                "Carls privates Projekt sieht Alice nicht, der Turm ist wieder offen, die importierte Mühle zählt nicht");
         assertEquals(1, projects.get("tasksDone").getAsInt());
 
         JsonObject events = r.getAsJsonObject("events");

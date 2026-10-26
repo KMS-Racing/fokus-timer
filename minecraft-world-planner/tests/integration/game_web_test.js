@@ -9,15 +9,33 @@ const [codeA, codeB] = process.argv.slice(2);
 if (!codeA || !codeB) { console.error('Aufruf: node game_web_test.js <code-A> <code-B>'); process.exit(2); }
 const SHOTS = process.env.SHOT_DIR || null;
 
-/** Texte der Dashboard-Liste „Zu erledigen“ und der Liste, die auch im Spiel steht (/api/todo). */
+/**
+ * Texte der Dashboard-Liste „Zu erledigen“ und der Liste, die auch im Spiel steht (/api/todo).
+ * Zugeklappt zeigt das Dashboard nur die ersten 6 (before, moreText) – für den Vergleich wird es aufgeklappt (dashboard).
+ */
 async function bothLists(page) {
-  await page.evaluate(() => Promise.all([planner.load.lands(), planner.load.teams(), planner.load.trades(), planner.load.projects(), planner.load.me()]));
+  await page.evaluate(() => Promise.all([planner.load.lands(), planner.load.teams(), planner.load.trades(), planner.load.projects(),
+    planner.load.events(), planner.load.me()]));
   await page.evaluate(() => planner.navigate('#/dashboard'));
   await page.waitForSelector('#todoCard');
   await page.waitForTimeout(300);
+  const before = await page.$$eval('#todoCard li a', as => as.map(a => a.textContent));
+  const moreText = await page.$eval('#todoMore', b => b.textContent).catch(() => null);
+  if (moreText) {
+    await page.click('#todoMore');
+    await page.waitForSelector('#todoMore[aria-expanded=true]');
+  }
   const dashboard = await page.$$eval('#todoCard li a', as => as.map(a => a.textContent));
   const game = await page.evaluate(async () => (await planner.api('api/todo')).items.map(i => i.text));
-  return { dashboard, game };
+  return { dashboard, game, before, moreText };
+}
+
+/** Mehr als 6: die ersten 6 und „… und N weitere anzeigen“; sonst alle ohne Knopf. */
+function shortened(lists) {
+  const n = lists.game.length;
+  return n > 6
+    ? JSON.stringify(lists.before) === JSON.stringify(lists.game.slice(0, 6)) && lists.moreText === `… und ${n - 6} weitere anzeigen`
+    : lists.moreText === null && lists.before.length === n;
 }
 
 (async () => {
@@ -48,12 +66,14 @@ async function bothLists(page) {
   const listsA = await bothLists(page);
   check('Dashboard = Liste im Spiel (Spieler A)', JSON.stringify(listsA.dashboard) === JSON.stringify(listsA.game),
     '\n  Dashboard: ' + JSON.stringify(listsA.dashboard) + '\n  Spiel:     ' + JSON.stringify(listsA.game));
+  check(`Zugeklappt nur die ersten 6, Rest per Knopf (A hat ${listsA.game.length})`, shortened(listsA), JSON.stringify([listsA.before.length, listsA.moreText]));
   const pageB = await browser.newPage({ viewport: { width: 1200, height: 900 } });
   const problemsB = collectProblems(pageB);
   await login(pageB, codeB);
   const listsB = await bothLists(pageB);
   check('Dashboard = Liste im Spiel (Spieler B)', JSON.stringify(listsB.dashboard) === JSON.stringify(listsB.game),
     '\n  Dashboard: ' + JSON.stringify(listsB.dashboard) + '\n  Spiel:     ' + JSON.stringify(listsB.game));
+  check(`Zugeklappt nur die ersten 6, Rest per Knopf (B hat ${listsB.game.length})`, shortened(listsB), JSON.stringify([listsB.before.length, listsB.moreText]));
   check('Die Listen sind nicht einfach leer', listsA.game.length + listsB.game.length > 0, 'beide leer – Test sagt dann wenig');
 
   // 3) Mess-Werkzeug

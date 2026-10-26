@@ -42,6 +42,8 @@ final class EventStore extends JsonStore {
     static final long ASK_AHEAD_MS = 7L * 24 * 3600_000;
     /** Eine Verschiebung wird bis zu einen Tag lang gemeldet. */
     static final long MOVED_NOTICE_MS = 24 * 3600_000L;
+    /** Die Liste enthält vergangene Events nur so lange (ältere bleiben gespeichert und per Link erreichbar) – sonst wächst sie ewig. */
+    static final long LIST_PAST_MS = 60L * 24 * 3600_000;
     private static final String DEFAULT_DIMENSION = "minecraft:overworld";
     private static final String[] WEEKDAYS = {"Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"};
 
@@ -235,7 +237,7 @@ final class EventStore extends JsonStore {
 
     synchronized JsonArray listJson(UUID viewer, boolean admin, long now) {
         JsonArray arr = new JsonArray();
-        events.values().stream().filter(e -> canView(e, viewer)).sorted(Comparator.comparingLong((Event e) -> e.start))
+        events.values().stream().filter(e -> canView(e, viewer) && e.end() >= now - LIST_PAST_MS).sorted(Comparator.comparingLong((Event e) -> e.start))
                 .forEach(e -> arr.add(json(e, viewer, admin, now)));
         return arr;
     }

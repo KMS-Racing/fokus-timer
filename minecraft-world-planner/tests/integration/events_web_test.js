@@ -2,8 +2,9 @@
 // und das Dashboard (Nächste Events, Rückblick wie die API, „Zu erledigen“ mit demselben Text wie /api/todo im Spiel), Handy.
 // Aufruf: node events_web_test.js <code-A> <code-B>
 'use strict';
+const fs = require('fs');
 const path = require('path');
-const { launch, makeChecker, collectProblems, login, waitUntil } = require('./lib');
+const { launch, makeChecker, collectProblems, login, todoText, waitUntil } = require('./lib');
 
 const [codeA, codeB] = process.argv.slice(2);
 if (!codeB) { console.error('Aufruf: node events_web_test.js <code-A> <code-B>'); process.exit(2); }
@@ -17,6 +18,12 @@ async function dialogSubmit(page) {
 
 const hash = page => page.evaluate(() => location.hash);
 const eventApi = (page, id) => page.evaluate(i => planner.api('api/events/' + i), id);
+/** Alle Felder des offenen Formulars als { name: Wert }. */
+const formValues = page => page.evaluate(() => Object.fromEntries([...document.querySelectorAll('#modal [name]')].map(x => [x.name, x.value])));
+async function closeDialog(page) {
+  await page.click('#modal button:has-text("Abbrechen")');
+  await page.waitForSelector('#modal', { state: 'hidden' });
+}
 
 (async () => {
   const { check, summary } = makeChecker();
@@ -93,18 +100,83 @@ const eventApi = (page, id) => page.evaluate(i => planner.api('api/events/' + i)
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'events-kalender.png'), fullPage: true });
   await page.click('.segmented button:has-text("Liste")');
 
+  // 3b) Kalender-Datei fürs Handy, „Nochmal planen“, „Event hier planen“ von Land, Marker und Projekt (0.6.1)
+  await page.evaluate(i => planner.navigate('#/events/' + i), id);
+  await page.waitForSelector('#eventIcs');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#eventIcs')]);
+  const ics = fs.readFileSync(await dl.path(), 'utf8');
+  const icsLines = ics.replace(/\r\n /g, '').split('\r\n');
+  const utc = new Date(at.start).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  check('Kalender-Datei: Dateiname, Beginn in UTC, Titel, Erinnerung 10 Minuten vorher', dl.suggestedFilename() === `${title}.ics`
+    && icsLines.includes(`DTSTART:${utc}`) && icsLines.includes(`SUMMARY:${title}`) && icsLines.includes('TRIGGER:-PT10M') && ics.endsWith('\r\n'),
+  dl.suggestedFilename() + '\n' + ics.slice(0, 500));
+  check('…mit Treffpunkt und Link zurück zur Webseite', icsLines.includes('LOCATION:Minecraft: Oberwelt 100 70 -50')
+    && icsLines.some(l => l.startsWith('URL:') && l.endsWith('#/events/' + id)), ics);
+
+  await page.click('#eventAgain');
+  await page.waitForSelector('#modal input[name=title]');
+  const again = await page.evaluate(async s => {
+    const f = await import('./js/eventfmt.js');
+    const tz = planner.store.meta.timeZone;
+    const n = f.nextWeekSameTime(s, tz, Date.now() + 60000);
+    return { date: f.dayKey(n, tz), start: n };
+  }, at.start);
+  let form = await formValues(page);
+  check('Nochmal planen: dasselbe Event eine Woche später zur selben Uhrzeit', form.title === title && form.date === again.date && form.time === '18:30'
+    && form.minutes === '120' && form.kind === 'build' && form.placeType === 'coords' && form.x === '100' && form.y === '70' && form.z === '-50', JSON.stringify(form));
+  await dialogSubmit(page);
+  await waitUntil(async () => { const h = await hash(page); return h.startsWith('#/events/') && h !== '#/events/' + id; });
+  const id2 = (await hash(page)).split('/')[2];
+  const e2 = await eventApi(page, id2);
+  check('…angelegt: neuer Beginn, Zusagen nicht mitkopiert (nur Alice)', e2.start === again.start && e2.counts.yes === 1 && e2.counts.maybe === 0,
+    JSON.stringify([e2.start, again.start, e2.counts]));
+  await page.evaluate(i => planner.api(`api/events/${i}/delete`, {}), id2);
+
+  const land = await page.evaluate(() => planner.store.lands[0] || null);
+  check('Es gibt ein Land zum Ausprobieren', !!land);
+  if (land) {
+    await page.evaluate(i => planner.navigate('#/claims/' + i), land.id);
+    await page.click('#landEvent');
+    await page.waitForSelector('#modal select[name=placeType]');
+    form = await formValues(page);
+    check('Land: „Event hier planen“ – Treffpunkt ist das Land', form.placeType === 'land' && form.landId === land.id, JSON.stringify(form));
+    await closeDialog(page);
+  }
+  const marker = await page.evaluate(async r => {
+    const m = await planner.api('api/markers', { name: 'Test-Treffpunkt ' + r, dimension: 'minecraft:overworld', x: 33, y: 64, z: -44, visibility: 'private' });
+    await planner.load.markers();
+    return m.id;
+  }, run);
+  await page.evaluate(() => planner.navigate('#/marker'));
+  const markerButton = page.locator('.item', { hasText: 'Test-Treffpunkt ' + run }).locator('.marker-event');
+  await markerButton.click();
+  await page.waitForSelector('#modal select[name=placeType]');
+  form = await formValues(page);
+  check('Marker: „Event hier“ – Koordinaten und Titel vorausgefüllt', form.placeType === 'coords' && form.x === '33' && form.y === '64' && form.z === '-44'
+    && form.title === `Treffen: Test-Treffpunkt ${run}`, JSON.stringify(form));
+  await closeDialog(page);
+  await page.evaluate(i => planner.api(`api/markers/${i}/delete`, {}), marker);
+  const project = await page.evaluate(async r => (await planner.api('api/projects', { name: 'Test-Projekt ' + r, visibility: 'private' })).id, run);
+  await page.evaluate(async i => { await planner.load.projects(); planner.navigate('#/projekte/' + i); }, project);
+  await page.click('#projectEvent');
+  await page.waitForSelector('#modal select[name=kind]');
+  form = await formValues(page);
+  check('Projekt: „Bauabend planen“ – Gemeinsam bauen, Titel mit dem Projekt', form.kind === 'together' && form.title === `Bauabend: Test-Projekt ${run}`,
+    JSON.stringify(form));
+  await closeDialog(page);
+  await page.evaluate(i => planner.api(`api/projects/${i}/delete`, {}), project);
+
   // 4) Bob: Einladung auf dem Dashboard – derselbe Text wie im Spiel (/api/todo kommt vom Server)
   const ctxB = await browser.newContext({ viewport: { width: 1400, height: 950 } });
   const pageB = await ctxB.newPage();
   const problemsB = collectProblems(pageB);
   await login(pageB, codeB);
   await pageB.evaluate(() => planner.load.events());
-  await pageB.waitForSelector('#todoCard');
   const expected = `Event: »${title}« am ${at.when} – kommst du?`;
   const serverTodo = await pageB.evaluate(() => planner.api('api/todo'));
   check('Server (/api/todo, wie im Spiel): „Event: … – kommst du?“', serverTodo.items.some(i => i.text === expected), JSON.stringify(serverTodo.items.map(i => i.text).filter(t => t.startsWith('Event'))));
-  await waitUntil(async () => (await pageB.textContent('#todoCard')).includes(expected));
-  check('Dashboard zeigt genau denselben Text', (await pageB.textContent('#todoCard')).includes(expected));
+  await waitUntil(async () => (await todoText(pageB)).includes(expected));
+  check('Dashboard zeigt genau denselben Text', (await todoText(pageB)).includes(expected));
   const badge = await pageB.$eval('[data-badge=events]', b => (b.classList.contains('hidden') ? 0 : Number(b.textContent)));
   check('Zahl am Reiter „Events“ = offene Einladungen', badge >= 1, badge);
   await pageB.evaluate(i => planner.navigate('#/events/' + i), id);
@@ -114,8 +186,7 @@ const eventApi = (page, id) => page.evaluate(i => planner.api('api/events/' + i)
   await waitUntil(async () => (await eventApi(pageB, id)).counts.yes === 2);
   check('Bob sagt zu: 2 kommen', true);
   await pageB.evaluate(() => planner.navigate('#/dashboard'));
-  await pageB.waitForSelector('#todoCard');
-  await waitUntil(async () => !(await pageB.textContent('#todoCard')).includes(expected));
+  await waitUntil(async () => !(await todoText(pageB)).includes(expected));
   check('…und die Einladung ist bei „Zu erledigen“ weg', true);
 
   // 5) Alice verschiebt um eine Stunde – Bob hat geantwortet, also merkt sich der Server die Verschiebung
@@ -158,7 +229,7 @@ const eventApi = (page, id) => page.evaluate(i => planner.api('api/events/' + i)
   check('Abgesagt: Hinweis mit Grund', (await page.textContent('#eventCancelled')).includes('Server-Wartung'));
   check('…keine Zusage-Knöpfe mehr', (await page.$$('#eventAnswer button[data-answer]')).length === 0);
   await pageB.evaluate(() => Promise.all([planner.load.events()]));
-  await waitUntil(async () => (await pageB.textContent('#todoCard')).includes(`Abgesagt: »${title}«`));
+  await waitUntil(async () => (await todoText(pageB)).includes(`Abgesagt: »${title}«`));
   check('Bob (hatte zugesagt) sieht die Absage bei „Zu erledigen“', true);
   await page.click('button:has-text("Löschen")');
   await dialogSubmit(page);

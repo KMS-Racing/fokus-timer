@@ -3,7 +3,7 @@
 // Auktion mit Gebot, Team auflösen ohne Datenverlust.
 // Aufruf: node smp_browser_test.js <code-A> <code-B> <name-B>   (beide keine OPs)
 'use strict';
-const { launch, makeChecker, collectProblems, login } = require('./lib');
+const { launch, makeChecker, collectProblems, login, todoText, waitUntil } = require('./lib');
 
 const [codeA, codeB, nameB] = process.argv.slice(2);
 if (!codeA || !codeB || !nameB) { console.error('Aufruf: node smp_browser_test.js <code-A> <code-B> <name-B>'); process.exit(2); }
@@ -131,8 +131,7 @@ async function cleanup(page) {
   await b.waitForSelector('#handoverBox', { timeout: 8000 });
   check('B: gekauft, Übergabe offen', (await b.textContent('#viewRoot')).includes('Du hast gekauft') && (await b.textContent('#handoverBox')).includes('Übergabe offen'));
   await go(b, '#/dashboard');
-  await b.waitForFunction(t => document.querySelector('#todoCard') && document.querySelector('#todoCard').textContent.includes('Du hast »' + t + '« gekauft'), title, { timeout: 8000 });
-  check('B: Dashboard erinnert an die Übergabe', true);
+  check('B: Dashboard erinnert an die Übergabe', await waitUntil(async () => (await todoText(b)).includes('Du hast »' + title + '« gekauft')));
   await go(a, listingHash);
   await a.evaluate(() => planner.load.trades());
   await a.waitForSelector('#confirmHandoverBtn', { timeout: 8000 });

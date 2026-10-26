@@ -125,6 +125,11 @@ final class ProjectStore extends JsonStore {
     // ------------------------------------------------------------------ Ändern
 
     synchronized String create(UUID actor, boolean admin, JsonObject data) {
+        return create(actor, admin, data, false);
+    }
+
+    /** imported = aus einem Export: Wann es fertig wurde, weiß niemand – dann zählt es nicht im Wochen-Rückblick. */
+    synchronized String create(UUID actor, boolean admin, JsonObject data, boolean imported) {
         long own = projects.values().stream().filter(p -> p.createdBy.equals(actor)).count();
         if (!admin && own >= config.maxProjectsPerPlayer()) {
             throw PlannerException.badRequest("Du hast schon " + own + " Projekte (Maximum " + config.maxProjectsPerPlayer() + ").");
@@ -132,7 +137,7 @@ final class ProjectStore extends JsonStore {
         long now = System.currentTimeMillis();
         Project p = new Project(UUID.randomUUID().toString(), actor, now);
         apply(p, actor, data, true);
-        if (p.status.equals("done")) p.doneAt = now;
+        if (p.status.equals("done") && !imported) p.doneAt = now;
         projects.put(p.id, p);
         changed();
         return p.id;
@@ -368,7 +373,7 @@ final class ProjectStore extends JsonStore {
                 if (isObject && e.getAsJsonObject().has("done") && e.getAsJsonObject().get("done").getAsBoolean()) {
                     t.done = true;
                     t.doneBy = actor;
-                    t.doneAt = System.currentTimeMillis();
+                    t.doneAt = 0; // nur der Import schickt erledigte Aufgaben – wann sie erledigt wurden, ist unbekannt (zählt nicht im Rückblick)
                 }
                 p.tasks.add(t);
             }

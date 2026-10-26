@@ -6,6 +6,7 @@ import { navigate } from '../router.js';
 import { landById, load, myTeams, store } from '../store.js';
 import { act, confirmDialog, dimName, el, fill, fmtAgo, fmtDate, formDialog, pill, plural, swatch } from '../util.js';
 import { bind, favButton, pageHead, playerDatalist, searchInput, segmented, selectInput, teamBadgeById } from './common.js';
+import { createEvent, eventsOn } from './events.js';
 import { myPosition, navigateButton } from './markers.js';
 
 const state = { filter: 'all', q: '', dim: '', sort: 'name' };
@@ -201,6 +202,7 @@ function renderDetail(root, id) {
           el('button', { onclick: () => openOnMap(l) }, 'Auf Karte'),
           el('button', { onclick: () => in3D(l) }, 'In 3D'),
           myPosition() ? navigateButton(`api/lands/${enc(l.id)}/navigate`) : null,
+          eventsOn() ? el('button', { id: 'landEvent', onclick: () => createEvent({ landId: l.id }) }, '📅 Event hier planen') : null,
           l.can && l.can.edit ? el('button', { class: 'primary', onclick: () => editLand(l) }, 'Bearbeiten') : null)),
       l.invitedMe ? el('section', { class: 'card highlight' }, el('p', { text: 'Du bist eingeladen, dieses Land mitzubesitzen.' }),
         el('div', { class: 'row' },

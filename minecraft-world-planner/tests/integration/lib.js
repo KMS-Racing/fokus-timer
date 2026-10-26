@@ -64,4 +64,14 @@ async function login(page, code) {
   await page.waitForSelector('#appView:not(.hidden)', { timeout: 15000 });
 }
 
-module.exports = { PLANNER_URL, launch, makeChecker, waitUntil, collectProblems, login };
+/**
+ * Text von „Zu erledigen“ auf dem Dashboard, ganz aufgeklappt – zugeklappt zeigt es nur die ersten 6 (seit 0.6.1).
+ * Klappt bei jedem Aufruf neu auf, weil die Liste nachladen kann.
+ */
+async function todoText(page) {
+  await page.waitForSelector('#todoCard');
+  if (await page.$('#todoMore[aria-expanded=false]')) await page.click('#todoMore');
+  return page.textContent('#todoCard');
+}
+
+module.exports = { PLANNER_URL, launch, makeChecker, waitUntil, collectProblems, login, todoText };

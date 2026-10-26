@@ -13,11 +13,7 @@ export function applyTheme() {
 }
 
 function download(name, data) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const a = el('a', { href: URL.createObjectURL(blob), download: name });
-  document.body.append(a);
-  a.click();
-  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  downloadFile(name, JSON.stringify(data, null, 2), 'application/json');
 }
 
 async function exportData() {

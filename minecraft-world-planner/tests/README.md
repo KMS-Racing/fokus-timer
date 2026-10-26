@@ -3,7 +3,7 @@
 | Art | Wo | Braucht | Aufruf |
 |---|---|---|---|
 | **Java-Unit-Tests** (Regeln, Rechte, Handel inkl. gleichzeitiger Zugriffe, Speichern, Umstellung von 0.2) | `fabric-mod/src/test/java` | Java 25 | `cd fabric-mod && ./gradlew test` |
-| **Web-Unit-Tests** (Koordinaten, Messen, Statistik-Zahlen und -Tage, Event-Zeiten in Server-Zeitzone, Kalender, Event-Hinweise) | `tests/web` | Node.js 22 | `node --test tests/web/*.test.mjs` |
+| **Web-Unit-Tests** (Koordinaten, Messen, Statistik-Zahlen und -Tage, Event-Zeiten in Server-Zeitzone, Kalender, Event-Hinweise, Kalender-Datei .ics, „nächste Woche“ über die Zeitumstellung, Titel-Vorschläge) | `tests/web` | Node.js 22 | `node --test tests/web/*.test.mjs` |
 | **Integrationstests** (echter Server, echte API, echter Browser) | `tests/integration` | Testserver + Python 3 + Playwright | siehe unten |
 
 Die Integrationstests prüfen nicht nur, ob Knöpfe da sind. Sie schauen nach, was der Server wirklich gespeichert hat,
@@ -19,11 +19,11 @@ schicken gleichzeitige Anfragen (Gebote, Käufe) und messen, wo die BlueMap-Kame
 | `bluemap_sync_test.js` | BlueMap übernimmt Position und Zoom der Karte wirklich (misst die Kamera im iframe) |
 | `chat_tags_test.py` | Team-Kürzel im Spiel: liest die Server-Konsole mit (`/team list`, `/say`) – braucht `TESTSERVER_DIR` |
 | `game_integration_test.py` | Spiel-Integration: Nachrichten (live, beim Einloggen, abgeschaltet), Land-Anzeige, Todespunkt, `/planer`, `/tc`, „überboten“ – liest die DEBUG-Zeilen der Mod im Server-Log |
-| `game_web_test.js` | Schalter „Im Spiel“ in den Einstellungen, Dashboard-Liste = Liste im Spiel (`/api/todo`, wörtlich), Mess-Werkzeug, Handy |
+| `game_web_test.js` | Schalter „Im Spiel“ in den Einstellungen, Dashboard-Liste = Liste im Spiel (`/api/todo`, wörtlich und in derselben Reihenfolge), zugeklappt nur die ersten 6 mit „… und N weitere anzeigen“, Mess-Werkzeug, Handy |
 | `stats_test.py` | Statistik mit echten Aktionen von Fake-Spielern (Blöcke setzen, springen, Diamanterz abbauen, an Fallschaden sterben): Zahlen, Ranglisten, Todesursache, alle für alle sichtbar (Ausblenden → 400), `/planer statistik` ohne Ränge, `/planer top` und `/planer ranglisten` gibt es nicht mehr. Außerdem 20 s künstlicher Lag (`/tick rate 10`): Aktiv + AFK muss genauso wachsen wie Minecrafts Spielzeit |
 | `events_test.py` | Events auf dem Server: Einladung im Chat mit [Komme], `/planer events`, `/planer event <id> ja`, Verschieben und Absagen (nur wer zugesagt hat), Erinnerung („In 2 Minuten“) und Start („Jetzt“) – ein Event beginnt dafür in gut 2 Minuten. Außerdem: `/api/races` und `/rennen` gibt es nicht mehr |
 | `stats_web_test.js` | Statistik- und Ranglisten-Seiten zeigen dasselbe wie die API (Kacheln, Wärmekarte mit leeren Feldern ohne Messung, Pfeiltasten, Tabellen-Ansicht, Ranglisten als eigener Reiter, alter Link leitet um, kein „Mich ausblenden“, Einstellungen mit Hinweis statt Schalter), Handy |
-| `events_web_test.js` | Events im Browser: Formular (Uhrzeit = Server-Zeit), Liste, Kalender, Zusagen umschalten, Bob sieht auf dem Dashboard wörtlich denselben Text wie `/api/todo` im Spiel, Verschieben, Absagen, Löschen; Rückblick-Zahlen = API; Handy |
+| `events_web_test.js` | Events im Browser: Formular (Uhrzeit = Server-Zeit), Liste, Kalender, Zusagen umschalten, Bob sieht auf dem Dashboard wörtlich denselben Text wie `/api/todo` im Spiel, Verschieben, Absagen, Löschen; Kalender-Datei wirklich herunterladen und prüfen (UTC, Erinnerung, Treffpunkt), „Nochmal planen“, „Event hier planen“ bei Land, Marker und Projekt; Rückblick-Zahlen = API; Handy |
 | `restart_check.py` | Alle Daten vor und nach einem Server-Neustart vergleichen (`save`, Server neu starten, `compare`) – ab 0.6 auch ein Team-Event mit Treffpunkt und Zusage. Taugt auch für Updates: Kennt der alte Server noch keine Events, fehlt nur dieser Teil |
 | `crash_check.py` | Absturz: wartet, bis der Planer neuer gespeichert hat als Minecraft (`wait`), dann `kill -9`, Neustart, `compare` – Statistik-Verlauf, Zuwachs gestern und Aktiv ≤ Spielzeit müssen stimmen |
 

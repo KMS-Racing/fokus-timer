@@ -11,6 +11,12 @@ import { createProject } from './projects.js';
 
 const enc = encodeURIComponent;
 const tz = () => (store.meta && store.meta.timeZone) || 'Europe/Berlin';
+/** So viele Einträge zeigt „Zu erledigen“ zugeklappt – wie die Zusammenfassung im Spiel beim Einloggen. */
+const TODO_SHOWN = 6;
+let todosOpen = false;
+const TODO_RANK = { danger: 1, invite: 2, warn: 3, info: 4 };
+/** Wie Notices.rank(): Event beginnt gleich oder gerade, Streitfall, Einladung, Warnung, Info. */
+const todoRank = t => (t.urgent ? 0 : TODO_RANK[t.kind] ?? 4);
 
 /** Rückblick auf die letzten 7 Tage – alles vom Server (/api/recap), nichts geschätzt. */
 function recapCard() {
@@ -111,12 +117,25 @@ export function todoItems() {
     items.push({ kind: 'warn', text: `Projekt überfällig: »${p.name}«`, href: '#/projekte/' + enc(p.id) });
   }
   items.push(...eventTodos(store.events, serverNow(), tz()));
-  return items;
+  return items.sort((a, b) => todoRank(a) - todoRank(b)); // stabil: gleicher Rang bleibt in Reihenfolge, wie im Spiel
+}
+
+/** Die ersten TODO_SHOWN Einträge, der Rest zum Aufklappen. */
+function todoList(todos, redraw) {
+  if (!todos.length) return el('p', { class: 'muted', text: 'Nichts offen. 🎉' });
+  const rest = todos.length - TODO_SHOWN;
+  return [
+    el('ul', { class: 'todo', id: 'todoList' }, (todosOpen ? todos : todos.slice(0, TODO_SHOWN)).map(t =>
+      el('li', { class: t.kind }, el('a', { href: t.href, text: t.text })))),
+    rest > 0 ? el('button', { class: 'small todo-more', id: 'todoMore', 'aria-expanded': String(todosOpen),
+      onclick: () => { todosOpen = !todosOpen; redraw(); } }, todosOpen ? 'Weniger anzeigen' : `… und ${rest} weitere anzeigen`) : null,
+  ];
 }
 
 export default {
   title: 'Dashboard',
   render(root) {
+    todosOpen = false;
     Promise.allSettled([load.teams(), load.trades(), load.projects(), load.activity(), load.people(), load.events(), load.recap()]);
     const draw = () => {
       const me = store.me || {};
@@ -146,9 +165,8 @@ export default {
           stat(myListings.length, 'aktive Angebote', '#/handel')),
         el('div', { class: 'grid two' },
           el('section', { class: 'card', id: 'todoCard' },
-            el('h2', { text: 'Zu erledigen' }),
-            todos.length ? el('ul', { class: 'todo' }, todos.map(t => el('li', { class: t.kind }, el('a', { href: t.href, text: t.text }))))
-              : el('p', { class: 'muted', text: 'Nichts offen. 🎉' })),
+            el('h2', { text: todos.length > TODO_SHOWN ? `Zu erledigen (${todos.length})` : 'Zu erledigen' }),
+            todoList(todos, draw)),
           el('section', { class: 'card' },
             el('h2', { text: 'Server' }),
             el('dl', { class: 'facts' },

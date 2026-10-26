@@ -5,7 +5,7 @@ Die Mod bringt ihre Webseite selbst mit – kein extra Webhosting nötig.
 
 | Bereich | Was er kann |
 |---|---|
-| 🏠 **Dashboard** | „Zu erledigen“ (Einladungen, überboten, Übergaben, Bewerbungen, überfällige Projekte, Events), deine Zahlen, Server-Status, **nächste Events**, **Rückblick auf die letzten 7 Tage**, was zuletzt passiert ist |
+| 🏠 **Dashboard** | „Zu erledigen“ (das Dringendste zuerst, 6 sichtbar, der Rest zum Aufklappen: Events gleich, Streitfälle, Einladungen, überboten, Übergaben, überfällige Projekte, Bewerbungen), deine Zahlen, Server-Status, **nächste Events**, **Rückblick auf die letzten 7 Tage**, was zuletzt passiert ist |
 | 🗺️ **Karte** | Nur **entdeckte** Gebiete, Länder, Marker, Projekte, Spieler, Spawn · Gehe zu Koordinaten · Ebenen · Legende · Maßstab · Regionen · **Messen** (Entfernung, Richtung, Strecke durch den Nether) |
 | 🧊 **Live-Welt** | BlueMap (3D) an derselben Stelle wie die Karte · optional Seed-Vorschau |
 | ⚑ **Claims** | Chunks anklicken → **Vorschau** (frei? entdeckt? zusammenhängend? Limit?) → Land erstellen · Mitbesitzer · Notizen · Team-Zuordnung |
@@ -13,7 +13,7 @@ Die Mod bringt ihre Webseite selbst mit – kein extra Webhosting nötig.
 | ⚔ **Teams** | Rollen Owner / Admin / Moderator / Mitglied / Anwärter · Einladung oder Bewerbung (**nie ohne Zustimmung**) · bestätigte Übergabe · Auflösen ohne Datenverlust · **Kürzel im Spiel**: `[KMS] Alice` im Chat, in der Tab-Liste und über dem Kopf |
 | ⚖ **Handel** | Auktion, Sofortkauf, Festpreis, Tausch und **Hilfe** (Bauen, Kämpfen …) · Gebote, Gegenangebote, Übergabe-Bestätigung, Streitfall |
 | ⚒ **Projekte** | Bauprojekte mit Aufgaben, Fortschritt, Verantwortlichen, Updates, Land/Team/Ort |
-| ◷ **Events** | Bauwettbewerb, Treffen, Party … mit **Kalender** (Liste und Monat), Treffpunkt (Land oder Koordinaten), Zusagen „Komme / Vielleicht / Komme nicht“ · Einladung im Spiel-Chat mit [Komme], **Erinnerung 10 Minuten vorher** und zum Start · Absagen und Verschieben mit Nachricht · auch nur fürs Team |
+| ◷ **Events** | Bauwettbewerb, Treffen, Party … mit **Kalender** (Liste und Monat), Treffpunkt (Land oder Koordinaten), Zusagen „Komme / Vielleicht / Komme nicht“ · Einladung im Spiel-Chat mit [Komme], **Erinnerung 10 Minuten vorher** und zum Start · Absagen und Verschieben mit Nachricht · auch nur fürs Team · **📅 in den Handy-Kalender** (.ics, mit Erinnerung) · **🔁 nochmal nächste Woche** · „Event hier planen“ bei Ländern, Markern und Projekten |
 | ☺ **Spieler** | Wer ist online, wer war zuletzt da, Teams, Länder |
 | ★ **Statistik** | Wie bei CraftAttack: der Server in Zahlen, „Wann ist am meisten los?“, Rekorde, Verlauf mit Toden und Meilensteinen, eine Seite pro Spieler |
 | ♛ **Ranglisten** | **16 Ranglisten** wie bei CraftAttack (Dauerzocker, Friedhof, Diamantenbank, Abrissbirne …) gesamt / 7 Tage / gestern / heute – **alle Spieler, für alle sichtbar**, nur auf der Webseite |
@@ -71,6 +71,7 @@ Fertig ist die Datei `fabric-mod/build/libs/world-planner-0.5.0.jar` (die `...-s
    **Update auf 0.6:** Rennen gibt es nicht mehr. `races.json` bleibt unangetastet liegen (0.6 liest sie nicht) – du kannst
    sie löschen oder aufheben. Neu ist `events.json`. In der Config verschwinden `races` und `maxTracksPerPlayer`, dazu kommen
    `events` und `maxEventsPerPlayer`. Alles andere bleibt gleich (getestet mit einem Update von 0.5.1 auf 0.6.0).
+   **Von 0.6.0 auf 0.6.1:** nur die Jar tauschen – an Dateien und Config ändert sich nichts.
 
 ## 3. Webseite öffnen und einloggen
 
@@ -149,7 +150,8 @@ Teams gründen, Handel und Projekte gehen nur auf der Webseite – im Spiel beko
 
 **Im Spiel** (alles serverseitig – im Spiel braucht niemand eine Mod)
 - **Nachrichten** (`gameNotifications`): Etwa 3 Sekunden nach dem Einloggen kommt „Zu erledigen“ – dieselbe Liste wie auf dem
-  Dashboard (höchstens 6 Zeilen, `/planer` zeigt bis zu 12). Danach kommt **live**, was neu ist: Einladungen, Bewerbungen,
+  Dashboard, in derselben Reihenfolge: das Dringendste zuerst (ein Event, das gleich beginnt, Streitfälle, Einladungen, dann
+  Warnungen wie Übergaben, zuletzt Infos). Höchstens 6 Zeilen, `/planer` zeigt bis zu 12. Danach kommt **live**, was neu ist: Einladungen, Bewerbungen,
   „überboten“, verkauft/gekauft/gewonnen, Gegenangebote, neue Gebote auf dein Angebot, Streitfälle. Viele Gebote hintereinander
   fasst der Planer zusammen (höchstens eine Nachricht alle 15 Sekunden pro Angebot – „überboten“ kommt aber immer sofort).
   Es gibt **keine Nachholung**: Wer offline war, sieht beim Einloggen, was jetzt noch offen ist – keine Liste alter Ereignisse.
@@ -216,6 +218,16 @@ Teams gründen, Handel und Projekte gehen nur auf der Webseite – im Spiel beko
   Nachricht. Absagen und Verschieben bekommen nur die mit „Komme“ oder „Vielleicht“ mit.
 - Ändern, Absagen und Löschen darf nur, wer eingeladen hat (oder ein Admin). Absagen ist meist besser als Löschen: Das Event
   bleibt als „abgesagt“ sichtbar. Höchstens `maxEventsPerPlayer` anstehende Events pro Spieler.
+- **📅 In meinen Kalender:** lädt das Event als `.ics`-Datei herunter (öffnen → Kalender-App übernimmt es) – mit Erinnerung
+  10 Minuten vorher, **auch wenn du nicht im Spiel bist**. Die Datei entsteht im Browser; nichts geht an Google, Apple oder sonst
+  wohin. Wird das Event danach verschoben, ändert sich dein Kalender **nicht** von selbst – lade die Datei neu (manche
+  Kalender-Apps legen es dann doppelt an; das alte musst du dann selbst löschen).
+- **🔁 Nochmal planen** (bei eigenen Events): öffnet das Formular mit demselben Event zur selben Uhrzeit eine Woche später (auch
+  über die Zeitumstellung richtig). Antworten werden nicht übernommen – alle werden neu eingeladen.
+- **📅 Event hier planen** auf der Seite eines Landes, bei einem Marker und **📅 Bauabend planen** bei einem Projekt: Das
+  Formular ist dann schon mit Treffpunkt (und bei Projekten mit „Gemeinsam bauen“) ausgefüllt.
+- Die Liste zeigt alles, was noch kommt, und vergangene Events der letzten 60 Tage. Ältere bleiben gespeichert und sind über
+  ihren Link erreichbar.
 - Wird ein Team aufgelöst, werden seine anstehenden Team-Events abgesagt – und für die früheren Mitglieder verschwinden sie
   (das Team gibt es ja nicht mehr; nur wer eingeladen hat, sieht sie noch). Wird ein Land gelöscht, bleibt der Treffpunkt als
   Koordinate stehen.
@@ -223,7 +235,7 @@ Teams gründen, Handel und Projekte gehen nur auf der Webseite – im Spiel beko
 **Rückblick auf dem Dashboard** – die letzten 7 Tage, nur aus echten Daten: Spielzeit und aktive Spieler (derselbe Zuwachs wie die
 Rangliste „7 Tage“), höchstens gleichzeitig online, die Spitze von sechs Ranglisten, Meilensteine, neue Länder, abgeschlossene
 Projekte und erledigte Aufgaben, vergangene Events (mit „N hatten zugesagt“ – wer wirklich kam, weiß der Planer nicht) und wie
-viele in den nächsten 7 Tagen anstehen. Projekte, die schon vor 0.6 abgeschlossen waren, zählen nicht (das Datum fehlt).
+viele in den nächsten 7 Tagen anstehen. Projekte, die schon vor 0.6 abgeschlossen waren, zählen nicht (das Datum fehlt) – ebenso importierte fertige Projekte und Aufgaben.
 
 ---
 
@@ -332,8 +344,9 @@ Export/Import auf der Webseite (Einstellungen) ist für **deine eigenen** Daten;
   auf einem echten Server geprüft. Wie Farben, Klick-Links, Partikel und die Anzeige über der Hotbar in deinem Spiel **aussehen**,
   konnte ich ohne echten Minecraft-Client nicht ansehen. Auch der Hinweis **nach dem Wiederbeleben** ist nur per Unit-Test geprüft
   (Fake-Spieler werden beim Tod entfernt statt wiederbelebt).
-- **Events-Erinnerungen** kommen nur, wenn du gerade online bist (keine Nachrichten auf Vorrat). Loggst du dich in den
-  10 Minuten vor dem Start ein, steht die Erinnerung bei „Zu erledigen“. Ob jemand wirklich dabei war, weiß der Planer nicht –
+- **Events-Erinnerungen im Spiel** kommen nur, wenn du gerade online bist (keine Nachrichten auf Vorrat). Loggst du dich in den
+  10 Minuten vor dem Start ein, steht die Erinnerung bei „Zu erledigen“. Für eine Erinnerung ohne Spiel: „📅 In meinen Kalender“
+  (ob deine Kalender-App die Datei richtig übernimmt, ließ sich hier nicht prüfen – geprüft ist die Datei selbst). Ob jemand wirklich dabei war, weiß der Planer nicht –
   im Rückblick steht deshalb „hatten zugesagt“. Events gehen nicht in den persönlichen Export (sie sind an Zeit und Server gebunden).
 - **Statistik:** Minecrafts Zahlen gehen bis zum ersten Login zurück, alles Selbstgemessene (AFK, Wann online, Zuwachs, Verlauf)
   erst ab 0.5. Spieler, die seit der Installation des Planers nie online waren, erscheinen erst nach ihrem nächsten Login.

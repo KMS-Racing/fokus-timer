@@ -321,3 +321,55 @@ Auf demselben echten Minecraft-26.3-Server (Fabric API, BlueMap 5.29, Carpet, vi
 Bildschirm – geprüft ist der Text im Server-Log); eine Erinnerung genau 10 Minuten vorher mit echter Wartezeit (der Test nimmt
 2 Minuten, die Grenze prüft ein Unit-Test mit fester Uhr); der Rückblick über eine echte Woche mit vielen Spielern; zurück von
 0.6 auf 0.5.1.
+
+## 0.6.1: Kürzere „Zu erledigen“-Liste, Kalender-Datei, „Nochmal planen“ – und eine gründliche Durchsicht
+
+Deine Wünsche: „kürz die Zu-erledigen-Liste“ und „füge noch Sachen hinzu, die du magst, und guck am Ende alles nach Fehlern durch“.
+
+- **„Zu erledigen“ zeigt 6 Einträge**, darunter „… und N weitere anzeigen“ (aufklappbar), in der Überschrift steht die Zahl.
+  **Neu sortiert, das Dringendste zuerst** – im Spiel und auf der Webseite gleich: ein Event, das gleich beginnt oder gerade
+  begonnen hat, Streitfälle, Einladungen, Warnungen (Übergaben, überboten, überfällig, abgesagt), zuletzt Infos (Bewerbungen).
+  Ohne die neue Reihenfolge hätte das Kürzen geschadet: Vorher standen Events ganz unten – „In 10 Minuten: Bauabend“ wäre hinter
+  29 Übergaben verschwunden. Dasselbe galt schon vorher für die Zusammenfassung im Spiel (höchstens 6 Zeilen).
+- **📅 In meinen Kalender:** Ein Event als `.ics`-Datei für Handy oder PC, mit Erinnerung 10 Minuten vorher – damit gibt es
+  endlich eine Erinnerung, auch wenn man nicht im Spiel ist. Die Datei entsteht im Browser, nichts geht an einen fremden Dienst.
+- **🔁 Nochmal planen:** dasselbe Event eine Woche später, zur selben Uhrzeit – auch über die Zeitumstellung (einfach 7 × 24
+  Stunden dazuzählen hätte aus 20:00 Uhr 19:00 Uhr gemacht). Erst das Formular, dann wird eingeladen.
+- **📅 Event hier planen** auf der Seite eines Landes und bei Markern, **📅 Bauabend planen** bei Projekten: Treffpunkt (und
+  bei Projekten „Gemeinsam bauen“) ist schon ausgefüllt.
+
+**Ehrlich – was die Kalender-Datei nicht kann:** Wird das Event verschoben oder abgesagt, merkt dein Kalender das nicht von
+selbst – die Datei ist eine Momentaufnahme. Neu laden hilft; manche Kalender-Apps legen es dann doppelt an. Ob Google-, Apple-
+oder Outlook-Kalender die Datei richtig übernehmen, konnte ich hier nicht ausprobieren (kein Handy). Geprüft habe ich die Datei
+mit meinem eigenen Test **und** mit einem unabhängigen Kalender-Programm (Python-Bibliothek `icalendar`): Titel mit Komma,
+Semikolon, Backslash und Emoji kommen exakt zurück, Zeiten in UTC, Erinnerung −10 Minuten, keine Fehler.
+
+## Fehler, die bei der Durchsicht von 0.6.1 gefunden und behoben wurden
+
+| Fehler | Gefunden durch | Behoben |
+|---|---|---|
+| **Importierte Projekte hätten im Rückblick als „diese Woche fertig“ gestanden** – wer Projekte über Einstellungen → Import wieder einspielt, dessen fertige Projekte und erledigte Aufgaben bekamen „jetzt“ als Datum. Eine vorgetäuschte Zahl | Code-Durchsicht | Beim Import ist das Datum unbekannt (0) – zählt nicht. Unit-Test, und mit absichtlich wieder eingebautem Fehler geprüft, dass der Test ihn findet |
+| Marker-Namen dürfen Zeichen haben, die in Event-Titeln verboten sind (z. B. „Bob's Haus“) – „Event hier“ hätte einen Titel vorgeschlagen, den der Server ablehnt | Code-Durchsicht | Der Vorschlag lässt verbotene Zeichen weg (dieselbe Regel wie der Server), Unit-Test |
+| Vergangene Events wären für immer alle 20 Sekunden an jeden offenen Browser geschickt worden – nach einem Jahr Hunderte | Code-Durchsicht | Die Liste enthält Vergangenes nur 60 Tage. Gespeichert bleibt alles; ältere Events holt die Detailseite einzeln (von Hand mit einem 70 Tage alten Event auf dem Server geprüft) |
+| Meine eigene neue Doku versprach „ältere Events per Link erreichbar“ – die Detailseite suchte aber nur in der Liste | beim Gegenlesen der eigenen Änderung | siehe oben: einzeln holen. Wurde ein Event gelöscht, während man es ansieht, wird nicht nachgefragt |
+| Test-Fehler: Der SMP-Browser-Test suchte einen neuen Kauf auf dem Dashboard – seit dem Kürzen steht der (bei Bob mit vielen offenen Übergaben auf dem Testserver) im zugeklappten Teil. Der Test brach ab | voller Testlauf | Alle Browser-Tests klappen die Liste über eine gemeinsame Hilfsfunktion auf und prüfen weiter genau denselben Text |
+| Test-Fehler: Mein Test zu „nächste Woche“ rechnete 20 Tage weiter und erwartete den 21.11. – richtig ist der 14.11. (der nächste Samstag) | Unit-Test rot | Erwartung korrigiert, der Code war richtig |
+
+## So wurde 0.6.1 getestet
+
+Auf demselben echten Minecraft-26.3-Server, zum Schluss mit genau der Jar, die ausgeliefert wird:
+- **169** Java-Unit-Tests (neu: Reihenfolge von „Zu erledigen“ im Spiel und in `/api/todo`, 60-Tage-Liste, Bearbeiten eines
+  laufenden Events, importierte Projekte im Rückblick)
+- **20** Web-Unit-Tests (neu: Kalender-Datei – gültig, ≤ 75 Bytes pro Zeile, Sonderzeichen, UTC, Erinnerung; „nächste Woche“
+  über beide Zeitumstellungen; Titel-Vorschläge)
+- Voller Testlauf, alle grün: API **59** Kern + **85** SMP + **46** Handel, Chat-Kürzel **10**, Spiel-Integration **36** + **22**
+  Webseite (neu: zugeklappt nur 6, Rest per Knopf; Reihenfolge = Spiel), Statistik **41** + **23** Browser, Events **30** + **39**
+  Browser (neu: Kalender-Datei wirklich herunterladen und prüfen, „Nochmal planen“, „Event hier planen“ bei Land, Marker und
+  Projekt), Browser **48** Kern + **33** SMP + **22** BlueMap
+- Im vollen Lauf brach der SMP-Browser-Test ab – siehe Tabelle; nach der Korrektur 33/33 (mit derselben Jar)
+- Update von 0.6.0 auf 0.6.1: **21/21** (mit Team-Event), Config Byte für Byte gleich
+- Von Hand: ein 70 Tage altes Event direkt in `events.json` eingetragen – nicht in der Liste, per Link mit Detailseite da;
+  ein unbekannter Link zeigt „gibt es nicht (mehr)“
+
+**Nicht geprüft** (ehrlich): die Kalender-Datei in einer echten Kalender-App auf einem Handy; wie die neue Reihenfolge im
+echten Minecraft-Fenster aussieht (geprüft ist der Text).

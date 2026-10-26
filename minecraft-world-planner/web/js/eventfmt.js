@@ -108,12 +108,89 @@ export function eventTodos(events, now, tz) {
     }
     if (going && until > 0 && until <= SOON_MS) {
       const inText = inMinutes(until);
-      out.push({ kind: 'warn', text: `${inText[0].toUpperCase()}${inText.slice(1)}: ${title}${where(e)}`, href });
+      out.push({ kind: 'warn', urgent: true, text: `${inText[0].toUpperCase()}${inText.slice(1)}: ${title}${where(e)}`, href });
     } else if (going && until <= 0 && -until < JUST_STARTED_MS) {
-      out.push({ kind: 'info', text: `Jetzt: ${title} beginnt${where(e)}`, href });
+      out.push({ kind: 'info', urgent: true, text: `Jetzt: ${title} beginnt${where(e)}`, href });
     } else if (!e.myAnswer && !e.mine && until > 0 && until <= ASK_AHEAD_MS) {
       out.push({ kind: 'invite', text: `Event: ${title} am ${fmtWhen(e.start, tz)} – kommst du?`, href });
     }
   }
   return out;
+}
+
+/**
+ * Dieselbe Uhrzeit (Server-Zeit) eine Woche später – oder so viele Wochen, bis es nach `after` liegt.
+ * Nicht einfach + 7 × 24 Stunden: Über die Zeitumstellung würde aus 20:00 sonst 19:00 oder 21:00.
+ */
+export function nextWeekSameTime(ms, tz, after) {
+  const t = zoned(ms, tz);
+  for (let w = 1; w < 600; w++) {
+    const d = new Date(Date.UTC(t.y, t.m - 1, t.d + 7 * w));
+    const s = zonedToEpoch(`${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`, `${pad(t.h)}:${pad(t.min)}`, tz);
+    if (s > after) return s;
+  }
+  return null;
+}
+
+/** Vorschlag für einen Titel aus einem Marker- oder Projektnamen: nur Zeichen, die der Server erlaubt (Validate.name), höchstens 60. */
+export function eventTitle(text) {
+  return String(text).replace(/[^\p{L}\p{N} _\-.!?+()#:]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 60).trim();
+}
+
+// ------------------------------------------------------------------ Kalender-Datei (.ics, RFC 5545)
+
+const icsTime = ms => new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+const icsText = s => String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+const utf8 = new TextEncoder();
+
+/** Zeilen länger als 75 Bytes umbrechen (Folgezeile beginnt mit Leerzeichen) – nie mitten in einem Umlaut oder Emoji. */
+function fold(line) {
+  const parts = [];
+  let cur = '', bytes = 0;
+  for (const ch of line) {
+    const n = utf8.encode(ch).length;
+    if (bytes + n > (parts.length ? 74 : 75)) { parts.push(cur); cur = ''; bytes = 0; }
+    cur += ch;
+    bytes += n;
+  }
+  parts.push(cur);
+  return parts.join('\r\n ');
+}
+
+/** "Land »Neustadt« · Oberwelt 120 ~ -30" – wo im Spiel. dimLabel macht aus "minecraft:overworld" einen Namen. */
+export function placeText(e, dimLabel = d => d) {
+  const p = e.place;
+  const coords = p ? `${dimLabel(p.dimension)} ${p.x} ${p.y ?? '~'} ${p.z}` : '';
+  if (e.landName) return `Land »${e.landName}«` + (coords ? ` · ${coords}` : '');
+  return coords;
+}
+
+/**
+ * Ein Event als Kalender-Datei für Handy oder PC – mit Erinnerung 10 Minuten vorher, auch wenn man nicht im Spiel ist.
+ * Zeiten in UTC (…Z), damit jeder Kalender sie richtig in seine Zeitzone umrechnet. Nichts wird hochgeladen.
+ */
+export function eventIcs(e, { now, url = '', kind = '', dimLabel } = {}) {
+  const where = placeText(e, dimLabel);
+  const about = [e.description, `${kind ? kind + ' · ' : ''}lädt ein: ${e.organizer ? e.organizer.name : '?'}`, url].filter(Boolean).join('\n\n');
+  const lines = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//World Planner//Minecraft-Events//DE', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:${e.id}@world-planner`,
+    `DTSTAMP:${icsTime(now)}`,
+    `DTSTART:${icsTime(e.start)}`,
+    `DTEND:${icsTime(e.end)}`,
+    `SEQUENCE:${Math.max(0, Math.floor(((e.updated || 0) - (e.created || 0)) / 1000))}`,
+    `SUMMARY:${icsText(e.title)}`,
+    `LOCATION:${icsText(where ? 'Minecraft: ' + where : 'Minecraft')}`,
+    `DESCRIPTION:${icsText(about)}`,
+    url ? `URL:${url}` : null,
+    'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsText(e.title)}`, 'TRIGGER:-PT10M', 'END:VALARM',
+    'END:VEVENT', 'END:VCALENDAR',
+  ].filter(Boolean);
+  return lines.map(fold).join('\r\n') + '\r\n';
+}
+
+/** Dateiname ohne Zeichen, die Windows oder Handys stören. */
+export function icsFileName(title) {
+  return (String(title).replace(/[^\p{L}\p{N} _-]/gu, '').trim().slice(0, 60) || 'event') + '.ics';
 }

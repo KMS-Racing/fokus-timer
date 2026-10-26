@@ -2,7 +2,7 @@
 // Suche, Handy-Ansicht. Läuft gegen einen echten Testserver.
 // Aufruf: node browser_core_test.js <code-spielerA> <code-spielerB> <name-spielerB>   (beide keine OPs)
 'use strict';
-const { launch, makeChecker, collectProblems, login } = require('./lib');
+const { launch, makeChecker, collectProblems, login, todoText } = require('./lib');
 
 const [codeA, codeB, nameB] = process.argv.slice(2);
 if (!codeA || !codeB || !nameB) { console.error('Aufruf: node browser_core_test.js <code-A> <code-B> <name-B>'); process.exit(2); }
@@ -179,7 +179,7 @@ async function dialogSubmit(page) {
   await page.waitForSelector('#appView:not(.hidden)');
   check('B: kein "null" im Kopfbereich', !(await page.textContent('#accountBox')).includes('null'));
   check('B: kein Admin-Abzeichen', !(await page.textContent('#accountBox')).includes('Admin'));
-  check('B: Dashboard zeigt die Einladung', (await page.textContent('#todoCard')).includes(landName));
+  check('B: Dashboard zeigt die Einladung', (await todoText(page)).includes(landName));
   await page.click('#sideNav a[data-route=claims]');
   await page.waitForSelector('#invitesPanel');
   check('B sieht die Einladung bei Claims', (await page.textContent('#invitesList')).includes(landName));
