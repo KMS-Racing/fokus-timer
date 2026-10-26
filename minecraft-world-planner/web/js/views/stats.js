@@ -238,7 +238,7 @@ function playerView(d) {
         barList((d.causes || []).map(c => ({ name: c.label, value: c.count })), x => `${fmtNum(x)}×`, 'Seit der Installation nicht gestorben.'),
         el('p', { class: 'muted small', text: '„Getötet von“ oben ist Minecrafts eigene Zählung, die Todesursachen zählt der Planer seit der Installation.' })),
       el('section', { class: 'card', id: 'playerEvents' }, el('h2', { text: 'Tode und Meilensteine' }), eventList(d.events || [], false))),
-    el('p', { class: 'muted small', text: `Spielzeit, Tode, Blöcke usw. zählt Minecraft selbst (wie unter Esc → Statistiken). Aktiv/AFK, „Wann online“, Sitzungen und Verlauf misst der Planer seit ${fmtDate(d.since)}. AFK = ${d.afkMinutes} Minuten ohne Bewegung und ohne Umschauen; Bewegung zählt immer, auch im Boot oder vom Wasser geschoben.` }),
+    el('p', { class: 'muted small', text: `Spielzeit, Tode, Blöcke usw. zählt Minecraft selbst (wie unter Esc → Statistiken). Aktiv/AFK, „Wann online“, Sitzungen und Verlauf misst der Planer seit ${fmtDate(d.since)}. AFK = ${d.afkMinutes} Minuten ohne Bewegung und ohne Umschauen; Bewegung zählt immer, auch im Boot oder vom Wasser geschoben. Aktiv und AFK zählen in Spiel-Ticks wie die Spielzeit – zusammen ergeben sie die Spielzeit seit ${fmtDate(d.since)}, auch wenn der Server ruckelt.` }),
   ];
 }
 

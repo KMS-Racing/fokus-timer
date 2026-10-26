@@ -30,16 +30,16 @@ final class StatsCollector {
         this.zone = s.config().zone();
     }
 
-    void joined(ServerPlayer player, int onlineCount) {
+    void joined(ServerPlayer player, int onlineCount, long tick) {
         long now = System.currentTimeMillis();
         s.stats().observe(player.getUUID(), reader.read(player), now, LocalDate.now(zone));
         s.stats().sessionStarted(player.getUUID(), now, onlineCount);
-        activity.check(player.getUUID(), player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot(), now);
+        activity.check(player.getUUID(), player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot(), now, tick);
     }
 
-    void everySecond(List<ServerPlayer> players) {
+    void everySecond(List<ServerPlayer> players, long tick) {
         long now = System.currentTimeMillis();
-        for (ServerPlayer p : players) activity.check(p.getUUID(), p.getX(), p.getY(), p.getZ(), p.getYRot(), p.getXRot(), now);
+        for (ServerPlayer p : players) activity.check(p.getUUID(), p.getX(), p.getY(), p.getZ(), p.getYRot(), p.getXRot(), now, tick);
     }
 
     void everyMinute(List<ServerPlayer> players) {

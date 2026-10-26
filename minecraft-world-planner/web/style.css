@@ -363,7 +363,15 @@ rect.heat-none { fill: transparent; stroke: var(--line); stroke-width: 1; }
 .rank-grid > .card { margin-bottom: 0; }
 .rank-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .rank-mine { margin-top: 10px; }
-.table-wrap { overflow-x: auto; }
+.table-wrap {
+  overflow-x: auto;
+  /* Schatten am Rand, solange es seitlich weitergeht (die Abdeckungen scrollen mit, die Schatten nicht) */
+  background:
+    linear-gradient(to right, var(--card) 40%, transparent) left / 32px 100% no-repeat local,
+    linear-gradient(to left, var(--card) 40%, transparent) right / 32px 100% no-repeat local,
+    linear-gradient(to right, color-mix(in srgb, var(--text) 35%, transparent), transparent) left / 14px 100% no-repeat scroll,
+    linear-gradient(to left, color-mix(in srgb, var(--text) 35%, transparent), transparent) right / 14px 100% no-repeat scroll;
+}
 .data-table { width: 100%; border-collapse: collapse; font-size: .82rem; font-variant-numeric: tabular-nums; }
 .data-table th, .data-table td { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
 .data-table th[scope="row"], .data-table thead th:first-child { text-align: left; white-space: normal; }
@@ -374,6 +382,7 @@ rect.heat-none { fill: transparent; stroke: var(--line); stroke-width: 1; }
 @media (max-width: 520px) {
   .bar-row { grid-template-columns: 1.6em minmax(0, 1fr) max-content; }
   .bar-track { grid-column: 2 / 4; grid-row: 2; }
+  .data-table th, .data-table td { padding: 4px 3px; }
 }
 
 /* ------------------------------------------------------------ Rennen */

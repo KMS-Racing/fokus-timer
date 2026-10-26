@@ -93,7 +93,7 @@ public final class WorldPlannerMod implements ModInitializer {
             if (before != null && before != player) onLeft(before); // neu verbunden, bevor die alte Verbindung bemerkt war
             GameNotifier n = notifier;
             if (n != null) n.joined(player.getUUID());
-            if (stats != null) stats.joined(player, server.getPlayerList().getPlayerCount());
+            if (stats != null) stats.joined(player, server.getPlayerList().getPlayerCount(), tick);
         });
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             if (present.remove(handler.getPlayer().getUUID(), handler.getPlayer())) onLeft(handler.getPlayer());
@@ -327,7 +327,7 @@ public final class WorldPlannerMod implements ModInitializer {
                 s.discovery().markArea(dimensionId(player.level()), player.chunkPosition().x(), player.chunkPosition().z(), radius);
             }
             checkPresence(server.getPlayerList().getPlayers());
-            if (stats != null) stats.everySecond(server.getPlayerList().getPlayers());
+            if (stats != null) stats.everySecond(server.getPlayerList().getPlayers(), tick);
         }
         if (stats != null && tick % 1200 == 600) stats.everyMinute(server.getPlayerList().getPlayers()); // jede Minute
         LandEnterTracker enter = landEnter;

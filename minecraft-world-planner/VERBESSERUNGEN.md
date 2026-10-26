@@ -197,6 +197,8 @@ nach dem Wiederbeleben auf dem Server (Fake-Spieler werden beim Tod entfernt) un
 | Statistik-Pfad: In 26.3 liegen Minecrafts Statistik-Dateien in `world/players/stats`, nicht mehr in `world/stats` | Nachgesehen in der echten Welt | Pfad von Minecraft selbst (`LevelResource.PLAYER_STATS_DIR`) |
 | Handy: Die Diagramme wurden verkleinert, die Schrift war nur noch ~6 px groß | Screenshot | Zeichnungen richten sich nach der Breite, die Schrift bleibt 11 px |
 | „Zuwachs“ und „Pro Online-Stunde“ waren lange Listen voller Nullen; Achse „0 / 1,5 / 3“ für Spielerzahlen | Screenshots | Nur Zeilen mit Werten; ganze Zahlen auf der Achse |
+| „Aktiv (ohne AFK)“ konnte größer sein als die Spielzeit (Screenshot: 10 min gegen 9 min). Minecraft zählt Spielzeit in Ticks, der Planer zählte Aktiv/AFK mit der echten Uhr – bei Ruckeln zählt Minecraft weniger. Hier waren es nur 2 Sekunden (plus Abrunden), auf einem Server mit 18 statt 20 Ticks pro Sekunde wären es 10 % | Screenshot nach dem Commit, dann die genauen Millisekunden nachgesehen | Aktiv/AFK zählen jetzt dieselben Ticks; die AFK-Grenze (5 Minuten) bleibt echte Zeit. Neuer Unit-Test mit einem Server auf 10 Ticks pro Sekunde |
+| Handy: In der Rennen-Bestenliste war die Spalte S4 unsichtbar – man konnte zwar seitlich wischen, aber nichts zeigte das an | Screenshot nach dem Commit | Engere Zellen auf schmalen Bildschirmen (4 Abschnitte passen ab 390 px) und ein Schatten am Rand jeder Tabelle, solange es seitlich weitergeht. Bei sehr vielen Toren muss man weiterhin wischen |
 | Test-Fehler: Ein Browser-Test wartete nach „Details“ auf irgendeine Überschrift – die Liste hat auch eine; manchmal prüfte er zu früh | voller Testlauf (1 von 48 rot) | wartet jetzt auf die Überschrift mit dem Landnamen (strenger, ohne Zufall) |
 
 Und ehrlich zum **Testaufbau**: Die Fake-Spieler sind wieder gestorben – sie wurden auf eine Plattform teleportiert, die es noch
@@ -208,13 +210,13 @@ zählte erst bei der nächsten Bewegung. Die Mod hatte recht; der Testweg endet 
 
 Auf demselben echten Minecraft-26.3-Server (Fabric API, BlueMap 5.29, Carpet, vier Fake-Spieler, einer OP) – zum Schluss alles
 noch einmal mit genau der Jar, die ausgeliefert wird:
-- **163** Java-Unit-Tests (35 neu: Wegweiser, Grenzen, Actionbar, Geräte, Login-Nachricht; Statistik-Kennzahlen, Zuwachs pro Tag,
+- **164** Java-Unit-Tests (36 neu: Wegweiser, Grenzen, Actionbar, Geräte, Login-Nachricht; Statistik-Kennzahlen, Zuwachs pro Tag,
   Meilensteine, Ranglisten mit Gleichstand, Ausblenden, AFK, Neustart; Zeitmessung zwischen den Ticks, ausgelassene Tore,
   Teleport, Ruckler, Fahrzeug-Regeln, Sprint, Bestenliste, Versionen, Texte, API)
 - **15** Web-Unit-Tests (neu: Statistik-Zahlen, Tage über die Zeitumstellung, Rundenzeiten, Streckenplan)
 - Alte Tests, alle grün: API **59** Kern + **85** SMP + **46** Handel, Chat-Kürzel **10**, Spiel-Integration **36** + **20** Webseite,
   Browser **48** Kern + **33** SMP + **22** BlueMap
-- Neu auf dem Server: **39** Statistik (echte Aktionen: Blöcke setzen, springen, Diamanterz abbauen, an Fallschaden sterben),
+- Neu auf dem Server: **41** Statistik (echte Aktionen: Blöcke setzen, springen, Diamanterz abbauen, an Fallschaden sterben; 20 s Lag mit `/tick rate 10`),
   **30** Rennen (bauen, Runden, Abschnitte, ausgelassenes Tor, Teleport, Fahrzeug-Regel, Rechte), **26** Browser (Seite = API,
   Wärmekarte ohne erfundene Nullen, Pfeiltasten, Tabellen-Ansicht, lila Abschnitte, Handy)
 - Update von 0.4.0 auf 0.5: **19/19** – Länder, Marker, Teams, Projekte, Angebote, Favoriten, Spiel-Schalter, Aktivität und Logins gleich

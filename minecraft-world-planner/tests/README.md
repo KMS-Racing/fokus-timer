@@ -20,7 +20,7 @@ schicken gleichzeitige Anfragen (Gebote, Käufe) und messen, wo die BlueMap-Kame
 | `chat_tags_test.py` | Team-Kürzel im Spiel: liest die Server-Konsole mit (`/team list`, `/say`) – braucht `TESTSERVER_DIR` |
 | `game_integration_test.py` | Spiel-Integration: Nachrichten (live, beim Einloggen, abgeschaltet), Land-Anzeige, Todespunkt, `/planer`, `/tc`, „überboten“ – liest die DEBUG-Zeilen der Mod im Server-Log |
 | `game_web_test.js` | Schalter „Im Spiel“ in den Einstellungen, Dashboard-Liste = Liste im Spiel (`/api/todo`, wörtlich), Mess-Werkzeug, Handy |
-| `stats_test.py` | Statistik mit echten Aktionen von Fake-Spielern (Blöcke setzen, springen, Diamanterz abbauen, an Fallschaden sterben): Zahlen, Ranglisten, Todesursache, Ausblenden, `/planer statistik`, `/planer top` |
+| `stats_test.py` | Statistik mit echten Aktionen von Fake-Spielern (Blöcke setzen, springen, Diamanterz abbauen, an Fallschaden sterben): Zahlen, Ranglisten, Todesursache, Ausblenden, `/planer statistik`, `/planer top`. Außerdem 20 s künstlicher Lag (`/tick rate 10`): Aktiv + AFK muss genauso wachsen wie Minecrafts Spielzeit |
 | `race_test.py` | Rennstrecke im Spiel bauen (`/rennen neu`, `tor`, `fertig`), Runden fahren (viele kleine Teleports), Abschnitte, Bestenliste, ausgelassenes Tor, Teleport, Fahrzeug-Regel, Rechte. `RACE_KEEP=1` lässt die Strecke stehen |
 | `stats_web_test.js` | Statistik- und Rennen-Seiten zeigen dasselbe wie die API (Kacheln, Wärmekarte mit leeren Feldern ohne Messung, Pfeiltasten, Tabellen-Ansicht, Ranglisten, Ausblenden, Bestenliste mit lila Abschnitten), Handy |
 | `restart_check.py` | Alle Daten vor und nach einem Server-Neustart vergleichen (`save`, Server neu starten, `compare`) |
@@ -53,7 +53,7 @@ schicken gleichzeitige Anfragen (Gebote, Käufe) und messen, wo die BlueMap-Kame
    python3 tests/integration/chat_tags_test.py $($T code Alice) $($T code Bob) $($T code Dana)   # liest server.log in TESTSERVER_DIR
    python3 tests/integration/game_integration_test.py $($T code Alice) $($T code Bob) $($T code Dana) $($T code Chef)
    node tests/integration/game_web_test.js     $($T code Alice) $($T code Bob)
-   python3 tests/integration/stats_test.py     $($T code Alice) $($T code Bob) $($T code Dana)   # dauert gut eine Minute
+   python3 tests/integration/stats_test.py     $($T code Alice) $($T code Bob) $($T code Dana)   # dauert 3–4 Minuten
    RACE_KEEP=1 python3 tests/integration/race_test.py $($T code Alice) $($T code Bob)
    node tests/integration/stats_web_test.js    $($T code Alice)   # Rennen-Teil braucht die Strecke von oben
    ```

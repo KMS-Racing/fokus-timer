@@ -189,7 +189,9 @@ Teams gründen, Handel und Projekte gehen nur auf der Webseite – im Spiel beko
   Sie reichen zurück bis zum ersten Login – auch vor der Mod. Die Mod liest sie jede Minute für Online-Spieler und beim Ausloggen.
 - Selbst gemessen (erst **ab der Installation von 0.5**): Aktiv/AFK, Sitzungen, „Wann online“, Todesursachen, Verlauf,
   Zuwachs pro Tag. **AFK** = `afkMinutes` (Standard 5) Minuten ohne Bewegung und ohne Umschauen; Bewegung zählt immer –
-  auch im Boot oder vom Wasser geschoben. „Heute“ und „Gestern“ richten sich nach `timeZone` (Standard Europe/Berlin).
+  auch im Boot oder vom Wasser geschoben. Aktiv und AFK werden in Spiel-Ticks gezählt wie Minecrafts Spielzeit – so ist
+  „Aktiv“ nie größer als die Spielzeit, auch wenn der Server ruckelt (ob jemand AFK ist, entscheidet die echte Uhr).
+  „Heute“ und „Gestern“ richten sich nach `timeZone` (Standard Europe/Berlin).
 - **Ranglisten** mit den Namen von CraftAttack: Dauerzocker, Fleißig, Friedhof, Diamantenbank, Abrissbirne, Baumeister,
   Monsterjäger, Weltenbummler, Unsterblich, Kampfmaschine, Vielfraß, Angelprofi, Tierfreund, Händler, Handwerker, Flummi –
   jeweils gesamt, letzte 7 Tage, gestern und heute (Zuwachs zählt ab der Installation). Gleiche Werte = gleicher Platz.

@@ -5,8 +5,8 @@ Minecrafts eigene Zahlen in Ranglisten, Spielerseiten und der Server-Übersicht 
 /planer statistik und /planer top antworten im Spiel.
 
 Aufruf: TESTSERVER_DIR=/pfad python3 stats_test.py <code-A> <code-B> <code-D>
-A, B und D müssen online sein (Fake-Spieler im Überlebensmodus, keine OPs). Dauert gut eine Minute: Für Spieler, die online
-sind, liest die Mod Minecrafts Statistik einmal pro Minute (und sofort beim Ausloggen).
+A, B und D müssen online sein (Fake-Spieler im Überlebensmodus, keine OPs). Dauert 3–4 Minuten: Für Spieler, die online
+sind, liest die Mod Minecrafts Statistik einmal pro Minute (und sofort beim Ausloggen), und der Lag-Test wartet zwei Messungen ab.
 """
 import os
 import sys
@@ -53,6 +53,33 @@ ids = [c["id"] for c in meta.get("statCategories", [])]
 check("16 Ranglisten mit den Namen von CraftAttack", len(ids) == 16 and {"dauerzocker", "friedhof", "diamantenbank", "abrissbirne", "unsterblich"} <= set(ids), ids)
 before = {u: values(u) for u in (ua, ub, ud)}
 check("Alle drei haben schon eine Statistik (sie sind online)", all(before.values()), before)
+
+
+# ------------------------------------------------------------------ Aktiv + AFK passt zur Spielzeit, auch bei Lag
+def next_reading(prev, limit):
+    """Wartet, bis die Mod Alices Zahlen das nächste Mal liest (jede Minute bzw. alle 1200 Ticks)."""
+    end = time.time() + limit
+    while time.time() < end:
+        v = values(ua)
+        if v.get("playTime") != prev.get("playTime"):
+            return v
+        time.sleep(1)
+    return None
+
+
+r1 = next_reading(values(ua), 75)
+try:
+    console("tick rate 10")  # wie ein überlasteter Server: halb so viele Ticks pro Sekunde
+    time.sleep(20)
+finally:
+    console("tick rate 20")
+r2 = next_reading(r1 or {}, 75) if r1 else None
+check("Zwei Messungen mit 20 s Lag dazwischen", r1 is not None and r2 is not None, (r1, r2))
+if r1 and r2:
+    played = r2["playTime"] - r1["playTime"]
+    counted = (r2.get("activeTime", 0) + r2.get("afkTime", 0)) - (r1.get("activeTime", 0) + r1.get("afkTime", 0))
+    check("Bei Lag: Aktiv + AFK wächst genau wie Minecrafts Spielzeit (±1,5 s)", played > 30_000 and abs(counted - played) <= 1500,
+          {"Spielzeit ms": played, "Aktiv+AFK ms": counted})
 
 # ------------------------------------------------------------------ Echte Aktionen im Spiel
 spots = {a_name: (300, 300), b_name: (320, 300), d_name: (340, 300)}

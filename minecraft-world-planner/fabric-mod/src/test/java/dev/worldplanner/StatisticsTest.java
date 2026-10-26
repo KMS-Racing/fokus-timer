@@ -267,17 +267,33 @@ class StatisticsTest {
     @Test
     void afkStartsAfterTheThresholdAndGapsDoNotCount() {
         ActivityTracker a = new ActivityTracker(5 * 60_000L);
-        a.check(alice, 0, 64, 0, 0, 0, 0);
-        for (int sec = 1; sec <= 360; sec++) a.check(alice, 0, 64, 0, 0, 0, sec * 1000L);
+        a.check(alice, 0, 64, 0, 0, 0, 0, 0);
+        for (int sec = 1; sec <= 360; sec++) a.check(alice, 0, 64, 0, 0, 0, sec * 1000L, sec * 20L);
         assertTrue(a.isAfk(alice, 360_000));
         long[] t = a.drain(alice);
         assertEquals(299_000, t[0], "die ersten 5 Minuten ohne Bewegung zählen noch als aktiv");
         assertEquals(61_000, t[1]);
-        a.check(alice, 0, 64, 0, 45, 0, 361_000); // umgeschaut
+        a.check(alice, 0, 64, 0, 45, 0, 361_000, 7220); // umgeschaut
         assertFalse(a.isAfk(alice, 361_000));
-        a.check(alice, 3, 64, 0, 45, 0, 421_000); // Server hing eine Minute
-        assertEquals(1000 + 5000, a.drain(alice)[0], "eine Lücke zählt höchstens 5 Sekunden");
+        a.check(alice, 3, 64, 0, 45, 0, 421_000, 7240); // Server hing eine Minute – in der Zeit liefen keine Ticks
+        assertEquals(1000 + 1000, a.drain(alice)[0], "eine Lücke zählt nur die Ticks, die wirklich liefen (wie Minecrafts Spielzeit)");
         assertEquals(0, a.drain(alice)[0], "abgeholt ist abgeholt");
+    }
+
+    @Test
+    void onALaggingServerActiveTimeMatchesMinecraftsPlayTimeButAfkUsesRealTime() {
+        // 10 Ticks pro Sekunde: Die Prüfung „jede Sekunde“ (alle 20 Ticks) kommt nur alle 2 echten Sekunden
+        ActivityTracker a = new ActivityTracker(5 * 60_000L);
+        a.check(alice, 0, 64, 0, 0, 0, 0, 0);
+        for (int i = 1; i <= 60; i++) a.check(alice, i, 64, 0, 0, 0, i * 2000L, i * 20L); // läuft die ganze Zeit
+        long[] t = a.drain(alice);
+        assertEquals(60_000, t[0], "2 echte Minuten, aber nur 1200 Ticks – Minecraft zählt 1 Minute Spielzeit, also auch nur 1 Minute aktiv");
+        assertEquals(0, t[1]);
+        for (int i = 61; i <= 210; i++) a.check(alice, 60, 64, 0, 0, 0, i * 2000L, i * 20L); // steht 300 echte Sekunden still
+        assertTrue(a.isAfk(alice, 420_000), "AFK nach 5 echten Minuten, nicht erst nach 5 Minuten Spielzeit");
+        t = a.drain(alice);
+        assertEquals(150_000, t[0] + t[1], "zusammen genau die gelaufenen Ticks");
+        assertEquals(1000, t[1], "erst die letzte Prüfung liegt bei 5 echten Minuten Stillstand");
     }
 
     @Test

@@ -83,7 +83,7 @@ keine IP). `Notices` meldet Logins der letzten 10 Minuten als Hinweis mit `alway
 `StatValues` macht daraus Kennzahlen (reine Rechnung, Unit-Tests). `StatsStore` speichert je Spieler den letzten Stand, Top-Listen
 und je Tag den Stand am Tagesende (40 Tage, der letzte ältere bleibt als Ausgangswert). Zuwachs = Stand jetzt − Stand am Ende
 des Vortags; an Tagen ohne Spielen bleibt der Stand einfach stehen. Der erste Stand eines Spielers gilt als Ausgangswert
-(sonst wäre bei der Installation alles „heute“). `ActivityTracker` zählt jede Sekunde aktiv/AFK. Der Timer zählt jede Minute,
+(sonst wäre bei der Installation alles „heute“). `ActivityTracker` zählt jede Sekunde aktiv/AFK – in Server-Ticks wie Minecrafts `play_time` (sonst wäre „Aktiv“ bei Lag größer als die Spielzeit); die AFK-Grenze misst die echte Uhr. Der Timer zählt jede Minute,
 wie viele online sind (auch 0, auch in der Pause) – daraus werden „Wann ist am meisten los“ und „Spieler pro Tag“. Beim Start
 liest ein Hintergrund-Auftrag die Statistik-Dateien (`world/players/stats/<uuid>.json`) bekannter Spieler, die neuer sind als
 der eigene Stand – nur lesen, nie schreiben.
