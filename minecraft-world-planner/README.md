@@ -18,7 +18,7 @@ Die Mod bringt ihre Webseite selbst mit – kein extra Webhosting nötig.
 | ★ **Statistik** | Wie bei CraftAttack: der Server in Zahlen, „Wann ist am meisten los?“, Rekorde, Verlauf mit Toden und Meilensteinen, eine Seite pro Spieler |
 | ♛ **Ranglisten** | **16 Ranglisten** wie bei CraftAttack (Dauerzocker, Friedhof, Diamantenbank, Abrissbirne …) gesamt / 7 Tage / gestern / heute – **alle Spieler, für alle sichtbar**, nur auf der Webseite |
 | ⚙ **Einstellungen** | Hell/Dunkel, Schalter fürs Spiel, **angemeldete Geräte**, Favoriten, **Export/Import** mit Vorschau, Server-Infos |
-| 🎮 **Im Spiel** | Kurz nach dem Einloggen „Zu erledigen“ im Chat, danach Neues sofort (Einladung, überboten, verkauft …) · Land-Name über der Hotbar beim Betreten · **Wegweiser** zu Markern, Ländern und zum Todespunkt · **Land-Grenzen** als Partikel · **Todespunkt** als privater Marker · **Team-Chat** `/tc` · Nachricht bei neuem Web-Login · alles einzeln abschaltbar |
+| 🎮 **Im Spiel** | Kurz nach dem Einloggen „Zu erledigen“ im Chat, danach Neues sofort (Einladung, überboten, verkauft …) · Land-Name über der Hotbar beim Betreten · **Wegweiser** zu Markern, Ländern und zum Todespunkt · **Land-Grenzen** als Partikel · **Todespunkt** als privater Marker · **Team-Chat** `/tc` · **Team-Einladungen annehmen** per Klick (`/planer team annehmen`) · Nachricht bei neuem Web-Login · alles einzeln abschaltbar |
 
 Dazu eine **Suche oben** (Länder, Marker, Projekte, Teams, Spieler, Angebote – und Koordinaten wie `100 64 -200`; Taste `/`).
 
@@ -71,7 +71,7 @@ Fertig ist die Datei `fabric-mod/build/libs/world-planner-0.5.0.jar` (die `...-s
    **Update auf 0.6:** Rennen gibt es nicht mehr. `races.json` bleibt unangetastet liegen (0.6 liest sie nicht) – du kannst
    sie löschen oder aufheben. Neu ist `events.json`. In der Config verschwinden `races` und `maxTracksPerPlayer`, dazu kommen
    `events` und `maxEventsPerPlayer`. Alles andere bleibt gleich (getestet mit einem Update von 0.5.1 auf 0.6.0).
-   **Von 0.6.0 auf 0.6.1:** nur die Jar tauschen – an Dateien und Config ändert sich nichts.
+   **Von 0.6.0 auf 0.6.1 oder 0.6.2:** nur die Jar tauschen – an Dateien und Config ändert sich nichts.
 
 ## 3. Webseite öffnen und einloggen
 
@@ -98,6 +98,7 @@ Ist `publicUrl` eingetragen, gibt es im Chat einen Link, der direkt einloggt. We
 | `/planer weg <Ziel>` | **Wegweiser**: Pfeil über der Hotbar zu einem Marker, Land oder `todespunkt` – gedreht nach deiner Blickrichtung, mit Entfernung (kein Teleport). `/planer weg aus` beendet ihn |
 | `/planer statistik [Spieler]` | Spielzeit, Tode, Blöcke … (die Ranglisten gibt es nur auf der Webseite) |
 | `/planer events` | Die nächsten 5 Events mit Zeit, wer kommt, deiner Antwort und Knöpfen [Komme] [Vielleicht] [Nein] (Knopf anklicken, dann Enter) |
+| `/planer team annehmen <Kürzel>` / `ablehnen <Kürzel>` | Eine Team-Einladung annehmen oder ablehnen – oder ein Team übernehmen, das dir übergeben werden soll. Nur, was dir selbst angeboten wurde; die Nachricht im Chat hat dafür einen Knopf [Annehmen] bzw. [Übernehmen]. (Nicht `/team`: das ist Minecrafts eigener OP-Befehl.) |
 | `/tc <Nachricht>` (lang: `/teamchat`) | **Team-Chat** – nur Mitglieder deines Teams lesen mit, auch bei privaten Teams |
 | `/land` oder `/land info` | Wem gehört der Chunk, in dem ich stehe? |
 | `/land neu <Name>` | Neues Land aus dem Chunk, in dem du stehst |

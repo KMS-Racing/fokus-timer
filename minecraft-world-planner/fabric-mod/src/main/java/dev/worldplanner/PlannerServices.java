@@ -95,9 +95,14 @@ record PlannerServices(
 
     /** Ein Team wurde aufgelöst: Länder, Projekte, Marker und Angebote bleiben erhalten. */
     void onTeamDissolved(TeamStore.Dissolved team) {
+        onTeamDissolved(team, System.currentTimeMillis());
+    }
+
+    /** now: ab wann ein Team-Event als "noch nicht vorbei" gilt und abgesagt wird (Tests geben ihre feste Uhr mit). */
+    void onTeamDissolved(TeamStore.Dissolved team, long now) {
         lands.dropTeam(team.id());
         projects.detachTeam(team.id());
-        events.detachTeam(team.id(), System.currentTimeMillis());
+        events.detachTeam(team.id(), now);
         markers.detachTeam(team.id());
         trades.detachTeam(team.id());
     }

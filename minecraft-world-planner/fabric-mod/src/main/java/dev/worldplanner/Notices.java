@@ -71,11 +71,12 @@ final class Notices {
         TeamStore.Notes teams = s.teams().notesFor(player);
         for (TeamStore.InviteNote i : teams.invites()) {
             out.add(todo("team-invite:" + i.inviteId(), Level.INVITE, "Team-Einladung von " + i.by() + ": [" + i.tag() + "] " + i.name(),
-                    "#/teams/" + i.teamId(), null));
+                    "#/teams/" + i.teamId(), "/planer team annehmen " + i.tag()));
         }
         for (TeamStore.TransferNote t : teams.transfers()) {
-            out.add(todo("transfer:" + t.teamId() + ":" + t.createdAt(), Level.WARN,
-                    "Dir wird das Team [" + t.tag() + "] übergeben – annehmen oder ablehnen", "#/teams/" + t.teamId(), null));
+            out.add(new Notice("transfer:" + t.teamId() + ":" + t.createdAt(), true, true, Level.WARN,
+                    "Dir wird das Team [" + t.tag() + "] übergeben – annehmen oder ablehnen", "#/teams/" + t.teamId(),
+                    "/planer team annehmen " + t.tag(), null, "[Übernehmen]", false));
         }
         // Bewerbungen: als Aufgabe pro Team zusammengefasst (wie auf dem Dashboard), live kommt jede neue einzeln.
         Map<String, List<TeamStore.ApplicationNote>> byTeam = new LinkedHashMap<>();

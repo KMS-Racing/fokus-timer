@@ -373,3 +373,33 @@ Auf demselben echten Minecraft-26.3-Server, zum Schluss mit genau der Jar, die a
 
 **Nicht geprüft** (ehrlich): die Kalender-Datei in einer echten Kalender-App auf einem Handy; wie die neue Reihenfolge im
 echten Minecraft-Fenster aussieht (geprüft ist der Text).
+
+## 0.6.2: Team-Einladungen im Spiel annehmen – und eine Zeitbombe in den Tests
+
+- **`/planer team annehmen <Kürzel>`** und **`/planer team ablehnen <Kürzel>`**: eine Team-Einladung annehmen oder ablehnen,
+  oder ein Team übernehmen, das dir übergeben werden soll. Die Nachricht im Chat hat dafür einen Knopf ([Annehmen] bei der
+  Einladung, [Übernehmen] bei der Übergabe). Es geht nur, was dir selbst angeboten wurde – niemand kommt ohne eigene Zustimmung
+  in ein Team. Das Kürzel darf klein geschrieben sein, Tab ergänzt nur Kürzel, die dir etwas anbieten.
+  Nicht `/team`, weil Minecraft selbst schon einen `/team`-Befehl (für OPs) hat.
+- Einladung und Übergabe kann es für dasselbe Team nie gleichzeitig geben (eingeladen wird, wer nicht Mitglied ist, übergeben
+  nur an Mitglieder) – deshalb reicht ein Befehlspaar für beides.
+
+| Fehler | Gefunden durch | Behoben |
+|---|---|---|
+| **Zeitbombe in einem Unit-Test (seit 0.6.0):** Der Test „Team aufgelöst = Events abgesagt“ rechnete mit einer festen Uhrzeit (26.10.2026, 17 Uhr UTC), das Auflösen nahm aber die echte Uhr. Bis 19 Uhr UTC am 26.10. grün – danach für immer rot. Wer die Mod später selbst gebaut hätte, hätte einen kaputten Build bekommen. Die Mod selbst war richtig | Build am Abend plötzlich rot, ohne Änderung an Events | Das Auflösen bekommt die Uhrzeit als Wert, der Test übergibt seine feste Uhr. Danach **alle** Java- und Web-Tests mit vorgestellter Uhr laufen lassen (`libfaketime`: morgen, in 40 und 155 Tagen, Sommer 2027, Ende 2027), um weitere Zeitbomben zu finden – Ergebnis siehe unten |
+| Wackeliger Test im Handel: „8 gleichzeitige Bieter“ verlangte mehr als 8 angenommene Gebote – das klappt nur, wenn der Rechner die Threads abwechselt. Liefen sie nacheinander, kam jeder genau einmal durch (danach ist man Höchstbietender und darf sich nicht selbst überbieten): 8, rot. Der Handel selbst war richtig – die wichtigen Prüfungen (Gebote steigen streng, niemand überbietet sich selbst, jedes bestätigte Gebot ist gespeichert) waren grün | bei der Zeitreise-Prüfung 2× rot (mit vorgestellter Uhr ist der Rechner langsamer); einzeln nicht nachzustellen | Strenger statt schwächer: Vor jeder der 50 Runden warten alle 8 aufeinander und bieten dann gleichzeitig. Damit ist echter Wettbewerb garantiert und der Test verlangt jetzt **mindestens 50** angenommene Gebote (vorher: mehr als 8) |
+
+## So wurde 0.6.2 getestet
+
+Auf demselben echten Minecraft-26.3-Server, mit genau der Jar, die ausgeliefert wird – diesmal alles in **einem** Durchgang grün:
+- **169** Java-Unit-Tests (neu: Knöpfe der Team-Hinweise), **20** Web-Unit-Tests
+- Voller Testlauf: API **59** Kern + **85** SMP + **46** Handel, Chat-Kürzel **10**, Spiel-Integration **46** (neu: 10 Prüfungen
+  für `/planer team` – Einladung mit Knopf im Chat, annehmen auch klein geschrieben, zweimal annehmen, fremdes Kürzel, Bob kann
+  eine Übergabe an Dana nicht annehmen, Übergabe ablehnen, übernehmen) + **22** Webseite, Statistik **41** + **23** Browser,
+  Events **30** + **39** Browser, Browser **48** Kern + **33** SMP + **22** BlueMap
+- Update von 0.6.1 auf 0.6.2: **21/21**, Config Byte für Byte gleich
+- **Zeitreise** (alle Unit-Tests mit vorgestellter Uhr, `libfaketime`): Java 169/169 morgen, in 40 Tagen und in 400 Tagen
+  (Nov. 2027); in 155 und 230 Tagen (Sommerzeit 2027) 168/169 – rot war nur der Handels-Test mit 8 Threads, und das liegt am
+  Werkzeug: Mit `libfaketime`, aber **ohne** Zeitverschiebung, scheitert er genauso (60 s statt 0,9 s). Web 20/20 an allen Daten.
+
+**Nicht geprüft** (ehrlich): die Knöpfe in einem echten Minecraft-Fenster (geprüft ist der Text im Server-Log).

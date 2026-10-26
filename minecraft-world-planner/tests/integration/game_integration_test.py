@@ -226,6 +226,49 @@ m = mark()
 console(f"execute as {d_name} run tc Hallo")
 check("Ohne Team: freundliche Fehlermeldung", wait_for(m, "Du bist in keinem Team"), since(m)[-300:])
 
+# ------------------------------------------------------------------ Team: Einladung und Übergabe im Spiel annehmen (seit 0.6.2)
+team_name = "Testteam Spiel " + run
+
+
+def owner():
+    return (call(f"api/teams/{team}", token=a)[1].get("owner") or {}).get("name")
+
+
+m = mark()
+call(f"api/teams/{team}/invite", {"player": d_name}, a)
+check("Team-Einladung im Chat mit Knopf [Annehmen]",
+      wait_for(m, f"Nachricht an {d_name}: [Planer] ✉ Team-Einladung von {a_name}: [{tag}] {team_name} [Annehmen]"), since(m)[-400:])
+m = mark()
+console(f"execute as {d_name} run planer team annehmen {tag.lower()}")
+check("/planer team annehmen <Kürzel> – auch klein geschrieben", wait_for(m, f"Willkommen im Team [{tag}] {team_name}!"), since(m)[-300:])
+members = call(f"api/teams/{team}", token=a)[1].get("members", [])
+check("…Dana ist jetzt Mitglied", any(x["name"] == d_name and x["role"] == "member" for x in members), members)
+m = mark()
+console(f"execute as {d_name} run planer team annehmen {tag}")
+check("Zweimal annehmen: freundliche Fehlermeldung", wait_for(m, f"Für [{tag}] hast du keine offene Einladung und keine Übergabe."), since(m)[-300:])
+m = mark()
+console(f"execute as {b_name} run planer team annehmen ZZZZ")
+check("Fremdes Kürzel: nichts passiert", wait_for(m, "Für [ZZZZ] hast du keine offene Einladung und keine Übergabe."), since(m)[-300:])
+
+m = mark()
+call(f"api/teams/{team}/transfer", {"player": d_name, "confirmName": team_name}, a)
+check("Übergabe im Chat mit Knopf [Übernehmen]",
+      wait_for(m, f"Nachricht an {d_name}: [Planer] ⚠ Dir wird das Team [{tag}] übergeben – annehmen oder ablehnen [Übernehmen]"), since(m)[-400:])
+m = mark()
+console(f"execute as {b_name} run planer team annehmen {tag}")
+check("Bob kann die Übergabe an Dana nicht annehmen", wait_for(m, f"Für [{tag}] hast du keine offene Einladung") and owner() == a_name, since(m)[-300:])
+m = mark()
+console(f"execute as {d_name} run planer team ablehnen {tag}")
+check("/planer team ablehnen: Übergabe abgelehnt, Alice bleibt Owner", wait_for(m, f"Übergabe von [{tag}] abgelehnt") and owner() == a_name, since(m)[-300:])
+call(f"api/teams/{team}/transfer", {"player": d_name, "confirmName": team_name}, a)
+m = mark()
+console(f"execute as {d_name} run planer team annehmen {tag}")
+check("/planer team annehmen: Dana ist jetzt Owner", wait_for(m, f"Du bist jetzt Owner von [{tag}] {team_name}.") and owner() == d_name, since(m)[-300:])
+# zurück an Alice (über die Webseite), damit das Aufräumen wie bisher geht
+call(f"api/teams/{team}/transfer", {"player": a_name, "confirmName": team_name}, d)
+call(f"api/teams/{team}/transfer-accept", {}, a)
+check("…und über die Webseite zurück an Alice", owner() == a_name, owner())
+
 # ------------------------------------------------------------------ Handel: überboten (live)
 st, r = call("api/trades", {"requestId": rid(), "kind": "auction", "title": "Spieltest " + run, "category": "tools", "itemName": "Spitzhacke",
                             "startPrice": 2, "durationHours": 1}, a)

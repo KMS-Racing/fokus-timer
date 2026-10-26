@@ -18,7 +18,7 @@ schicken gleichzeitige Anfragen (Gebote, Käufe) und messen, wo die BlueMap-Kame
 | `smp_browser_test.js` | Zwei Spieler gleichzeitig: Team gründen/einladen/Rolle, Team-Projekt, Kauf mit Übergabe, Auktion, Team auflösen |
 | `bluemap_sync_test.js` | BlueMap übernimmt Position und Zoom der Karte wirklich (misst die Kamera im iframe) |
 | `chat_tags_test.py` | Team-Kürzel im Spiel: liest die Server-Konsole mit (`/team list`, `/say`) – braucht `TESTSERVER_DIR` |
-| `game_integration_test.py` | Spiel-Integration: Nachrichten (live, beim Einloggen, abgeschaltet), Land-Anzeige, Todespunkt, `/planer`, `/tc`, „überboten“ – liest die DEBUG-Zeilen der Mod im Server-Log |
+| `game_integration_test.py` | Spiel-Integration: Nachrichten (live, beim Einloggen, abgeschaltet), Land-Anzeige, Todespunkt, `/planer`, `/tc`, Team-Einladung und -Übergabe im Spiel annehmen/ablehnen (auch: fremdes Kürzel, zweimal annehmen, Übergabe an jemand anderen), „überboten“ – liest die DEBUG-Zeilen der Mod im Server-Log |
 | `game_web_test.js` | Schalter „Im Spiel“ in den Einstellungen, Dashboard-Liste = Liste im Spiel (`/api/todo`, wörtlich und in derselben Reihenfolge), zugeklappt nur die ersten 6 mit „… und N weitere anzeigen“, Mess-Werkzeug, Handy |
 | `stats_test.py` | Statistik mit echten Aktionen von Fake-Spielern (Blöcke setzen, springen, Diamanterz abbauen, an Fallschaden sterben): Zahlen, Ranglisten, Todesursache, alle für alle sichtbar (Ausblenden → 400), `/planer statistik` ohne Ränge, `/planer top` und `/planer ranglisten` gibt es nicht mehr. Außerdem 20 s künstlicher Lag (`/tick rate 10`): Aktiv + AFK muss genauso wachsen wie Minecrafts Spielzeit |
 | `events_test.py` | Events auf dem Server: Einladung im Chat mit [Komme], `/planer events`, `/planer event <id> ja`, Verschieben und Absagen (nur wer zugesagt hat), Erinnerung („In 2 Minuten“) und Start („Jetzt“) – ein Event beginnt dafür in gut 2 Minuten. Außerdem: `/api/races` und `/rennen` gibt es nicht mehr |
@@ -26,6 +26,22 @@ schicken gleichzeitige Anfragen (Gebote, Käufe) und messen, wo die BlueMap-Kame
 | `events_web_test.js` | Events im Browser: Formular (Uhrzeit = Server-Zeit), Liste, Kalender, Zusagen umschalten, Bob sieht auf dem Dashboard wörtlich denselben Text wie `/api/todo` im Spiel, Verschieben, Absagen, Löschen; Kalender-Datei wirklich herunterladen und prüfen (UTC, Erinnerung, Treffpunkt), „Nochmal planen“, „Event hier planen“ bei Land, Marker und Projekt; Rückblick-Zahlen = API; Handy |
 | `restart_check.py` | Alle Daten vor und nach einem Server-Neustart vergleichen (`save`, Server neu starten, `compare`) – ab 0.6 auch ein Team-Event mit Treffpunkt und Zusage. Taugt auch für Updates: Kennt der alte Server noch keine Events, fehlt nur dieser Teil |
 | `crash_check.py` | Absturz: wartet, bis der Planer neuer gespeichert hat als Minecraft (`wait`), dann `kill -9`, Neustart, `compare` – Statistik-Verlauf, Zuwachs gestern und Aktiv ≤ Spielzeit müssen stimmen |
+
+## Unit-Tests mit vorgestellter Uhr (Zeitbomben finden)
+
+Ein Test, der eine feste Uhrzeit benutzt, aber irgendwo die echte Uhr abfragt, ist nur an bestimmten Tagen grün (das ist in
+0.6.0 passiert, siehe VERBESSERUNGEN.md). So prüfst du das mit `libfaketime` (z. B. `pip install libfaketime`, dort liegt die
+`.so`-Datei unter `libfaketime/vendor/libfaketime/src/`):
+
+```bash
+cd fabric-mod
+LD_PRELOAD=/pfad/zu/libfaketime.so.1 FAKETIME="+230d" FAKETIME_DONT_FAKE_MONOTONIC=1 ./gradlew --no-daemon test --rerun-tasks
+node --test ../tests/web/*.test.mjs   # genauso mit LD_PRELOAD und FAKETIME davor
+```
+
+Ehrlich: `TradeStoreTest.parallelBidsNeverContradictEachOther` (8 Threads warten 50-mal aufeinander) ist unter `libfaketime`
+**nicht aussagekräftig** – das Werkzeug bremst das Warten von Threads so stark, dass er schon mit `FAKETIME="+0d"` (also ohne
+Zeitverschiebung) in die 60-Sekunden-Grenze läuft. Ohne `libfaketime` braucht er unter einer Sekunde.
 
 ## Integrationstests vorbereiten
 

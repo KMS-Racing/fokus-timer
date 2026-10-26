@@ -85,6 +85,7 @@ class NoticesTest {
         Notices.Notice inv = find(bob, "team-invite:");
         assertNotNull(inv);
         assertEquals("Team-Einladung von Alice: [KMS] Kart Racing", inv.text());
+        assertEquals("/planer team annehmen KMS", inv.command(), "im Spiel annehmen per Knopf (seit 0.6.2)");
         w.teams.acceptInvite(bob, team);
         assertNull(find(bob, "team-invite:"));
         Notices.Notice member = find(bob, "member:" + team);
@@ -109,6 +110,8 @@ class NoticesTest {
         Notices.Notice tr = find(bob, "transfer:" + team);
         assertNotNull(tr);
         assertEquals("Dir wird das Team [KMS] übergeben – annehmen oder ablehnen", tr.text());
+        assertEquals("/planer team annehmen KMS", tr.command());
+        assertEquals("[Übernehmen]", tr.commandLabel());
         assertNull(find(alice, "transfer:"), "nur der Empfänger muss etwas tun");
         w.teams.acceptTransfer(bob, team);
         assertNull(find(bob, "transfer:"));

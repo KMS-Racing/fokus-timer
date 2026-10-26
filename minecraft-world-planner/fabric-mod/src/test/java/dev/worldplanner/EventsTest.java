@@ -94,7 +94,7 @@ class EventsTest {
         assertEquals("team:" + team, ev.audienceOf(id));
 
         TeamStore.Dissolved d = w.teams.dissolve(alice, false, team, "Baumeister");
-        w.services.onTeamDissolved(d);
+        w.services.onTeamDissolved(d, NOW); // feste Uhr – mit der echten wäre der Test ab 26.10.2026 19 Uhr UTC rot gewesen
         JsonObject after = ev.eventJson(id, alice, false, NOW);
         assertEquals("cancelled", after.get("state").getAsString(), "Team aufgelöst = abgesagt");
         assertEquals("Das Team wurde aufgelöst.", after.get("cancelReason").getAsString());

@@ -254,7 +254,7 @@ Handels-Aktionen (alle POST unter `/api/trades`) brauchen eine `requestId` (8–
 
 1. **Echter Schutz** (optional): Abbauen/Bauen in fremden Ländern blocken. Ehrlich: Kolben, Explosionen, Lava machen das aufwendig.
 2. **Wiederkehrende Events** (z. B. jeden Samstag 20 Uhr) – heute gibt es „Nochmal planen“ (eine Woche später), aber keine Serie.
-3. **Befehle für Handel und Teams im Spiel** (z. B. Einladung annehmen per Klick) – heute gibt es dazu nur Nachrichten.
+3. **Befehle für den Handel im Spiel** (z. B. Übergabe bestätigen per Klick) – Team-Einladungen und -Übergaben gehen seit 0.6.2 im Spiel (`/planer team annehmen`), Handel nur auf der Webseite.
 4. **Gelände in der Claim-Karte**, z. B. aus BlueMaps Flach-Ansicht.
 5. **Bestehende Welten:** entdeckte Chunks aus den Region-Dateien (InhabitedTime) übernehmen.
 6. **Economy-Anbindung**, falls der Server eine Economy-Mod bekommt – erst dann wären echte Zahlungen möglich.

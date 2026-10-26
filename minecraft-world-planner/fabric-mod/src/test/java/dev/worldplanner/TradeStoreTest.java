@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -135,6 +136,9 @@ class TradeStoreTest {
         for (int i = 0; i < 8; i++) bidders.add(w.player(100 + i, "Bieter" + i));
         ExecutorService pool = Executors.newFixedThreadPool(8);
         CountDownLatch start = new CountDownLatch(1);
+        // Vor jeder Runde warten alle 8 aufeinander und bieten dann gleichzeitig – echter Wettbewerb in jeder Runde, nicht nur,
+        // wenn der Rechner die Threads zufällig abwechselt (sonst kommt jeder einmal durch und ist danach Höchstbietender: 8 Gebote).
+        CyclicBarrier round = new CyclicBarrier(bidders.size());
         AtomicInteger accepted = new AtomicInteger();
         ConcurrentLinkedQueue<Throwable> unexpected = new ConcurrentLinkedQueue<>();
         List<Future<?>> jobs = new ArrayList<>();
@@ -142,6 +146,7 @@ class TradeStoreTest {
             jobs.add(pool.submit(() -> {
                 start.await();
                 for (int i = 0; i < 50; i++) {
+                    round.await(30, TimeUnit.SECONDS);
                     try {
                         JsonObject cur = w.trades.toApiJson(b, false, id);
                         int min = cur.get("minimumBid").getAsInt();
@@ -164,7 +169,8 @@ class TradeStoreTest {
         JsonObject v = w.trades.toApiJson(seller, false, id);
         JsonArray bids = v.getAsJsonArray("bids");
         assertEquals(accepted.get(), bids.size(), "jedes bestätigte Gebot ist gespeichert, kein anderes");
-        assertTrue(bids.size() > 8);
+        // Zu Beginn jeder Runde steht der Stand still; der erste, der nicht Höchstbietender ist, kommt also immer durch
+        assertTrue(bids.size() >= 50, "in jeder der 50 Runden mindestens ein Gebot – angenommen wurden " + bids.size());
         int last = 0;
         String lastBidder = null;
         for (JsonElement e : bids) {

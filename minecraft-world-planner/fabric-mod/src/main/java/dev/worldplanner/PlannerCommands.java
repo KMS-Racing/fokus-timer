@@ -17,6 +17,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
@@ -34,6 +35,7 @@ import java.util.function.Supplier;
  *   /planer weg <Ziel>       Pfeil über der Hotbar zu einem Marker, Land oder zum Todespunkt (/planer weg aus = beenden)
  *   /planer statistik [Spieler]  Spielzeit, Tode, Blöcke … (die Ranglisten gibt es nur auf der Webseite)
  *   /planer events           die nächsten Events – zusagen per Klick (/planer event <id> ja|vielleicht|nein)
+ *   /planer team annehmen|ablehnen <Kürzel>  Einladung in ein Team oder Übergabe eines Teams (nur, was dir angeboten wurde)
  *   /tc <Nachricht>          Team-Chat (auch /teamchat) – nur Mitglieder deines Teams lesen mit
  *   /land [info]             wem gehört dieser Chunk?
  *   /land neu <Name>         neues Land mit dem Chunk, in dem du stehst
@@ -81,7 +83,14 @@ final class PlannerCommands {
                         .then(Commands.argument("id", StringArgumentType.word())
                                 .then(Commands.literal("ja").executes(ctx -> answerEvent(ctx, "yes")))
                                 .then(Commands.literal("vielleicht").executes(ctx -> answerEvent(ctx, "maybe")))
-                                .then(Commands.literal("nein").executes(ctx -> answerEvent(ctx, "no"))))));
+                                .then(Commands.literal("nein").executes(ctx -> answerEvent(ctx, "no")))))
+                .then(Commands.literal("team")
+                        .then(Commands.literal("annehmen")
+                                .then(Commands.argument("kuerzel", StringArgumentType.word()).suggests(teamOffers())
+                                        .executes(ctx -> teamDecision(ctx, true))))
+                        .then(Commands.literal("ablehnen")
+                                .then(Commands.argument("kuerzel", StringArgumentType.word()).suggests(teamOffers())
+                                        .executes(ctx -> teamDecision(ctx, false))))));
 
         var teamChat = dispatcher.register(Commands.literal("teamchat")
                 .then(Commands.argument("nachricht", StringArgumentType.greedyString()).executes(this::teamChat)));
@@ -205,6 +214,7 @@ final class PlannerCommands {
                 {"/land grenzen", "Rand des Landes als Partikel zeigen"},
                 {"/planer statistik", "deine Statistik (oder die eines anderen: Name dahinter)"},
                 {"/planer events", "die nächsten Events – zusagen mit einem Klick"},
+                {"/planer team annehmen ", "Team-Einladung oder -Übergabe annehmen (Kürzel dahinter; „ablehnen“ genauso)"},
                 {"/land", "wem gehört dieser Chunk? Außerdem: neu, erweitern, abgeben, liste, einladen"},
                 {"/tc ", "Team-Chat – nur dein Team liest mit (Nachricht dahinter)"},
                 {"/planer abmelden", "auf allen Geräten von der Webseite abmelden"},
@@ -332,6 +342,48 @@ final class PlannerCommands {
             s.events().answer(player.getUUID(), id, answer, System.currentTimeMillis());
             return "Gespeichert: »" + s.events().titleOf(player.getUUID(), id) + "« – " + EventStore.ANSWERS.get(answer) + ".";
         });
+    }
+
+    // ------------------------------------------------------------------ Teams
+
+    /**
+     * /planer team annehmen|ablehnen <Kürzel>: eine Einladung ins Team (wer nicht Mitglied ist) oder die Übergabe eines Teams
+     * (nur an Mitglieder) – beides kann es für dasselbe Team nicht gleichzeitig geben. Nur, was dir selbst angeboten wurde.
+     */
+    private int teamDecision(CommandContext<CommandSourceStack> ctx, boolean accept) throws CommandSyntaxException {
+        return withPlayer(ctx, (player, s) -> {
+            UUID me = player.getUUID();
+            String tag = StringArgumentType.getString(ctx, "kuerzel");
+            TeamStore.Notes notes = s.teams().notesFor(me);
+            for (TeamStore.InviteNote i : notes.invites()) {
+                if (!i.tag().equalsIgnoreCase(tag)) continue;
+                if (!accept) {
+                    s.teams().declineInvite(me, i.teamId());
+                    return "Einladung von [" + i.tag() + "] abgelehnt.";
+                }
+                s.teams().acceptInvite(me, i.teamId());
+                s.activity().add(me, "team.joined", s.players().name(me) + " ist dem Team [" + i.tag() + "] beigetreten.", "team", i.teamId(),
+                        teamAudience(s, i.teamId()));
+                return "Willkommen im Team [" + i.tag() + "] " + i.name() + "!";
+            }
+            for (TeamStore.TransferNote t : notes.transfers()) {
+                if (!t.tag().equalsIgnoreCase(tag)) continue;
+                if (!accept) {
+                    s.teams().cancelTransfer(me, t.teamId());
+                    return "Übergabe von [" + t.tag() + "] abgelehnt – das Team behält seinen Owner.";
+                }
+                s.teams().acceptTransfer(me, t.teamId());
+                s.activity().add(me, "team.owner", s.players().name(me) + " ist jetzt Owner von [" + t.tag() + "].", "team", t.teamId(),
+                        teamAudience(s, t.teamId()));
+                return "Du bist jetzt Owner von [" + t.tag() + "] " + t.name() + ".";
+            }
+            throw PlannerException.notFound("Für [" + tag.toUpperCase(java.util.Locale.ROOT) + "] hast du keine offene Einladung und keine Übergabe.");
+        });
+    }
+
+    /** Wie Routes.teamAudience: Ereignisse öffentlicher Teams sehen alle, die von privaten nur das Team. */
+    private static String teamAudience(PlannerServices s, String teamId) {
+        return s.teams().isPublic(teamId) ? "all" : "team:" + teamId;
     }
 
     private int teamChat(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
@@ -657,6 +709,19 @@ final class PlannerCommands {
         return suggestFrom(source -> {
             ServerPlayer p = source.getPlayer();
             return p == null || services.get() == null ? List.of() : services.get().lands().namesInviting(p.getUUID());
+        });
+    }
+
+    /** Kürzel der Teams, die dich eingeladen haben oder dir übergeben werden sollen. */
+    private SuggestionProvider<CommandSourceStack> teamOffers() {
+        return suggestFrom(source -> {
+            ServerPlayer p = source.getPlayer();
+            if (p == null || services.get() == null) return List.of();
+            TeamStore.Notes n = services.get().teams().notesFor(p.getUUID());
+            List<String> tags = new ArrayList<>();
+            n.invites().forEach(i -> tags.add(i.tag()));
+            n.transfers().forEach(t -> tags.add(t.tag()));
+            return tags;
         });
     }
 
