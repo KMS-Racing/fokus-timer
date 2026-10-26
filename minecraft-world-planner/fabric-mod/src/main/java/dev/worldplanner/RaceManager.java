@@ -126,13 +126,11 @@ final class RaceManager {
                     RaceStore.Lap stored = new RaceStore.Lap(player.getUUID(), Math.round(lap.lapMs()), sectors, System.currentTimeMillis(),
                             track.version(), mode(player), lap.clean());
                     result = s.races().recordLap(track.id(), stored);
-                    java.util.Set<UUID> hidden = s.prefs().statsHidden();
                     if (result.recordBefore() != null) {
                         UUID before = result.recordBefore().player();
-                        // Wer sich aus Ranglisten ausgeblendet hat, wird auch hier nicht genannt
-                        holder = before.equals(player.getUUID()) ? "dir" : hidden.contains(before) ? null : s.players().name(before);
+                        holder = before.equals(player.getUUID()) ? "dir" : s.players().name(before);
                     }
-                    if (result.record() && !hidden.contains(player.getUUID())) {
+                    if (result.record()) {
                         s.activity().add(player.getUUID(), "race.record", s.players().name(player.getUUID()) + " hat den Streckenrekord auf »"
                                 + track.name() + "« geholt: " + RaceStore.time(stored.ms()), "race", track.id(), "all");
                     }

@@ -121,8 +121,12 @@ if (!code) { console.error('Aufruf: node bluemap_sync_test.js <login-code>'); pr
   await toLive();
   statusText = await page.textContent('#liveStatus');
   check('Entdecktes Gebiet: keine "noch niemand"-Warnung', !statusText.includes('Hier war noch niemand'), statusText);
-  await page.evaluate(() => { planner.store.blueMapStatus = { available: true, renderQueue: 3, renderThreads: 1, rendering: true, paused: false }; planner.bluemap.updateMapStatus('live'); });
-  statusText = await page.textContent('#liveStatus');
+  // Setzen und Lesen in einem Schritt: Die Seite holt alle 5 Sekunden den echten Status – dazwischen könnte er den Test-Status überschreiben
+  statusText = await page.evaluate(() => {
+    planner.store.blueMapStatus = { available: true, renderQueue: 3, renderThreads: 1, rendering: true, paused: false };
+    planner.bluemap.updateMapStatus('live');
+    return document.querySelector('#liveStatus').textContent;
+  });
   check('Render-Warteschlange wird angezeigt', statusText.includes('rendert gerade (3 Aufgaben'), statusText);
   await page.screenshot({ path: (process.env.SHOT_DIR || '.') + '/bluemap-sync.png' });
 

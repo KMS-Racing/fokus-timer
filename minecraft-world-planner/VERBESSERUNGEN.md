@@ -227,3 +227,27 @@ noch einmal mit genau der Jar, die ausgeliefert wird:
 **Nicht geprüft** (ehrlich): wie Pfeil, Partikel und Rennanzeige in einem echten Minecraft-Fenster aussehen; Rennen mit echtem
 Boot, Pferd oder Elytra (Fake-Spieler können nicht lenken – die Fahrzeug-Erkennung ist nur per Unit-Test geprüft); dass Fabrics
 Abmelde-Ereignis bei echten Spielern sofort kommt (die Mod kommt aber auch ohne aus).
+
+## 0.5.1: Ranglisten für alle sichtbar, nur auf der Webseite
+
+Dein Wunsch: „mach die Ranglisten immer für alle sichtbar, einfach als Tab auf der Website, nicht in game“.
+
+- **Eigener Reiter ♛ Ranglisten** in der Navigation (`#/ranglisten`). Die Statistik hat nur noch „Server“ und „Spieler“.
+  Alte Links (`#/statistik/ranglisten`, z. B. aus Chat-Nachrichten von 0.5.0) führen auf die neue Seite.
+- **Für alle sichtbar:** Ausblenden gibt es nicht mehr – kein Schalter in den Einstellungen (dort steht jetzt ein Hinweis),
+  kein „Mich ausblenden“, `/api/prefs/game` mit `rankings` → 400. Alle Spieler stehen in Ranglisten, Server-Summen, Verlauf
+  und Renn-Bestenlisten, jede Spielerseite ist für alle eingeloggten Spieler offen.
+- **Nicht im Spiel:** `/planer top` und `/planer ranglisten an|aus` gibt es nicht mehr; `/planer statistik` zeigt deine Zahlen
+  ohne „Ränge“ und verlinkt auf die Ranglisten der Webseite. `/rennen zeiten` (Bestenliste einer Strecke) bleibt – die gehört
+  zum Fahren.
+- **Bestehende Daten:** Wer sich in 0.5.0 ausgeblendet hatte, steht ab 0.5.1 wieder drin. Der alte Eintrag in `prefs.json` wird
+  überlesen und beim nächsten Speichern weggelassen; alle anderen Schalter bleiben.
+
+**Ehrlich:** Damit sieht jeder eingeloggte Spieler Spielzeit, AFK-Zeit, Tode und Sitzungen aller anderen – so wie bei
+CraftAttack. Auf einem Server unter Freunden passt das; sag es deinen Mitspielern trotzdem vorher. Wer das gar nicht will:
+`statistics: false` schaltet Statistik und Ranglisten für alle ab.
+
+| Fehler | Gefunden durch | Behoben |
+|---|---|---|
+| Test-Fehler: Der Browser-Test ließ bei jedem Lauf ein Land mit 3 Chunks stehen – nach vielen Läufen war Alices Grenze von 64 Chunks voll, und zwei Tests brachen ab | voller Testlauf (Spiel-Integration und Browser-Kern abgebrochen: „höchstens 64 Chunks“) | Der Test heißt sein Land „Testland …“ und räumt alte eigene Testländer am Anfang auf (nur ohne Mitbesitzer) |
+| Test-Fehler: Der BlueMap-Test setzte einen künstlichen Status und las ihn erst danach – holte die Seite (alle 5 s) dazwischen den echten Status, war der Test rot | voller Testlauf (1 von 22 rot) | Setzen und Lesen in einem Schritt im Browser – kein Zeitfenster mehr |

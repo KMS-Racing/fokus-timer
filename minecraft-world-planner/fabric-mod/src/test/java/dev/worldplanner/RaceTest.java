@@ -262,14 +262,14 @@ class RaceTest {
         r.finishEdit(alice, id);
         assertEquals(2, r.track(id).version(), "4 statt 3 Tore = neue Version");
         assertTrue(r.leaderboard(id).isEmpty());
-        assertEquals(1, r.trackJson(id, alice, false, java.util.Set.of(), w.players::name).get("archived").getAsInt(), "alte Bestzeit bleibt im Archiv");
+        assertEquals(1, r.trackJson(id, alice, false, w.players::name).get("archived").getAsInt(), "alte Bestzeit bleibt im Archiv");
         r.setVehicle(alice, false, id, "horse");
         assertEquals(3, r.track(id).version());
         r.recordLap(id, lap(bob, 30_000, 2, 3));
 
         TestSupport.World again = w.restart();
         RaceStore r2 = again.services.races();
-        assertEquals(r.trackJson(id, alice, false, java.util.Set.of(), w.players::name), r2.trackJson(id, alice, false, java.util.Set.of(), again.players::name),
+        assertEquals(r.trackJson(id, alice, false, w.players::name), r2.trackJson(id, alice, false, again.players::name),
                 "alles nach dem Neustart gleich");
         assertEquals("horse", r2.track(id).vehicle());
         assertEquals(SQUARE, r2.track(id).gates());
@@ -319,14 +319,12 @@ class RaceTest {
         assertEquals(403, assertThrows(PlannerException.class, () -> new RaceRoutes(w.services).handle(post(bob, "{\"name\":\"X\"}", "races", id, "rename"))).status);
         assertEquals(400, assertThrows(PlannerException.class, () -> new RaceRoutes(w.services).handle(post(alice, "{\"confirmName\":\"falsch\"}", "races", id, "delete"))).status);
         assertEquals(409, assertThrows(PlannerException.class, () -> new RaceRoutes(w.services).handle(post(alice, "{}", "races", id, "navigate"))).status, "nicht im Spiel");
-        // Wer sich aus Ranglisten ausgeblendet hat: Die Zeit bleibt (sonst wäre die Bestenliste falsch), der Name nicht
-        w.prefs.setGame(alice, "rankings", false);
-        JsonObject anon = new RaceRoutes(w.services).handle(get(bob, "races", id)).getAsJsonObject().getAsJsonArray("leaderboard").get(0).getAsJsonObject();
-        assertEquals("ausgeblendet", anon.get("name").getAsString());
-        assertEquals(24_000, anon.get("ms").getAsLong());
-        assertFalse(anon.has("uuid"), "auch keine UUID, über die man sie finden könnte");
-        JsonObject own = new RaceRoutes(w.services).handle(get(alice, "races", id)).getAsJsonObject().getAsJsonArray("leaderboard").get(0).getAsJsonObject();
-        assertEquals("Alice", own.get("name").getAsString(), "sich selbst sieht man");
+        // Bestenlisten sind für alle sichtbar – mit Namen (ausblenden gibt es seit 0.5.1 nicht mehr)
+        JsonObject top = new RaceRoutes(w.services).handle(get(bob, "races", id)).getAsJsonObject().getAsJsonArray("leaderboard").get(0).getAsJsonObject();
+        assertEquals("Alice", top.get("name").getAsString());
+        assertEquals(alice.toString(), top.get("uuid").getAsString());
+        assertEquals(24_000, top.get("ms").getAsLong());
+        assertFalse(top.has("hidden"));
         new RaceRoutes(w.services).handle(post(alice, "{\"confirmName\":\"kurs\"}", "races", id, "delete"));
         assertNull(r.track(id));
         TestSupport.World off = new TestSupport.World(dir.resolve("aus"), TestSupport.config("races", false));

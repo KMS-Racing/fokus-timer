@@ -23,13 +23,22 @@ async function dialogSubmit(page) {
   await login(page, codeA);
   check('Login per Link funktioniert', await page.isVisible('#appView'));
   check('Code wurde aus der Adresszeile entfernt', !page.url().includes('login='), page.url());
+  // Testländer früherer Läufe aufräumen: nur eigene, deren Name mit „Testland “ beginnt und die niemand sonst mitbesitzt.
+  // Sonst ist nach vielen Läufen die Chunk-Grenze voll. Das Land dieses Laufs bleibt am Ende zum Ansehen stehen.
+  await page.evaluate(async () => {
+    const me = planner.store.me.uuid;
+    for (const l of planner.store.lands) {
+      if (l.name.startsWith('Testland ') && l.owners.length === 1 && l.owners[0].uuid === me) await planner.api(`api/lands/${l.id}/delete`, {});
+    }
+    await planner.load.lands();
+  });
   const nameA = await page.evaluate(() => planner.store.me.name);
   check('Name oben rechts', (await page.textContent('#accountBox')).includes(nameA));
   check('Kein "null" im Kopfbereich', !(await page.textContent('#accountBox')).includes('null'));
   check('Dashboard ist die Startseite', (await page.textContent('#viewRoot h1')).includes('Hallo'));
   const routes = await page.$$eval('#sideNav .nav-link', as => as.map(a => a.dataset.route));
-  check('Hauptnavigation mit allen 12 Bereichen (seit 0.5 mit Statistik und Rennen)', JSON.stringify(routes) === JSON.stringify(
-    ['dashboard', 'karte', 'live', 'claims', 'marker', 'teams', 'handel', 'projekte', 'spieler', 'statistik', 'rennen', 'einstellungen']), routes.join(','));
+  check('Hauptnavigation mit allen 13 Bereichen (seit 0.5 mit Statistik und Rennen, seit 0.5.1 Ranglisten eigenständig)', JSON.stringify(routes) === JSON.stringify(
+    ['dashboard', 'karte', 'live', 'claims', 'marker', 'teams', 'handel', 'projekte', 'spieler', 'statistik', 'ranglisten', 'rennen', 'einstellungen']), routes.join(','));
   await page.click('#sideNav a[data-route=einstellungen]');
   await page.waitForSelector('#seedValue');
   check('Seed angezeigt (Einstellungen)', /^-?\d+$/.test(await page.textContent('#seedValue')), await page.textContent('#seedValue'));
@@ -68,7 +77,7 @@ async function dialogSubmit(page) {
   check('Vorschau zeigt Chunks danach', (await page.textContent('#checkLine')).includes(`danach ${usedBefore + 3} von`), await page.textContent('#checkLine'));
   check('"Neues Land" ist klickbar', await page.isEnabled('#newLandBtn'));
   await page.click('#newLandBtn');
-  const landName = 'Dorf ' + run;
+  const landName = 'Testland ' + run;
   await page.fill('#modal input[name=name]', landName);
   await dialogSubmit(page);
   await page.waitForFunction(n => planner.store.lands.some(l => l.name === n), landName, { timeout: 8000 });
@@ -184,7 +193,7 @@ async function dialogSubmit(page) {
   check('Mit Mitbesitzer: kein Löschen-Knopf, nur Austreten', !(await page.isVisible('button.danger:has-text("Löschen")')) && await page.isVisible('button:has-text("Austreten")'));
   check('B sieht keine Admin-Knöpfe', (await page.locator('button', { hasText: 'Admin' }).count()) === 0);
 
-  // Aufräumen: beide treten aus (letzter Besitzer -> Land frei), Marker löschen
+  // Aufräumen: B tritt aus (A behält das Land zum Ansehen – der nächste Lauf räumt es weg)
   await page.evaluate(async n => { const l = planner.store.lands.find(x => x.name === n); await planner.api(`api/lands/${l.id}/leave`, {}); }, landName);
   await page.click('#accountBox button:has-text("Abmelden")');
   check('Keine Fehler unserer Seite in der Konsole', problems.length === 0, problems.join(' | '));

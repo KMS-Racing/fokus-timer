@@ -1,8 +1,8 @@
 """Test: Statistik wie bei CraftAttack auf einem echten Server.
 
 Echte Aktionen von Carpet-Fake-Spielern (Blöcke setzen, springen, Diamanterz abbauen, an Fallschaden sterben) müssen als
-Minecrafts eigene Zahlen in Ranglisten, Spielerseiten und der Server-Übersicht ankommen. Außerdem: Ausblenden wirkt überall,
-/planer statistik und /planer top antworten im Spiel.
+Minecrafts eigene Zahlen in Ranglisten, Spielerseiten und der Server-Übersicht ankommen. Außerdem: Alle sind für alle sichtbar
+(ausblenden gibt es seit 0.5.1 nicht mehr), /planer statistik antwortet im Spiel, Ranglisten gibt es im Spiel nicht mehr.
 
 Aufruf: TESTSERVER_DIR=/pfad python3 stats_test.py <code-A> <code-B> <code-D>
 A, B und D müssen online sein (Fake-Spieler im Überlebensmodus, keine OPs). Dauert 3–4 Minuten: Für Spieler, die online
@@ -23,8 +23,6 @@ check = Checker("Statistik")
 a, a_name = login(sys.argv[1])
 b, b_name = login(sys.argv[2])
 d, d_name = login(sys.argv[3])
-for tok in (a, b, d):
-    call("api/prefs/game", {"key": "rankings", "on": True}, tok)
 console("difficulty peaceful")  # sonst stören Monster (nach einem Neustart gilt wieder die Schwierigkeit aus server.properties)
 ua, ub, ud = (call("api/me", token=t)[1]["uuid"] for t in (a, b, d))
 
@@ -141,41 +139,34 @@ check("Server: Rekord mindestens 3 gleichzeitig", server.get("records", {}).get(
 check("Server: „Wann ist am meisten los“ hat Messwerte", any(v is not None for row in server.get("heat", []) for v in row))
 check("Server: Summe platzierter Blöcke enthält Alice", server.get("totals", {}).get("placed", 0) >= after[ua].get("placed", 0), server.get("totals"))
 
-# ------------------------------------------------------------------ Ausblenden
-call("api/prefs/game", {"key": "rankings", "on": False}, d)
-st, week = call("api/stats/rankings?range=week", token=a)
-check("Ausgeblendet: Dana fehlt in der Rangliste", d_name not in names(category(week, "diamantenbank")), category(week, "diamantenbank"))
+# ------------------------------------------------------------------ Für alle sichtbar (seit 0.5.1)
+st, r = call("api/prefs/game", {"key": "rankings", "on": False}, d)
+check("Ausblenden gibt es nicht mehr", st == 400, (st, r))
 st, r = page(a, ud)
-check("Ausgeblendet: Danas Seite gibt es für Alice nicht", st == 404, (st, r))
-st, r = page(d, ud)
-check("…aber für Dana selbst, mit Hinweis", st == 200 and r.get("hidden") is True and r.get("places") == {}, (st, r.get("hidden")))
+check("Alice sieht Danas Seite", st == 200 and r.get("name") == d_name and "hidden" not in r, (st, r.get("name")))
+check("…mit Danas Rängen", "diamantenbank" in r.get("places", {}), r.get("places"))
 st, plist = call("api/stats/players", token=a)
-check("Ausgeblendet: nicht in der Spielerliste", d_name not in [p["name"] for p in plist.get("players", [])])
+check("Spielerliste: alle drei", {a_name, b_name, d_name} <= {p["name"] for p in plist.get("players", [])}, [p["name"] for p in plist.get("players", [])])
 st, server = call("api/stats/server", token=a)
-check("Ausgeblendet: nicht im Verlauf, aber gezählt", server.get("hiddenPlayers", 0) >= 1 and not any(e["name"] == d_name for e in server.get("events", [])),
-      (server.get("hiddenPlayers"), [e["name"] for e in server.get("events", [])][:5]))
-m = mark()
-console(f"execute as {a_name} run planer statistik {d_name}")
-check("Im Spiel: /planer statistik Dana sagt „ausgeblendet“", wait_for(m, f"»{d_name}« hat die Statistik ausgeblendet."), since(m)[-300:])
-m = mark()
-console(f"execute as {d_name} run planer ranglisten an")
-check("/planer ranglisten an antwortet", wait_for(m, "In Ranglisten und Statistik sichtbar: an."), since(m)[-300:])
-st, r = page(a, ud)
-check("…und Dana ist wieder sichtbar", st == 200 and r.get("hidden") is False, st)
+check("Server-Übersicht ohne „ausgeblendet“", "hiddenPlayers" not in server and server.get("players", 0) >= 3, (server.get("players"), server.get("hiddenPlayers")))
 
 # ------------------------------------------------------------------ Befehle im Spiel
 m = mark()
 console(f"execute as {a_name} run planer statistik")
 check("/planer statistik: eigene Zahlen", wait_for(m, f"Statistik von {a_name}") and wait_for(m, "Blöcke platziert:"), since(m)[-500:])
+answer = since(m).split(f"Statistik von {a_name}", 1)[-1].split("[Server thread", 1)[0]  # nur die Antwort selbst
+check("…ohne Ränge (die gibt es nur auf der Webseite)", "Blöcke platziert:" in answer and "Ränge:" not in answer and "Platz" not in answer, answer)
 m = mark()
-console(f"execute as {a_name} run planer top baumeister")
-check("/planer top baumeister: Rangliste", wait_for(m, "Baumeister – Blöcke platziert") and wait_for(m, f". {a_name} "), since(m)[-400:])
+console(f"execute as {a_name} run planer statistik {d_name}")
+check("/planer statistik Dana: Danas Zahlen", wait_for(m, f"Statistik von {d_name}"), since(m)[-300:])
+for cmd in ("planer top", "planer top baumeister", "planer ranglisten aus"):
+    m = mark()
+    console(f"execute as {a_name} run {cmd}")
+    check(f"/{cmd} gibt es im Spiel nicht mehr", wait_for(m, "Incorrect argument for command") and "Ranglisten – wer führt?" not in since(m), since(m)[-300:])
 m = mark()
-console(f"execute as {a_name} run planer top")
-check("/planer top: wer führt wo", wait_for(m, "Ranglisten – wer führt?") and "Dauerzocker:" in since(m), since(m)[-600:])
-m = mark()
-console(f"execute as {a_name} run planer top gibtsnicht")
-check("Unbekannte Rangliste: Fehlermeldung", wait_for(m, "Diese Rangliste gibt es nicht."), since(m)[-300:])
+console(f"execute as {a_name} run planer hilfe")
+check("/planer hilfe nennt keine Ranglisten mehr", wait_for(m, "Befehle (anklicken zum Einfügen):") and wait_for(m, "/planer abmelden")
+      and "/planer top" not in since(m) and "Ranglisten" not in since(m), since(m)[-900:])
 
 # Aufräumen: Bob wieder holen, Plattformen weg
 respawn(b_name)

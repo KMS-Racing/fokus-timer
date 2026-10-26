@@ -78,10 +78,9 @@ function switchRow([key, title, text]) {
 }
 
 function statsSection() {
-  return el('section', { class: 'card', id: 'statsSettings' }, el('h2', { text: 'Statistik' }),
-    switchRow(['rankings', 'In Ranglisten und Statistik sichtbar',
-      'Andere sehen deine Statistik-Seite und dich in den Ranglisten. Aus: Nur du siehst deine Zahlen, und du fehlst in Ranglisten, Server-Summen und im Verlauf. Gezählt wird trotzdem weiter – so wie Minecraft selbst auch zählt.']),
-    el('p', { class: 'muted small', text: 'Im Spiel: /planer ranglisten an oder aus.' }));
+  return el('section', { class: 'card', id: 'statsSettings' }, el('h2', { text: 'Statistik und Ranglisten' }),
+    el('p', { text: 'Wie bei CraftAttack sehen alle eingeloggten Spieler unter „Statistik“ und „Ranglisten“, wie lange du spielst, wie oft du stirbst, was du abbaust und baust. Ausblenden kann man sich nicht.' }),
+    el('p', { class: 'muted small', text: 'Die Zahlen zählt Minecraft selbst (wie unter Esc → Statistiken). Der Server-Admin kann die Statistik für alle abschalten.' }));
 }
 
 function gameSection() {

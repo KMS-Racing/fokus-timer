@@ -32,8 +32,8 @@ import java.util.function.Function;
  * Minecrafts Zahlen reichen zurück bis zum ersten Login. Was die Mod selbst misst (Aktiv/AFK, Sitzungen, Wann online,
  * Todesursachen, Verlauf, Zuwachs), gibt es erst ab der Installation – "since" sagt, ab wann.
  *
- * Spieler, die sich ausgeblendet haben ("hidden"), fehlen in Ranglisten, im Verlauf und in den Server-Summen;
- * ihre Seite sieht nur der Spieler selbst. In anonymen Zählungen (wie viele online, Wann ist am meisten los) sind sie dabei.
+ * Wie bei CraftAttack stehen alle Spieler in den Ranglisten und jeder kann jede Spielerseite sehen (ein Ausblenden gab es
+ * nur in 0.5.0).
  */
 final class StatsStore extends JsonStore {
     static final int KEEP_DAYS = 40;
@@ -291,11 +291,10 @@ final class StatsStore extends JsonStore {
         };
     }
 
-    /** Rangliste (größter Wert zuerst, nur Werte über 0, ohne ausgeblendete Spieler). */
-    synchronized List<Entry> ranking(StatValues.Category c, String range, LocalDate today, Set<UUID> hidden) {
+    /** Rangliste (größter Wert zuerst, nur Werte über 0). */
+    synchronized List<Entry> ranking(StatValues.Category c, String range, LocalDate today) {
         List<Entry> out = new ArrayList<>();
         players.forEach((id, p) -> {
-            if (hidden.contains(id)) return;
             Long v = value(p, c, range, today);
             if (v != null && v > 0) out.add(new Entry(id, v));
         });
@@ -312,16 +311,15 @@ final class StatsStore extends JsonStore {
 
     // ------------------------------------------------------------------ API
 
-    synchronized JsonObject rankingsJson(String range, LocalDate today, UUID viewer, Set<UUID> hidden, Function<UUID, String> names) {
+    synchronized JsonObject rankingsJson(String range, LocalDate today, UUID viewer, Function<UUID, String> names) {
         Validate.oneOf(range, RANGES, "Zeitraum");
         JsonObject o = new JsonObject();
         o.addProperty("range", range);
         o.addProperty("since", since);
-        o.addProperty("meHidden", hidden.contains(viewer));
         JsonArray cats = new JsonArray();
         for (StatValues.Category c : StatValues.CATEGORIES) {
             JsonObject co = category(c);
-            List<Entry> list = ranking(c, range, today, hidden);
+            List<Entry> list = ranking(c, range, today);
             JsonArray entries = new JsonArray();
             JsonObject me = null;
             for (int i = 0; i < list.size(); i++) {
@@ -345,10 +343,9 @@ final class StatsStore extends JsonStore {
     }
 
     /** Liste aller Spieler mit Statistik (für die Auswahl auf der Webseite). */
-    synchronized JsonObject playersJson(UUID viewer, Set<UUID> hidden, Set<UUID> online, Function<UUID, String> names) {
+    synchronized JsonObject playersJson(Set<UUID> online, Function<UUID, String> names) {
         JsonArray arr = new JsonArray();
         players.forEach((id, p) -> {
-            if (hidden.contains(id) && !id.equals(viewer)) return;
             JsonObject o = new JsonObject();
             o.addProperty("uuid", id.toString());
             o.addProperty("name", names.apply(id));
@@ -356,7 +353,6 @@ final class StatsStore extends JsonStore {
             o.addProperty("deaths", p.values.getOrDefault("deaths", 0L));
             o.addProperty("updated", p.updated);
             o.addProperty("online", online != null && online.contains(id));
-            o.addProperty("hidden", hidden.contains(id));
             arr.add(o);
         });
         JsonObject o = new JsonObject();
@@ -366,22 +362,18 @@ final class StatsStore extends JsonStore {
     }
 
     /**
-     * Server-Übersicht. Summen und Verlauf ohne ausgeblendete Spieler; anonyme Zählungen (online, Rekord, Wann ist am meisten
-     * los, Spieler pro Tag) mit allen.
+     * Server-Übersicht: Summen, Rekorde, Wann ist am meisten los, Spieler pro Tag, Todesursachen und Verlauf.
      *
      * @param online wer gerade online ist, oder null, wenn der Server das nicht zeigen soll (showOnlinePlayers)
      */
-    synchronized JsonObject serverJson(LocalDate today, Set<UUID> hidden, Set<UUID> online, Function<UUID, String> names) {
+    synchronized JsonObject serverJson(LocalDate today, Set<UUID> online, Function<UUID, String> names) {
         JsonObject o = new JsonObject();
         o.addProperty("since", since);
-        int visible = 0;
         Map<String, Long> totals = new LinkedHashMap<>();
         for (String key : TOTAL_KEYS) totals.put(key, 0L);
         Map<String, Integer> causes = new HashMap<>();
         List<JsonObject> events = new ArrayList<>();
         for (Map.Entry<UUID, Player> e : players.entrySet()) {
-            if (hidden.contains(e.getKey())) continue;
-            visible++;
             Player p = e.getValue();
             for (String key : TOTAL_KEYS) totals.merge(key, current(p, key), Long::sum);
             p.causes.forEach((k, n) -> causes.merge(StatNames.cause(k), n, Integer::sum));
@@ -391,8 +383,7 @@ final class StatsStore extends JsonStore {
                 events.add(event(ev, e.getKey(), names));
             }
         }
-        o.addProperty("players", visible);
-        o.addProperty("hiddenPlayers", players.size() - visible);
+        o.addProperty("players", players.size());
         JsonObject t = new JsonObject();
         totals.forEach(t::addProperty);
         o.add("totals", t);
@@ -412,11 +403,8 @@ final class StatsStore extends JsonStore {
         }
         if (longestSessionBy != null) {
             JsonObject r = new JsonObject();
-            boolean show = !hidden.contains(longestSessionBy);
-            if (show) {
-                r.addProperty("uuid", longestSessionBy.toString());
-                r.addProperty("name", names.apply(longestSessionBy));
-            }
+            r.addProperty("uuid", longestSessionBy.toString());
+            r.addProperty("name", names.apply(longestSessionBy));
             r.addProperty("ms", longestSessionMs);
             r.addProperty("at", longestSessionAt);
             records.add("longestSession", r);
@@ -470,14 +458,13 @@ final class StatsStore extends JsonStore {
         return o;
     }
 
-    /** Spielerseite. Null, wenn es keine Statistik gibt oder der Spieler sich ausgeblendet hat (außer für sich selbst). */
-    synchronized JsonObject playerJson(UUID id, UUID viewer, LocalDate today, Set<UUID> hidden, boolean online, Function<UUID, String> names) {
+    /** Spielerseite. Null, wenn es für den Spieler (noch) keine Statistik gibt. */
+    synchronized JsonObject playerJson(UUID id, LocalDate today, boolean online, Function<UUID, String> names) {
         Player p = players.get(id);
-        if (p == null || (hidden.contains(id) && !id.equals(viewer))) return null;
+        if (p == null) return null;
         JsonObject o = new JsonObject();
         o.addProperty("uuid", id.toString());
         o.addProperty("name", names.apply(id));
-        o.addProperty("hidden", hidden.contains(id));
         o.addProperty("since", since);
         o.addProperty("firstSeen", p.firstSeen);
         o.addProperty("updated", p.updated);
@@ -552,23 +539,21 @@ final class StatsStore extends JsonStore {
         }
         o.add("events", events);
 
-        // Platz in jeder Rangliste (gesamt) und vor 7 Tagen – nur unter sichtbaren Spielern
+        // Platz in jeder Rangliste (gesamt) und vor 7 Tagen
         JsonObject places = new JsonObject();
-        if (!hidden.contains(id)) {
-            for (StatValues.Category c : StatValues.CATEGORIES) {
-                List<Entry> now = ranking(c, "all", today, hidden);
-                int idx = indexOf(now, id);
-                if (idx < 0) continue;
-                JsonObject x = new JsonObject();
-                x.addProperty("place", place(now, idx));
-                x.addProperty("of", now.size());
-                if (c.growth()) {
-                    List<Entry> before = rankingAt(c, today.minusDays(7), hidden);
-                    int b = indexOf(before, id);
-                    if (b >= 0) x.addProperty("weekAgo", place(before, b));
-                }
-                places.add(c.id(), x);
+        for (StatValues.Category c : StatValues.CATEGORIES) {
+            List<Entry> now = ranking(c, "all", today);
+            int idx = indexOf(now, id);
+            if (idx < 0) continue;
+            JsonObject x = new JsonObject();
+            x.addProperty("place", place(now, idx));
+            x.addProperty("of", now.size());
+            if (c.growth()) {
+                List<Entry> before = rankingAt(c, today.minusDays(7));
+                int b = indexOf(before, id);
+                if (b >= 0) x.addProperty("weekAgo", place(before, b));
             }
+            places.add(c.id(), x);
         }
         o.add("places", places);
 
@@ -590,10 +575,10 @@ final class StatsStore extends JsonStore {
     }
 
     /** Rangliste mit dem Stand am Ende eines Tages (für "vor 7 Tagen: Platz 5"). */
-    private List<Entry> rankingAt(StatValues.Category c, LocalDate date, Set<UUID> hidden) {
+    private List<Entry> rankingAt(StatValues.Category c, LocalDate date) {
         List<Entry> out = new ArrayList<>();
         players.forEach((id, p) -> {
-            if (hidden.contains(id) || p.days.isEmpty() || p.days.firstKey().compareTo(date.toString()) > 0) return;
+            if (p.days.isEmpty() || p.days.firstKey().compareTo(date.toString()) > 0) return;
             long v = endOf(p, date, c.key());
             if (v > 0) out.add(new Entry(id, v));
         });
@@ -606,24 +591,19 @@ final class StatsStore extends JsonStore {
         return -1;
     }
 
-    /** Für /planer statistik: Werte, Zuwachs heute und Plätze (gesamt). */
-    record Summary(Map<String, Long> values, Map<String, Long> today, Map<String, Integer> places, long updated) {}
+    /** Für /planer statistik: Werte und Zuwachs heute (Ranglisten gibt es nur auf der Webseite). */
+    record Summary(Map<String, Long> values, Map<String, Long> today, long updated) {}
 
-    /** Null, wenn es für den Spieler (noch) keine Statistik gibt. Plätze nur, wenn er nicht ausgeblendet ist. */
-    synchronized Summary summary(UUID id, LocalDate today, Set<UUID> hidden) {
+    /** Null, wenn es für den Spieler (noch) keine Statistik gibt. */
+    synchronized Summary summary(UUID id, LocalDate today) {
         Player p = players.get(id);
         if (p == null) return null;
         Map<String, Long> growth = new LinkedHashMap<>();
-        Map<String, Integer> places = new LinkedHashMap<>();
         for (StatValues.Category c : StatValues.CATEGORIES) {
             Long v = value(p, c, "today", today);
             if (v != null) growth.put(c.key(), v);
-            if (hidden.contains(id)) continue;
-            List<Entry> list = ranking(c, "all", today, hidden);
-            int i = indexOf(list, id);
-            if (i >= 0) places.put(c.id(), place(list, i));
         }
-        return new Summary(values(id), growth, places, p.updated);
+        return new Summary(values(id), growth, p.updated);
     }
 
     /** Kennzahlen eines Spielers (mit Aktiv/AFK). Null, wenn es (noch) keine Statistik gibt. */

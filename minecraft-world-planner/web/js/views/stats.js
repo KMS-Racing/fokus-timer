@@ -1,8 +1,9 @@
-// Statistik wie bei CraftAttack: der Server in Zahlen, Ranglisten mit Spaßnamen und eine Seite pro Spieler.
+// Statistik wie bei CraftAttack: der Server in Zahlen und eine Seite pro Spieler (#/statistik) – und die Ranglisten mit
+// Spaßnamen als eigene Seite (#/ranglisten). Alle Spieler stehen drin, ausblenden gibt es nicht (wie bei CraftAttack).
 // Alle Zahlen kommen vom Server (Minecrafts eigene Statistik plus das, was der Planer seit der Installation misst).
 import { api, enc } from '../api.js';
-import { setGameSwitch, store } from '../store.js';
-import { act, debounce, el, fill, fmtAgo, fmtDate, fmtDateTime, fmtNum, pill } from '../util.js';
+import { store } from '../store.js';
+import { debounce, el, fill, fmtAgo, fmtDate, fmtDateTime, fmtNum } from '../util.js';
 import { barList, chartCard, columns, dataTable, heatLegend, heatmap, hideTip } from '../charts.js';
 import { dayLabel, fmtDuration, fmtValue, lastDays, oneDecimal, placeText, serverToday, shortDay, WEEKDAYS } from '../statfmt.js';
 import { bind, pageHead, searchInput, segmented } from './common.js';
@@ -29,7 +30,7 @@ async function fetchJson(key, path) {
 
 function tabs(active) {
   return el('nav', { class: 'tabs', 'aria-label': 'Statistik' },
-    [['server', 'Server', '#/statistik'], ['ranglisten', 'Ranglisten', '#/statistik/ranglisten'], ['spieler', 'Spieler', '#/statistik/spieler']]
+    [['server', 'Server', '#/statistik'], ['spieler', 'Spieler', '#/statistik/spieler'], ['ranglisten', 'Ranglisten', '#/ranglisten']]
       .map(([k, t, href]) => el('a', { class: 'tab' + (k === active ? ' active' : ''), href, 'aria-current': k === active ? 'page' : null, text: t })));
 }
 
@@ -83,7 +84,7 @@ function serverView(d) {
   const records = el('dl', { class: 'facts' },
     el('dt', { text: 'Meiste gleichzeitig online' }), el('dd', { text: r.maxOnline ? `${fmtNum(r.maxOnline.count)} (${fmtDateTime(r.maxOnline.at)})` : '—' }),
     el('dt', { text: 'Längste Sitzung' }), el('dd', {}, r.longestSession
-      ? [fmtDuration(r.longestSession.ms), ' – ', r.longestSession.name ? el('a', { href: playerHref(r.longestSession.uuid), text: r.longestSession.name }) : 'ausgeblendet',
+      ? [fmtDuration(r.longestSession.ms), ' – ', el('a', { href: playerHref(r.longestSession.uuid), text: r.longestSession.name }),
         ` (${fmtDate(r.longestSession.at)})`] : '—'),
     el('dt', { text: 'Meiste Spieler an einem Tag' }), el('dd', { text: r.busiestDay ? `${fmtNum(r.busiestDay.players)} (${dayLabel(r.busiestDay.date)})` : '—' }),
     el('dt', { text: 'Meiste Spielstunden an einem Tag' }), el('dd', { text: r.mostPlayedDay ? `${oneDecimal(r.mostPlayedDay.minutes / 60)} h (${dayLabel(r.mostPlayedDay.date)})` : '—' }));
@@ -104,8 +105,6 @@ function serverView(d) {
         barList(causes, v => `${fmtNum(v)}×`, 'Seit der Installation des Planers ist noch niemand gestorben.'),
         causes.length ? el('p', { class: 'muted small', text: 'Gezählt seit der Installation des Planers.' }) : null),
       el('section', { class: 'card', id: 'statsFeed' }, el('h2', { text: 'Verlauf' }), eventList(d.events || [], true))),
-    el('p', { class: 'muted small', text: (d.hiddenPlayers ? `${fmtNum(d.hiddenPlayers)} Spieler haben sich ausgeblendet – sie fehlen in Summen, Ranglisten und im Verlauf. ` : '')
-      + 'Ausblenden kann sich jeder in den Einstellungen oder im Spiel mit /planer ranglisten aus.' }),
   ];
 }
 
@@ -115,7 +114,7 @@ function rankingsView(d) {
   const me = store.me || {};
   const cards = d.categories.map(c => {
     const entries = c.entries.map(e => ({ place: e.place, name: e.name, value: e.value, href: playerHref(e.uuid), mine: e.uuid === me.uuid }));
-    const mine = c.me ? `Dein Platz: ${c.me.place} von ${c.count} · ${fmtValue(c.unit, c.me.value)}` : d.meHidden ? 'Du bist ausgeblendet.' : 'Du bist hier (noch) nicht dabei.';
+    const mine = c.me ? `Dein Platz: ${c.me.place} von ${c.count} · ${fmtValue(c.unit, c.me.value)}` : 'Du bist hier (noch) nicht dabei.';
     return el('section', { class: 'card rank-card', 'data-category': c.id },
       el('div', { class: 'rank-head' }, el('h2', { text: c.rank }), el('span', { class: 'muted small', text: c.label })),
       c.available ? barList(entries, v => fmtValue(c.unit, v), 'Noch niemand – sei die oder der Erste!')
@@ -126,7 +125,6 @@ function rankingsView(d) {
     el('div', { class: 'toolbar' }, segmented(RANGES, state.range, v => { state.range = v; refresh(); }, 'Zeitraum'),
       el('span', { class: 'toolbar-note', text: state.range === 'all' ? 'Gesamt = Minecrafts Zahlen seit dem ersten Login.'
         : `Zuwachs im Zeitraum – gemessen seit ${fmtDate(d.since)}.` })),
-    d.meHidden ? el('div', { class: 'card highlight' }, el('p', { text: 'Du bist ausgeblendet und tauchst in keiner Rangliste auf. Wieder sichtbar: in den Einstellungen oder mit /planer ranglisten an.' })) : null,
     el('div', { class: 'rank-grid', id: 'rankGrid' }, cards),
   ];
 }
@@ -142,7 +140,7 @@ function playerListView(d) {
     fill(listBox, items.length ? el('div', { class: 'list', id: 'statsPlayerList' }, items.map(p => el('a', { class: 'item link-item', href: playerHref(p.uuid) },
       el('div', { class: 'item-top' },
         el('div', { class: 'row tight' }, el('span', { class: 'dot ' + (p.online ? 'online' : 'offline'), 'aria-hidden': 'true' }),
-          el('strong', { text: p.name + (p.uuid === me.uuid ? ' (du)' : '') }), p.hidden ? pill('ausgeblendet', 'muted') : null),
+          el('strong', { text: p.name + (p.uuid === me.uuid ? ' (du)' : '') })),
         el('span', { class: 'muted small', text: `${fmtDuration(p.playTime)} gespielt · ${fmtNum(p.deaths)} Tode` })))))
       : el('div', { class: 'empty' }, el('p', { text: 'Niemand gefunden.' })));
   };
@@ -152,10 +150,6 @@ function playerListView(d) {
     listBox,
     el('p', { class: 'muted small', text: 'Spieler, die seit der Installation des Planers noch nie online waren, erscheinen nach ihrem nächsten Login.' }),
   ];
-}
-
-async function setVisible(on) {
-  if (await act(() => setGameSwitch('rankings', on), on ? 'Du bist wieder in Ranglisten und Statistik sichtbar.' : 'Du bist jetzt ausgeblendet.')) refresh();
 }
 
 function playerView(d) {
@@ -204,15 +198,11 @@ function playerView(d) {
 
   return [
     el('a', { class: 'back', href: '#/statistik/spieler', text: '← Alle Spieler' }),
-    pageHead(d.name + (self ? ' (du)' : ''), status,
-      self && !d.hidden ? el('button', { class: 'small', id: 'hideMeBtn', onclick: () => setVisible(false) }, 'Mich ausblenden') : null),
-    d.hidden ? el('div', { class: 'card highlight', id: 'hiddenNote' },
-      el('p', { text: 'Du bist ausgeblendet: Nur du siehst diese Seite, und du fehlst in allen Ranglisten. Gezählt wird trotzdem weiter.' }),
-      el('button', { class: 'primary', onclick: () => setVisible(true) }, 'Wieder sichtbar machen')) : null,
+    pageHead(d.name + (self ? ' (du)' : ''), status),
     el('div', { class: 'stats', id: 'playerTiles' }, tiles),
     el('div', { class: 'grid two' },
       el('section', { class: 'card', id: 'playerRanks' }, el('h2', { text: 'Ränge' }),
-        rankRows.length ? el('ul', { class: 'mini-list' }, rankRows) : el('p', { class: 'muted small', text: d.hidden ? 'Ausgeblendet – keine Ränge.' : 'Noch in keiner Rangliste.' })),
+        rankRows.length ? el('ul', { class: 'mini-list' }, rankRows) : el('p', { class: 'muted small', text: 'Noch in keiner Rangliste.' })),
       el('section', { class: 'card', id: 'playerGrowth' }, el('h2', { text: 'Zuwachs' }), growthTable,
         el('p', { class: 'muted small', text: `Gemessen seit ${fmtDate(d.firstSeen)}.` }))),
     el('div', { class: 'grid two' },
@@ -247,10 +237,11 @@ function playerView(d) {
 let redraw = () => {};
 let refresh = () => {};
 
-export default {
-  title: 'Statistik',
+/** Statistik (Server, Spieler) und Ranglisten teilen sich Laden, Nachladen und Zeichnen. */
+const page = (title, pickTab) => ({
+  title,
   render(root, route) {
-    const tab = route.path[1] === 'ranglisten' ? 'ranglisten' : route.path[1] === 'spieler' ? 'spieler' : 'server';
+    const tab = pickTab(route);
     const playerId = tab === 'spieler' ? route.path[2] || null : null;
     const head = el('div'), body = el('div', { class: 'stats-page' });
     let data = null, error = null, loading = false;
@@ -260,7 +251,9 @@ export default {
 
     const draw = () => {
       const off = store.meta && store.meta.gameFeatures && store.meta.gameFeatures.statistics === false;
-      fill(head, playerId ? null : pageHead('Statistik', 'Wie bei CraftAttack – mit Minecrafts eigenen Zahlen. ' + sinceText(data && data.since)), playerId ? null : tabs(tab));
+      fill(head, playerId ? null : tab === 'ranglisten'
+        ? pageHead('Ranglisten', 'Wie bei CraftAttack – alle Spieler, mit Minecrafts eigenen Zahlen. ' + sinceText(data && data.since))
+        : pageHead('Statistik', 'Wie bei CraftAttack – mit Minecrafts eigenen Zahlen. ' + sinceText(data && data.since)), playerId ? null : tabs(tab));
       if (off) { fill(body, el('div', { class: 'empty' }, el('p', { text: 'Die Statistik ist auf diesem Server ausgeschaltet.' }))); return; }
       if (error) { fill(body, el('div', { class: 'empty' }, el('p', { text: error }))); return; }
       if (!data) { fill(body, el('p', { class: 'muted', text: 'Lädt …' })); return; }
@@ -297,4 +290,7 @@ export default {
     window.addEventListener('resize', onResize);
     return () => { clearInterval(timer); window.removeEventListener('resize', onResize); unbind(); hideTip(); redraw = () => {}; refresh = () => {}; };
   },
-};
+});
+
+export default page('Statistik', route => (route.path[1] === 'spieler' ? 'spieler' : 'server'));
+export const rankings = page('Ranglisten', () => 'ranglisten');

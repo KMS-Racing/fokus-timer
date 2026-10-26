@@ -17,17 +17,18 @@ import players from './views/players.js';
 import projects from './views/projects.js';
 import settings, { applyTheme } from './views/settings.js';
 import races from './views/races.js';
-import stats from './views/stats.js';
+import stats, { rankings } from './views/stats.js';
 import teams from './views/teams.js';
 import trade from './views/trade.js';
 
 const VIEWS = {
-  dashboard, karte, live, seed: live, claims, marker: markers, teams, handel: trade, projekte: projects, spieler: players, statistik: stats, rennen: races,
+  dashboard, karte, live, seed: live, claims, marker: markers, teams, handel: trade, projekte: projects, spieler: players, statistik: stats, ranglisten: rankings, rennen: races,
   einstellungen: settings,
 };
 const NAV = [
   ['dashboard', 'Dashboard', '⌂'], ['karte', 'Karte', '▦'], ['live', 'Live-Welt', '◈'], ['claims', 'Claims', '⚑'], ['marker', 'Marker', '◆'],
-  ['teams', 'Teams', '⚔'], ['handel', 'Handel', '⚖'], ['projekte', 'Projekte', '⚒'], ['spieler', 'Spieler', '☺'], ['statistik', 'Statistik', '★'], ['rennen', 'Rennen', '⏱'],
+  ['teams', 'Teams', '⚔'], ['handel', 'Handel', '⚖'], ['projekte', 'Projekte', '⚒'], ['spieler', 'Spieler', '☺'], ['statistik', 'Statistik', '★'],
+  ['ranglisten', 'Ranglisten', '♛'], ['rennen', 'Rennen', '⏱'],
   ['einstellungen', 'Einstellungen', '⚙'],
 ];
 
@@ -53,7 +54,7 @@ function buildNav() {
 /** Bereiche, die der Server-Admin abgeschaltet hat, verschwinden aus der Navigation. */
 function updateNavVisibility() {
   const features = (store.meta && store.meta.gameFeatures) || {};
-  for (const [route, key] of [['statistik', 'statistics'], ['rennen', 'races']]) {
+  for (const [route, key] of [['statistik', 'statistics'], ['ranglisten', 'statistics'], ['rennen', 'races']]) {
     const link = document.querySelector(`.nav-link[data-route="${route}"]`);
     if (link) link.classList.toggle('hidden', features[key] === false);
   }
@@ -80,6 +81,8 @@ function updateBadges() {
 
 async function show(route) {
   if (!store.me) return;
+  // Bis 0.5.0 waren die Ranglisten ein Reiter der Statistik – alte Links (z. B. aus dem Chat) führen auf die neue Seite
+  if (route.name === 'statistik' && route.path[1] === 'ranglisten') { location.replace('#/ranglisten'); return; }
   const view = VIEWS[route.name] || dashboard;
   if (cleanup) { try { cleanup(); } catch (e) { console.error(e); } cleanup = null; }
   const stage = view.stage || null;

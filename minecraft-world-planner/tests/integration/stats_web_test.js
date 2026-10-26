@@ -1,4 +1,4 @@
-// Browser-Test der neuen Seiten aus 0.5: Statistik (Server, Ranglisten, Spielerseite, Ausblenden) und Rennen.
+// Browser-Test der Seiten aus 0.5: Statistik (Server, Spielerseite), Ranglisten (eigener Reiter, für alle sichtbar) und Rennen.
 // Vergleicht, was die Seite zeigt, mit dem, was die API liefert – es wird nichts erfunden. Läuft gegen einen echten Testserver.
 // Aufruf: node stats_web_test.js <code-spielerA>
 // Für den Rennen-Teil muss es eine fertige Strecke mit Zeiten geben (z. B. nach race_test.py mit RACE_KEEP=1), sonst wird er übersprungen.
@@ -16,7 +16,6 @@ const SHOTS = process.env.SHOT_DIR || null;
   const page = await browser.newPage({ viewport: { width: 1400, height: 950 } });
   const problems = collectProblems(page);
   await login(page, codeA);
-  await page.evaluate(() => planner.api('api/prefs/game', { key: 'rankings', on: true }));
   const me = await page.evaluate(() => planner.store.me);
 
   // 1) Server-Übersicht
@@ -42,9 +41,12 @@ const SHOTS = process.env.SHOT_DIR || null;
   const bars = await page.$$eval('#statsPlayersPerDay path.viz-bar', els => els.length);
   check('Spieler pro Tag: so viele Säulen wie Tage mit Spielern', bars === server.days.filter(d => d.players > 0).length, bars);
 
-  // 2) Ranglisten
-  await page.evaluate(() => planner.navigate('#/statistik/ranglisten'));
+  // 2) Ranglisten: eigener Reiter in der Navigation
+  await page.click('#sideNav .nav-link[data-route=ranglisten]');
   await page.waitForSelector('#rankGrid .rank-card');
+  check('Reiter „Ranglisten“ führt auf #/ranglisten und ist markiert', await page.evaluate(() => location.hash) === '#/ranglisten'
+    && await page.$eval('#sideNav .nav-link[data-route=ranglisten]', a => a.classList.contains('active')), await page.evaluate(() => location.hash));
+  check('Überschrift „Ranglisten“', await page.$eval('#viewRoot h1', h => h.textContent) === 'Ranglisten');
   const cards = await page.$$eval('#rankGrid .rank-card', els => els.map(e => e.dataset.category));
   check('16 Ranglisten', cards.length === 16 && cards.includes('dauerzocker') && cards.includes('flummi'), cards.join(','));
   const api = await page.evaluate(() => planner.api('api/stats/rankings?range=all'));
@@ -56,27 +58,34 @@ const SHOTS = process.env.SHOT_DIR || null;
   const unsterblich = await page.$eval('[data-category=unsterblich]', e => e.textContent);
   check('7 Tage: „Unsterblich“ gibt es nur gesamt', unsterblich.includes('nur „Gesamt“'), unsterblich.slice(0, 120));
 
-  // 3) Eigene Spielerseite, ausblenden und wieder sichtbar
+  await page.evaluate(() => planner.navigate('#/statistik'));
+  await page.waitForSelector('#serverTiles');
+  await page.evaluate(() => planner.navigate('#/statistik/ranglisten')); // Link aus 0.5.0 (z. B. im Chat)
+  await page.waitForSelector('#rankGrid .rank-card');
+  check('Alter Link #/statistik/ranglisten führt auf die neue Seite', await page.evaluate(() => location.hash) === '#/ranglisten', await page.evaluate(() => location.hash));
+
+  // 3) Spielerseiten: für alle sichtbar, ohne „Mich ausblenden“
+  const other = api.categories.flatMap(c => c.entries).find(e => e.uuid !== me.uuid);
+  if (other) {
+    await page.evaluate(uuid => planner.navigate('#/statistik/spieler/' + uuid), other.uuid);
+    await page.waitForSelector('#playerTiles');
+    check(`Die Seite von ${other.name} ist für alle sichtbar`, (await page.$eval('#viewRoot h1', h => h.textContent)) === other.name);
+  }
   await page.evaluate(uuid => planner.navigate('#/statistik/spieler/' + uuid), me.uuid);
   await page.waitForSelector('#playerTiles');
   const mine = await page.evaluate(uuid => planner.api('api/stats/players/' + uuid), me.uuid);
   const playTile = await page.$eval('#playerTiles .stat strong', s => s.textContent);
   check('Spielerseite: Spielzeit wie in der API', playTile.length > 0 && mine.values.playTime > 0, playTile);
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'statistik-spieler.png'), fullPage: true });
-  await page.click('#hideMeBtn');
-  await page.waitForSelector('#hiddenNote');
+  check('Kein „Mich ausblenden“ mehr', (await page.$('#hideMeBtn')) === null && !(await page.textContent('#viewRoot')).includes('ausblenden'));
   const prefs = await page.evaluate(() => planner.api('api/prefs'));
-  check('„Mich ausblenden“ stellt den Schalter um', prefs.game.rankings === false, JSON.stringify(prefs.game));
-  const others = await page.evaluate(() => planner.api('api/stats/rankings?range=all'));
-  check('…und Ranglisten zeigen „ausgeblendet“', others.meHidden === true);
-  await page.click('#hiddenNote button.primary');
-  await page.waitForSelector('#hideMeBtn');
-  check('„Wieder sichtbar machen“', (await page.evaluate(() => planner.api('api/prefs'))).game.rankings === true);
+  check('/api/prefs kennt keinen Ranglisten-Schalter mehr', !('rankings' in prefs.game), JSON.stringify(prefs.game));
 
-  // 4) Einstellungen: derselbe Schalter
+  // 4) Einstellungen: Hinweis statt Schalter
   await page.evaluate(() => planner.navigate('#/einstellungen'));
-  await page.waitForSelector('#statsSettings input[data-game=rankings]');
-  check('Einstellungen: Schalter „In Ranglisten und Statistik sichtbar“ ist an', await page.isChecked('#statsSettings input[data-game=rankings]'));
+  await page.waitForSelector('#statsSettings');
+  check('Einstellungen: Hinweis „für alle sichtbar“, kein Schalter', (await page.$$('#statsSettings input')).length === 0
+    && (await page.textContent('#statsSettings')).includes('Ausblenden kann man sich nicht.'), await page.textContent('#statsSettings'));
   const gameSwitches = await page.$$eval('#gameSettings input[data-game]', els => els.map(e => e.dataset.game));
   check('„Im Spiel“ hat weiter genau drei Schalter', JSON.stringify(gameSwitches) === JSON.stringify(['notify', 'landEnter', 'deathMarker']), gameSwitches.join(','));
 
@@ -111,7 +120,7 @@ const SHOTS = process.env.SHOT_DIR || null;
 
   // 6) Handy: nichts ragt seitlich heraus
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const hash of ['#/statistik', '#/statistik/ranglisten', '#/statistik/spieler/' + me.uuid].concat(track ? ['#/rennen/' + track.id] : [])) {
+  for (const hash of ['#/statistik', '#/ranglisten', '#/statistik/spieler/' + me.uuid].concat(track ? ['#/rennen/' + track.id] : [])) {
     await page.evaluate(h => planner.navigate(h), hash);
     await page.waitForTimeout(1200);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

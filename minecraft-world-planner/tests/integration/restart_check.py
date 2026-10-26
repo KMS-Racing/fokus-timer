@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from apilib import Checker, call, cleanup_test_teams, login, rid, suffix  # noqa: E402
 
 AREAS = ["lands", "markers", "teams", "projects", "trades", "prefs", "activity"]
+REMOVED_SWITCHES = {"rankings"}
 
 
 def snapshot(token):
@@ -89,9 +90,11 @@ if mode == "compare":
                 continue
             same = json.loads(json.dumps(before[area])) == json.loads(json.dumps(after[area]))
             check(f"{who.upper()}: {area} unverändert", same, f"vorher {before[area]} nachher {after[area]}" if not same else "")
-        # Nach einem Update können neue Schalter dazukommen – die alten müssen gleich bleiben, neue stehen auf "an" (Standard)
+        # Nach einem Update können neue Schalter dazukommen – die alten müssen gleich bleiben, neue stehen auf "an" (Standard).
+        # Absichtlich entfernt: "rankings" (aus Ranglisten ausblenden, nur in 0.5.0) – der muss dann weg sein.
         bg, ag = before.get("game"), after.get("game") or {}
-        kept = bg is not None and all(ag.get(k) == v for k, v in bg.items())
+        kept = bg is not None and all(ag.get(k) == v for k, v in bg.items() if k not in REMOVED_SWITCHES)
+        kept = kept and not any(k in ag for k in REMOVED_SWITCHES)
         new_default = all(v is True for k, v in ag.items() if k not in (bg or {}))
         check(f"{who.upper()}: Spiel-Schalter unverändert", kept and new_default, f"vorher {bg} nachher {ag}")
     # Die requestId des Gebots kennt der Server noch: derselbe Klick wird nicht noch einmal ausgeführt

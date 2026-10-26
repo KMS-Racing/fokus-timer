@@ -118,30 +118,30 @@ class StatisticsTest {
     void growthPerDayStartsAtTheFirstMeasurement() {
         assertTrue(st.observe(alice, snap(1, 100), 1, D0).isEmpty(), "erster Stand: keine Meilensteine (sonst Schwall bei der Installation)");
         StatValues.Category mined = StatValues.category("abrissbirne");
-        assertTrue(st.ranking(mined, "today", D0, Set.of()).isEmpty(), "was vor der Installation war, ist kein Zuwachs von heute");
-        assertEquals(100, st.ranking(mined, "all", D0, Set.of()).getFirst().value());
+        assertTrue(st.ranking(mined, "today", D0).isEmpty(), "was vor der Installation war, ist kein Zuwachs von heute");
+        assertEquals(100, st.ranking(mined, "all", D0).getFirst().value());
 
         assertEquals(List.of("1.000 Blöcke abgebaut"), st.observe(alice, snap(3, 1500), 2, D0));
-        assertEquals(1400, st.ranking(mined, "today", D0, Set.of()).getFirst().value());
-        assertEquals(2 * 3_600_000L, st.ranking(StatValues.category("dauerzocker"), "today", D0, Set.of()).getFirst().value());
+        assertEquals(1400, st.ranking(mined, "today", D0).getFirst().value());
+        assertEquals(2 * 3_600_000L, st.ranking(StatValues.category("dauerzocker"), "today", D0).getFirst().value());
 
         LocalDate d1 = D0.plusDays(1);
         st.observe(alice, snap(4, 2000), 3, d1);
-        assertEquals(500, st.ranking(mined, "today", d1, Set.of()).getFirst().value());
-        assertEquals(1400, st.ranking(mined, "yesterday", d1, Set.of()).getFirst().value());
+        assertEquals(500, st.ranking(mined, "today", d1).getFirst().value());
+        assertEquals(1400, st.ranking(mined, "yesterday", d1).getFirst().value());
 
         // drei Tage nicht gespielt: der Stand bleibt einfach stehen
         LocalDate d5 = D0.plusDays(5);
         st.observe(alice, snap(5, 2600), 4, d5);
-        assertEquals(600, st.ranking(mined, "today", d5, Set.of()).getFirst().value());
-        assertTrue(st.ranking(mined, "yesterday", d5, Set.of()).isEmpty(), "gestern nichts abgebaut");
-        assertEquals(2500, st.ranking(mined, "week", d5, Set.of()).getFirst().value(), "7 Tage, aber erst seit der ersten Messung");
+        assertEquals(600, st.ranking(mined, "today", d5).getFirst().value());
+        assertTrue(st.ranking(mined, "yesterday", d5).isEmpty(), "gestern nichts abgebaut");
+        assertEquals(2500, st.ranking(mined, "week", d5).getFirst().value(), "7 Tage, aber erst seit der ersten Messung");
 
         // nach 50 Tagen sind alte Tage gelöscht – der letzte davor bleibt als Ausgangswert
         LocalDate d50 = D0.plusDays(50);
         st.observe(alice, snap(6, 2700), 5, d50);
-        assertEquals(100, st.ranking(mined, "week", d50, Set.of()).getFirst().value(), "2700 − Stand vom Tag 5");
-        assertTrue(st.ranking(StatValues.category("unsterblich"), "week", d50, Set.of()).isEmpty(), "Momentwert: kein Zuwachs");
+        assertEquals(100, st.ranking(mined, "week", d50).getFirst().value(), "2700 − Stand vom Tag 5");
+        assertTrue(st.ranking(StatValues.category("unsterblich"), "week", d50).isEmpty(), "Momentwert: kein Zuwachs");
     }
 
     @Test
@@ -149,10 +149,10 @@ class StatisticsTest {
         StatValues.Category mined = StatValues.category("abrissbirne");
         st.observe(alice, snap(10, 5000), 1, D0);
         st.observe(alice, snap(0, 0), 2, D0); // Admin hat die Statistik-Datei gelöscht
-        assertTrue(st.ranking(mined, "today", D0, Set.of()).isEmpty());
-        assertTrue(st.ranking(mined, "all", D0, Set.of()).isEmpty(), "Gesamt = Minecrafts Zahl, auch nach dem Löschen");
+        assertTrue(st.ranking(mined, "today", D0).isEmpty());
+        assertTrue(st.ranking(mined, "all", D0).isEmpty(), "Gesamt = Minecrafts Zahl, auch nach dem Löschen");
         assertTrue(st.observe(alice, snap(1, 50), 3, D0).isEmpty(), "die erste Stunde war schon – kein zweites „Erste Stunde gespielt“");
-        assertEquals(50, st.ranking(mined, "today", D0, Set.of()).getFirst().value());
+        assertEquals(50, st.ranking(mined, "today", D0).getFirst().value());
         assertEquals(List.of("Minecrafts Statistik ist zurückgesprungen (Spielzeit −10 h 0 min), z. B. nach einem Absturz – der Verlauf bleibt"),
                 eventTexts(D0));
     }
@@ -166,18 +166,18 @@ class StatisticsTest {
         assertEquals(List.of("1.000 Blöcke abgebaut"), st.observe(alice, snap(3, 1000), 3, d1)); // Tag 1: +700
         // Absturz: Minecraft hatte zuletzt bei 900 Blöcken gespeichert, der Planer kannte schon 1000
         st.observe(alice, snap(2, 900), 4, d1);
-        assertEquals(900, st.ranking(mined, "all", d1, Set.of()).getFirst().value(), "Gesamt = Minecrafts Zahl");
-        assertEquals(700, st.ranking(mined, "today", d1, Set.of()).getFirst().value(), "der Zuwachs von heute bleibt");
-        assertEquals(200, st.ranking(mined, "yesterday", d1, Set.of()).getFirst().value(), "gestern bleibt, wie es war");
+        assertEquals(900, st.ranking(mined, "all", d1).getFirst().value(), "Gesamt = Minecrafts Zahl");
+        assertEquals(700, st.ranking(mined, "today", d1).getFirst().value(), "der Zuwachs von heute bleibt");
+        assertEquals(200, st.ranking(mined, "yesterday", d1).getFirst().value(), "gestern bleibt, wie es war");
         assertEquals("Minecrafts Statistik ist zurückgesprungen (Spielzeit −1 h 0 min), z. B. nach einem Absturz – der Verlauf bleibt",
                 eventTexts(d1).getFirst());
 
         TestSupport.World again = w.restart(); // auch nach einem Neustart: derselbe Meilenstein kommt nicht noch einmal
         StatsStore st2 = again.services.stats();
         assertTrue(st2.observe(alice, snap(3, 1000), 5, d1).isEmpty());
-        assertEquals(800, st2.ranking(mined, "today", d1, Set.of()).getFirst().value());
+        assertEquals(800, st2.ranking(mined, "today", d1).getFirst().value());
         st2.observe(alice, snap(4, 1100), 6, d2);
-        JsonArray history = st2.playerJson(alice, alice, d2, Set.of(), false, again.players::name).getAsJsonArray("history");
+        JsonArray history = st2.playerJson(alice, d2, false, again.players::name).getAsJsonArray("history");
         List<Long> perDay = new java.util.ArrayList<>();
         for (int i = 27; i < 30; i++) perDay.add(history.get(i).getAsJsonObject().get("mined").getAsLong());
         assertEquals(List.of(200L, 800L, 100L), perDay, "Verlauf: kein Tag verloren, keiner negativ");
@@ -185,7 +185,7 @@ class StatisticsTest {
 
     private List<String> eventTexts(LocalDate today) {
         List<String> texts = new java.util.ArrayList<>();
-        st.playerJson(alice, alice, today, Set.of(), false, w.players::name).getAsJsonArray("events")
+        st.playerJson(alice, today, false, w.players::name).getAsJsonArray("events")
                 .forEach(e -> texts.add(e.getAsJsonObject().get("text").getAsString()));
         return texts;
     }
@@ -198,58 +198,79 @@ class StatisticsTest {
         assertTrue(StatValues.milestones(after, after).isEmpty());
     }
 
-    // ------------------------------------------------------------------ Ranglisten und Ausblenden
+    // ------------------------------------------------------------------ Ranglisten: alle sind dabei
 
     @Test
-    void rankingsShareThePlaceOnTiesAndSkipZeroAndHidden() {
+    void rankingsShareThePlaceOnTiesAndSkipZero() {
         st.observe(alice, snap(1, 100), 1, D0);
         st.observe(bob, snap(1, 80), 1, D0);
         st.observe(carl, snap(1, 80), 1, D0);
         st.observe(dana, snap(1, 50), 1, D0);
         st.observe(w.player(5, "Eve"), snap(1, 0), 1, D0);
-        List<StatsStore.Entry> list = st.ranking(StatValues.category("abrissbirne"), "all", D0, Set.of());
+        List<StatsStore.Entry> list = st.ranking(StatValues.category("abrissbirne"), "all", D0);
         assertEquals(4, list.size(), "0 Blöcke = nicht in der Liste");
         assertEquals(List.of(1, 2, 2, 4), List.of(StatsStore.place(list, 0), StatsStore.place(list, 1), StatsStore.place(list, 2), StatsStore.place(list, 3)));
 
-        w.prefs.setGame(bob, "rankings", false);
-        Set<UUID> hidden = w.prefs.statsHidden();
-        JsonObject r = st.rankingsJson("all", D0, carl, hidden, w.players::name);
+        JsonObject r = st.rankingsJson("all", D0, carl, w.players::name);
         JsonObject cat = category(r, "abrissbirne");
-        assertEquals(List.of("Alice", "Carl", "Dana"), names(cat.getAsJsonArray("entries")));
-        assertEquals(2, cat.getAsJsonObject("me").get("place").getAsInt());
-        assertFalse(category(st.rankingsJson("today", D0, carl, hidden, w.players::name), "unsterblich").get("available").getAsBoolean());
-        assertTrue(st.rankingsJson("all", D0, bob, hidden, w.players::name).get("meHidden").getAsBoolean());
-        assertEquals(400, assertThrows(PlannerException.class, () -> st.rankingsJson("immer", D0, carl, hidden, w.players::name)).status);
+        assertEquals(List.of("Alice", "Bob", "Carl", "Dana"), names(cat.getAsJsonArray("entries")));
+        assertEquals(2, cat.getAsJsonObject("me").get("place").getAsInt(), "Gleichstand mit Bob: beide Platz 2");
+        assertFalse(r.has("meHidden"), "ausblenden gibt es nicht mehr");
+        assertFalse(category(st.rankingsJson("today", D0, carl, w.players::name), "unsterblich").get("available").getAsBoolean());
+        assertEquals(400, assertThrows(PlannerException.class, () -> st.rankingsJson("immer", D0, carl, w.players::name)).status);
     }
 
     @Test
-    void hiddenPlayersAreOnlyVisibleToThemselves() throws Exception {
+    void everyPlayerPageIsVisibleToEveryone() throws Exception {
         st.observe(alice, snap(2, 100), 1, D0);
         st.observe(bob, snap(5, 900), 1, D0);
         st.sessionStarted(bob, 1000, 1);
         st.sessionEnded(bob, 1000 + 7_200_000);
-        w.prefs.setGame(bob, "rankings", false);
-        Set<UUID> hidden = w.prefs.statsHidden();
 
-        assertNull(st.playerJson(bob, alice, D0, hidden, false, w.players::name), "andere sehen die Seite nicht");
-        JsonObject own = st.playerJson(bob, bob, D0, hidden, false, w.players::name);
-        assertTrue(own.get("hidden").getAsBoolean(), "Bob selbst schon – mit Hinweis");
-        assertEquals(0, own.getAsJsonObject("places").size(), "ausgeblendet = kein Platz");
+        JsonObject bobsPage = st.playerJson(bob, D0, false, w.players::name);
+        assertEquals("Bob", bobsPage.get("name").getAsString());
+        assertFalse(bobsPage.has("hidden"));
+        assertEquals(1, bobsPage.getAsJsonObject("places").getAsJsonObject("abrissbirne").get("place").getAsInt());
 
-        JsonObject server = st.serverJson(D0, hidden, Set.of(alice), w.players::name);
-        assertEquals(100, server.getAsJsonObject("totals").get("mined").getAsLong(), "Summen ohne ausgeblendete Spieler");
-        assertEquals(1, server.get("hiddenPlayers").getAsInt());
+        JsonObject server = st.serverJson(D0, Set.of(alice), w.players::name);
+        assertEquals(1000, server.getAsJsonObject("totals").get("mined").getAsLong(), "Summen mit allen");
+        assertEquals(2, server.get("players").getAsInt());
+        assertFalse(server.has("hiddenPlayers"));
         assertEquals(1, server.get("online").getAsInt());
         JsonObject longest = server.getAsJsonObject("records").getAsJsonObject("longestSession");
-        assertEquals(7_200_000, longest.get("ms").getAsLong(), "der Rekord bleibt …");
-        assertFalse(longest.has("name"), "… aber ohne Bobs Namen");
-        assertFalse(st.serverJson(D0, hidden, null, w.players::name).has("online"), "showOnlinePlayers aus: keine Zahl");
-        assertEquals(List.of("Alice"), names(st.playersJson(alice, hidden, Set.of(), w.players::name).getAsJsonArray("players")));
+        assertEquals(7_200_000, longest.get("ms").getAsLong());
+        assertEquals("Bob", longest.get("name").getAsString(), "der Rekord mit Namen");
+        assertFalse(st.serverJson(D0, null, w.players::name).has("online"), "showOnlinePlayers aus: keine Zahl");
+        assertEquals(Set.of("Alice", "Bob"), Set.copyOf(names(st.playersJson(Set.of(), w.players::name).getAsJsonArray("players"))));
 
         // über die API (wie die Webseite)
-        assertEquals(404, assertThrows(PlannerException.class, () -> api(alice, "players", bob.toString())).status);
-        assertEquals("Bob", api(bob, "players", bob.toString()).getAsJsonObject().get("name").getAsString());
+        assertEquals("Bob", api(alice, "players", bob.toString()).getAsJsonObject().get("name").getAsString());
+        assertEquals(404, assertThrows(PlannerException.class, () -> api(alice, "players", carl.toString())).status, "noch nie online");
         assertEquals(400, assertThrows(PlannerException.class, () -> api(alice, "players", "../../etc")).status);
+    }
+
+    @Test
+    void theHideSwitchFromVersion050IsIgnoredAndCannotBeSetAnymore() throws Exception {
+        st.observe(alice, snap(1, 10), 1, D0);
+        st.observe(bob, snap(1, 20), 1, D0);
+        w.prefs.setGame(bob, "notify", false);
+        TestSupport.World saved = w.restart();
+        // so stand es in 0.5.0 in prefs.json, wenn sich Bob ausgeblendet hatte
+        java.nio.file.Path file = dir.resolve("prefs.json");
+        JsonObject json = JsonParser.parseString(java.nio.file.Files.readString(file)).getAsJsonObject();
+        json.getAsJsonObject("game").getAsJsonObject(bob.toString()).addProperty("rankings", false);
+        java.nio.file.Files.writeString(file, json.toString());
+
+        TestSupport.World again = new TestSupport.World(dir, saved.config);
+        assertFalse(again.prefs.game(bob).notices(), "die anderen Schalter bleiben");
+        assertFalse(again.prefs.get(bob).getAsJsonObject("game").has("rankings"));
+        assertEquals(List.of("Bob", "Alice"), names(category(again.services.stats().rankingsJson("all", D0, alice, again.players::name), "abrissbirne")
+                .getAsJsonArray("entries")), "Bob steht trotzdem in der Rangliste");
+        assertEquals(400, assertThrows(PlannerException.class, () -> again.prefs.setGame(bob, "rankings", false)).status);
+        again.prefs.setGame(bob, "landEnter", false);
+        again.save();
+        assertFalse(java.nio.file.Files.readString(file).contains("rankings"), "beim nächsten Speichern ist der alte Schalter weg");
+        assertFalse(new TestSupport.World(dir, saved.config).prefs.game(bob).landEnter());
     }
 
     @Test
@@ -260,7 +281,7 @@ class StatisticsTest {
         st.death(alice, "type:fall", "Gestorben: Fallschaden", 3);
         st.death(alice, "type:fall", "Gestorben: Fallschaden", 4);
         st.death(alice, "mob:minecraft:zombie", "Gestorben: Zombie", 5);
-        JsonObject p = st.playerJson(alice, bob, D0, Set.of(), true, w.players::name);
+        JsonObject p = st.playerJson(alice, D0, true, w.players::name);
         assertEquals(100.0, p.getAsJsonObject("perHour").get("mined").getAsDouble(), "1000 Blöcke in 10 Stunden");
         JsonObject place = p.getAsJsonObject("places").getAsJsonObject("abrissbirne");
         assertEquals(1, place.get("place").getAsInt());
@@ -285,8 +306,7 @@ class StatisticsTest {
         st.sampleServer(Set.of(alice, bob), 1, monday8pm);
         st.sampleServer(Set.of(alice), 2, monday8pm.plusMinutes(1));
         st.sampleServer(Set.of(carl), 3, monday8pm.plusDays(1));
-        w.prefs.setGame(bob, "rankings", false);
-        JsonObject o = st.serverJson(monday8pm.toLocalDate().plusDays(1), w.prefs.statsHidden(), Set.of(), w.players::name);
+        JsonObject o = st.serverJson(monday8pm.toLocalDate().plusDays(1), Set.of(), w.players::name);
         assertEquals(1.5, o.getAsJsonArray("heat").get(0).getAsJsonArray().get(20).getAsDouble(), "Montag 20 Uhr: im Schnitt 1,5 online");
         assertTrue(o.getAsJsonArray("heat").get(0).getAsJsonArray().get(3).isJsonNull(), "keine Messung = keine erfundene 0");
         assertEquals(1.0, o.getAsJsonArray("heat").get(1).getAsJsonArray().get(20).getAsDouble(), "Dienstag");
@@ -337,13 +357,13 @@ class StatisticsTest {
         st.sessionEnded(alice, 100 + 3_600_000);
         st.death(alice, "type:lava", "Gestorben: Lava", 20);
         st.sampleServer(Set.of(alice), 30, ZonedDateTime.of(2026, 10, 20, 18, 31, 0, 0, BERLIN));
-        JsonObject before = st.playerJson(alice, alice, D0, Set.of(), false, w.players::name);
-        JsonObject serverBefore = st.serverJson(D0, Set.of(), Set.of(), w.players::name);
+        JsonObject before = st.playerJson(alice, D0, false, w.players::name);
+        JsonObject serverBefore = st.serverJson(D0, Set.of(), w.players::name);
 
         TestSupport.World again = w.restart();
         StatsStore st2 = again.services.stats();
-        assertEquals(before, st2.playerJson(alice, alice, D0, Set.of(), false, again.players::name));
-        assertEquals(serverBefore, st2.serverJson(D0, Set.of(), Set.of(), again.players::name));
+        assertEquals(before, st2.playerJson(alice, D0, false, again.players::name));
+        assertEquals(serverBefore, st2.serverJson(D0, Set.of(), again.players::name));
         assertEquals(60_000, before.getAsJsonObject("values").get("activeTime").getAsLong());
         assertEquals(1, before.getAsJsonArray("heat").get(1).getAsJsonArray().get(18).getAsInt(), "Dienstag 18 Uhr: 1,5 Minuten → 1");
 
@@ -360,9 +380,7 @@ class StatisticsTest {
         assertEquals("all", r.get("range").getAsString());
         assertEquals(StatValues.CATEGORIES.size(), r.getAsJsonArray("categories").size());
         assertTrue(api(alice, "server").getAsJsonObject().has("timeZone"));
-        assertTrue(w.prefs.game(alice).rankings(), "Standard: sichtbar");
-        w.prefs.setGame(alice, "rankings", false);
-        assertFalse(w.restart().prefs.game(alice).rankings(), "bleibt nach Neustart");
+        assertFalse(PrefsStore.GAME_KEYS.containsKey("rankings"), "aus Ranglisten ausblenden gibt es nicht mehr");
 
         TestSupport.World off = new TestSupport.World(dir.resolve("aus"), TestSupport.config("statistics", false));
         PlannerException e = assertThrows(PlannerException.class, () -> new StatsRoutes(off.services).handle(request(alice, List.of("stats", "server"), Map.of())));
@@ -380,25 +398,15 @@ class StatisticsTest {
         v.put("mined", 1500L);
         v.put("placed", 40L);
         v.put("distance", 350_000L);
-        Map<String, Integer> places = new LinkedHashMap<>();
-        places.put("dauerzocker", 1);
-        places.put("friedhof", 3);
-        places.put("diamantenbank", 1);
-        places.put("abrissbirne", 2);
-        StatsStore.Summary s = new StatsStore.Summary(v, Map.of("playTime", 2 * 3_600_000L), places, 970_000);
+        StatsStore.Summary s = new StatsStore.Summary(v, Map.of("playTime", 2 * 3_600_000L), 970_000);
         assertEquals("""
                 [Planer] Statistik von Alice (Stand: gerade eben)
                  Spielzeit: 3 h 0 min (heute +2 h 0 min)
                  Tode: 2 · Mobs besiegt: 5 · Diamanten abgebaut: 5
-                 Blöcke abgebaut: 1.500 · Blöcke platziert: 40 · Strecke: 3,5 km
-                 Ränge: Dauerzocker Platz 1 · Diamantenbank Platz 1 · Abrissbirne Platz 2""",
-                GameText.statsSummary("Alice", s, 1_000_000, "", "#/statistik/spieler/x").getString());
-
-        st.observe(alice, snap(1, 10), 1, D0);
-        st.observe(bob, snap(1, 30), 1, D0);
-        StatValues.Category c = StatValues.category("abrissbirne");
-        assertEquals("[Planer] Abrissbirne – Blöcke abgebaut\n 1. Bob 30\n 2. Alice 10",
-                GameText.ranking(c, st.ranking(c, "all", D0, Set.of()), w.players::name, alice, "").getString());
+                 Blöcke abgebaut: 1.500 · Blöcke platziert: 40 · Strecke: 3,5 km""",
+                GameText.statsSummary("Alice", s, 1_000_000, "", "#/statistik/spieler/x").getString(), "keine Ränge im Spiel – die stehen auf der Webseite");
+        String withLinks = GameText.statsSummary("Alice", s, 1_000_000, "https://planer.example/", "#/statistik/spieler/x").getString();
+        assertTrue(withLinks.endsWith("[Ganze Statistik auf der Webseite] [Ranglisten]"), withLinks);
     }
 
     // ------------------------------------------------------------------ Hilfen

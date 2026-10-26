@@ -16,9 +16,9 @@ const typeName = t => (store.meta && store.meta.raceTypes && store.meta.raceType
 const vehicleName = v => (store.meta && store.meta.raceVehicles && store.meta.raceVehicles[v]) || v;
 const startCommand = t => `/rennen start ${/^[A-Za-z0-9_.+-]+$/.test(t.name) ? t.name : `"${t.name.replace(/"/g, '')}"`}`;
 
-/** Name eines Fahrers – als Link zur Statistik, außer er hat sich aus Ranglisten ausgeblendet (dann ohne Namen). */
+/** Name eines Fahrers – als Link zu seiner Statistik. */
 function driver(l) {
-  return l.hidden ? el('span', { class: 'muted', text: 'ausgeblendet' }) : el('a', { href: '#/statistik/spieler/' + enc(l.uuid), text: l.name });
+  return el('a', { href: '#/statistik/spieler/' + enc(l.uuid), text: l.name });
 }
 
 function svg(tag, attrs = {}, ...children) {
@@ -37,7 +37,7 @@ function trackCard(t) {
       el('strong', { text: '🏁 ' + t.name }),
       el('div', { class: 'row tight' }, pill(typeName(t.type), 'info'), pill(vehicleName(t.vehicle)), t.building ? pill('wird gebaut', 'warn') : null)),
     el('div', { class: 'meta' },
-      el('span', { text: rec ? `Rekord ${fmtLap(rec.ms)}${rec.hidden ? '' : ` von ${rec.name}`}` : t.ready ? 'noch keine Zeit' : 'noch nicht fertig' }),
+      el('span', { text: rec ? `Rekord ${fmtLap(rec.ms)} von ${rec.name}` : t.ready ? 'noch keine Zeit' : 'noch nicht fertig' }),
       t.myBestMs ? el('span', { text: `deine Bestzeit ${fmtLap(t.myBestMs)}` }) : null,
       el('span', { class: 'muted', text: `${t.gateCount} Tore · ${dimName(t.dimension)} · von ${t.ownerName}` })));
 }
@@ -134,7 +134,7 @@ function trackView(t, refresh) {
     el('div', { class: 'grid two' },
       el('section', { class: 'card', id: 'raceBoardCard' }, el('h2', { text: 'Bestenliste' }),
         t.leaderboard.length ? leaderboardTable(t) : el('p', { class: 'muted', text: t.ready ? `Noch keine Zeit. Fahr die erste: ${startCommand(t)}` : 'Die Strecke ist noch nicht fertig gebaut.' }),
-        el('p', { class: 'muted small', text: 'Je Fahrer die beste Runde. Lila = schnellster Abschnitt von allen. Zeiten mit ⚠ „ungenau“ (der Server hat geruckelt) zählen nicht. Wer sich aus den Ranglisten ausgeblendet hat, steht ohne Namen da.' }),
+        el('p', { class: 'muted small', text: 'Je Fahrer die beste Runde. Lila = schnellster Abschnitt von allen. Zeiten mit ⚠ „ungenau“ (der Server hat geruckelt) zählen nicht.' }),
         t.archived ? el('p', { class: 'muted small', text: `${fmtNum(t.archived)} Bestzeit(en) einer früheren Version liegen im Archiv – die Strecke wurde seitdem geändert.` }) : null),
       el('section', { class: 'card', id: 'racePlanCard' }, el('h2', { text: 'Streckenplan' }),
         t.gates.length ? planSvg(t) : el('p', { class: 'muted', text: 'Noch keine Tore.' }),

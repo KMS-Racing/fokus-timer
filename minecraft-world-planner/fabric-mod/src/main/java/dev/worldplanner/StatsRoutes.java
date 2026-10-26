@@ -17,17 +17,16 @@ final class StatsRoutes extends Routes {
     JsonElement handle(ApiRequest r) {
         if (!s.config().statistics()) throw PlannerException.notFound("Die Statistik ist auf diesem Server ausgeschaltet.");
         LocalDate today = LocalDate.now(s.config().zone());
-        Set<UUID> hidden = s.prefs().statsHidden(); // vorher holen: StatsStore fragt keine anderen Speicher (keine Verklemmung)
         Set<UUID> online = s.config().showOnlinePlayers() ? s.onlinePlayers() : null;
         if (r.is("GET", "stats", "server")) {
-            JsonObject o = s.stats().serverJson(today, hidden, online, s.players()::name);
+            JsonObject o = s.stats().serverJson(today, online, s.players()::name);
             o.addProperty("timeZone", s.config().timeZone());
             return o;
         }
         if (r.is("GET", "stats", "rankings")) {
-            return s.stats().rankingsJson(r.query.getOrDefault("range", "all"), today, r.user, hidden, s.players()::name);
+            return s.stats().rankingsJson(r.query.getOrDefault("range", "all"), today, r.user, s.players()::name);
         }
-        if (r.is("GET", "stats", "players")) return s.stats().playersJson(r.user, hidden, online, s.players()::name);
+        if (r.is("GET", "stats", "players")) return s.stats().playersJson(online, s.players()::name);
         if (r.is("GET", "stats", "players", "*")) {
             UUID id;
             try {
@@ -35,8 +34,8 @@ final class StatsRoutes extends Routes {
             } catch (IllegalArgumentException e) {
                 throw PlannerException.badRequest("Ungültige Spieler-ID.");
             }
-            JsonObject o = s.stats().playerJson(id, r.user, today, hidden, online != null && online.contains(id), s.players()::name);
-            if (o == null) throw PlannerException.notFound("Keine Statistik für diesen Spieler – noch nie online gewesen oder ausgeblendet.");
+            JsonObject o = s.stats().playerJson(id, today, online != null && online.contains(id), s.players()::name);
+            if (o == null) throw PlannerException.notFound("Keine Statistik für diesen Spieler – noch nie online gewesen.");
             o.addProperty("timeZone", s.config().timeZone());
             o.addProperty("afkMinutes", s.config().afkMinutes());
             if (online != null && !online.contains(id)) o.addProperty("lastSeen", s.players().lastSeen(id));

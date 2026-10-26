@@ -14,9 +14,10 @@ Die Mod bringt ihre Webseite selbst mit – kein extra Webhosting nötig.
 | ⚖ **Handel** | Auktion, Sofortkauf, Festpreis, Tausch und **Hilfe** (Bauen, Kämpfen …) · Gebote, Gegenangebote, Übergabe-Bestätigung, Streitfall |
 | ⚒ **Projekte** | Bauprojekte mit Aufgaben, Fortschritt, Verantwortlichen, Updates, Land/Team/Ort |
 | ☺ **Spieler** | Wer ist online, wer war zuletzt da, Teams, Länder |
-| ★ **Statistik** | Wie bei CraftAttack: der Server in Zahlen, **16 Ranglisten** (Dauerzocker, Friedhof, Diamantenbank, Abrissbirne …) gesamt / 7 Tage / gestern / heute, „Wann ist am meisten los?“, Rekorde, Verlauf mit Toden und Meilensteinen, eine Seite pro Spieler · jeder kann sich ausblenden |
+| ★ **Statistik** | Wie bei CraftAttack: der Server in Zahlen, „Wann ist am meisten los?“, Rekorde, Verlauf mit Toden und Meilensteinen, eine Seite pro Spieler |
+| ♛ **Ranglisten** | **16 Ranglisten** wie bei CraftAttack (Dauerzocker, Friedhof, Diamantenbank, Abrissbirne …) gesamt / 7 Tage / gestern / heute – **alle Spieler, für alle sichtbar**, nur auf der Webseite |
 | ⏱ **Rennen** | Rennstrecken im Spiel bauen (Tore), **Zeitmessung** mit Abschnitten in F1-Farben (lila/grün/gelb), Bestenliste, Fahrzeug-Regel (zu Fuß, Boot, Pferd, Elytra) |
-| ⚙ **Einstellungen** | Hell/Dunkel, Schalter fürs Spiel, Statistik sichtbar ja/nein, **angemeldete Geräte**, Favoriten, **Export/Import** mit Vorschau, Server-Infos |
+| ⚙ **Einstellungen** | Hell/Dunkel, Schalter fürs Spiel, **angemeldete Geräte**, Favoriten, **Export/Import** mit Vorschau, Server-Infos |
 | 🎮 **Im Spiel** | Kurz nach dem Einloggen „Zu erledigen“ im Chat, danach Neues sofort (Einladung, überboten, verkauft …) · Land-Name über der Hotbar beim Betreten · **Wegweiser** zu Markern, Ländern und zum Todespunkt · **Land-Grenzen** als Partikel · **Todespunkt** als privater Marker · **Team-Chat** `/tc` · Nachricht bei neuem Web-Login · alles einzeln abschaltbar |
 
 Dazu eine **Suche oben** (Länder, Marker, Projekte, Teams, Spieler, Angebote – und Koordinaten wie `100 64 -200`; Taste `/`).
@@ -91,9 +92,7 @@ Ist `publicUrl` eingetragen, gibt es im Chat einen Link, der direkt einloggt. We
 | `/planer todespunkt` | Wo du zuletzt gestorben bist – mit Entfernung und Richtung von hier |
 | `/planer marker <Name>` | Privater Marker an deiner Position (teilen und bearbeiten auf der Webseite) |
 | `/planer weg <Ziel>` | **Wegweiser**: Pfeil über der Hotbar zu einem Marker, Land oder `todespunkt` – gedreht nach deiner Blickrichtung, mit Entfernung (kein Teleport). `/planer weg aus` beendet ihn |
-| `/planer statistik [Spieler]` | Spielzeit, Tode, Blöcke … und deine besten Ränge |
-| `/planer top [Rangliste]` | Wer führt wo? Mit Namen (z. B. `/planer top friedhof`) die ersten fünf und dein Platz |
-| `/planer ranglisten an\|aus` | In Ranglisten und Statistik für andere sichtbar sein (Standard: an) |
+| `/planer statistik [Spieler]` | Spielzeit, Tode, Blöcke … (die Ranglisten gibt es nur auf der Webseite) |
 | `/tc <Nachricht>` (lang: `/teamchat`) | **Team-Chat** – nur Mitglieder deines Teams lesen mit, auch bei privaten Teams |
 | `/land` oder `/land info` | Wem gehört der Chunk, in dem ich stehe? |
 | `/land neu <Name>` | Neues Land aus dem Chunk, in dem du stehst |
@@ -198,9 +197,10 @@ Teams gründen, Handel und Projekte gehen nur auf der Webseite – im Spiel beko
 - **Ranglisten** mit den Namen von CraftAttack: Dauerzocker, Fleißig, Friedhof, Diamantenbank, Abrissbirne, Baumeister,
   Monsterjäger, Weltenbummler, Unsterblich, Kampfmaschine, Vielfraß, Angelprofi, Tierfreund, Händler, Handwerker, Flummi –
   jeweils gesamt, letzte 7 Tage, gestern und heute (Zuwachs zählt ab der Installation). Gleiche Werte = gleicher Platz.
-- **Ausblenden:** Wer `/planer ranglisten aus` tippt (oder in den Einstellungen den Schalter ausmacht), fehlt in allen Ranglisten,
-  in den Server-Summen und im Verlauf; seine Seite sieht nur er selbst. Gezählt wird trotzdem weiter (so wie Minecraft selbst
-  auch zählt). In **anonymen** Zählungen (wie viele online, Rekord, „Wann ist am meisten los“, Spieler pro Tag) ist er dabei.
+- **Für alle sichtbar:** Wie bei CraftAttack stehen alle Spieler in den Ranglisten, und jeder eingeloggte Spieler sieht jede
+  Spielerseite (Spielzeit, AFK, Tode, Sitzungen …) – auch in Renn-Bestenlisten steht immer der Name. Ausblenden gibt es nicht
+  (nur 0.5.0 hatte das; ein dort gespeichertes „aus“ wird ab 0.5.1 überlesen). Sag das deinen Mitspielern, bevor du updatest.
+  Die Ranglisten stehen nur auf der Webseite (Reiter **Ranglisten**), im Spiel gibt es dafür keinen Befehl mehr.
 - Platziert = benutzte Block-Items, Gegessen = benutzte Essen-Items plus Kuchenstücke. Karotten, Kartoffeln und Beeren zählen
   bei keinem von beiden – Minecraft zählt dort Pflanzen und Essen in **einer** Zahl, die Mod kann sie nicht trennen.
 
@@ -256,7 +256,7 @@ Datei: `config/world-planner.json` (Server neu starten nach Änderungen). Unsinn
 | `tradeActionsPerMinute` | `30` | Handels-Aktionen pro Spieler und Minute |
 | `extraTradeCategories` | `{}` | Eigene Kategorien, z. B. `{"potions": "Tränke"}` |
 | `activityLimit` | `1000` | So viele Einträge behält die Aktivitäts-Übersicht |
-| `statistics` | `true` | Statistik und Ranglisten (jeder kann sich ausblenden) |
+| `statistics` | `true` | Statistik und Ranglisten (für alle sichtbar; `false` = für alle aus) |
 | `timeZone` | `"Europe/Berlin"` | Zeitzone für „Heute“, „Gestern“ und „Wann ist am meisten los“ |
 | `afkMinutes` | `5` | So viele Minuten ohne Bewegung und ohne Umschauen = AFK (1–60) |
 | `races` | `true` | Rennstrecken mit Zeitmessung (`/rennen`) |

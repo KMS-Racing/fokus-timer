@@ -14,10 +14,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
-import java.util.function.Predicate;
 
 /**
  * Rennstrecken und ihre Zeiten. Eine Strecke besteht aus Toren (Linien quer zur Fahrtrichtung): beim Rundkurs Start/Ziel
@@ -331,15 +329,10 @@ final class RaceStore extends JsonStore {
         return out;
     }
 
-    /**
-     * @param hidden Spieler, die sich aus Ranglisten ausgeblendet haben: Ihre Zeiten bleiben (sonst wäre die Bestenliste
-     *               falsch), aber für andere ohne Namen
-     */
-    synchronized JsonObject listJson(UUID viewer, Set<UUID> hidden, Function<UUID, String> names) {
-        Predicate<UUID> anonymous = u -> hidden.contains(u) && !u.equals(viewer);
+    synchronized JsonObject listJson(UUID viewer, Function<UUID, String> names) {
         JsonArray arr = new JsonArray();
         for (Data d : tracks.values()) {
-            JsonObject o = summary(d, names, anonymous);
+            JsonObject o = summary(d, names);
             Lap mine = d.best.get(viewer);
             if (mine != null) o.addProperty("myBestMs", mine.ms());
             o.addProperty("mine", d.track.owner().equals(viewer));
@@ -352,11 +345,10 @@ final class RaceStore extends JsonStore {
         return o;
     }
 
-    synchronized JsonObject trackJson(String id, UUID viewer, boolean admin, Set<UUID> hidden, Function<UUID, String> names) {
+    synchronized JsonObject trackJson(String id, UUID viewer, boolean admin, Function<UUID, String> names) {
         Data d = tracks.get(id);
         if (d == null) throw PlannerException.notFound("Diese Strecke gibt es nicht (mehr).");
-        Predicate<UUID> anonymous = u -> hidden.contains(u) && !u.equals(viewer);
-        JsonObject o = summary(d, names, anonymous);
+        JsonObject o = summary(d, names);
         o.addProperty("mine", d.track.owner().equals(viewer));
         o.addProperty("canEdit", admin || d.track.owner().equals(viewer));
         o.addProperty("created", d.track.created());
@@ -374,7 +366,7 @@ final class RaceStore extends JsonStore {
         List<Lap> board = leaderboard(d);
         JsonArray lb = new JsonArray();
         for (int i = 0; i < board.size(); i++) {
-            JsonObject x = lapJson(board.get(i), names, anonymous);
+            JsonObject x = lapJson(board.get(i), names);
             x.addProperty("place", rank(board, i));
             lb.add(x);
         }
@@ -385,7 +377,7 @@ final class RaceStore extends JsonStore {
         if (mine != null) o.add("mySectors", longs(mine));
         JsonArray recent = new JsonArray();
         for (Lap l : d.recent) {
-            JsonObject x = lapJson(l, names, anonymous);
+            JsonObject x = lapJson(l, names);
             x.addProperty("current", l.version() == d.track.version());
             recent.add(x);
         }
@@ -394,7 +386,7 @@ final class RaceStore extends JsonStore {
         return o;
     }
 
-    private static JsonObject summary(Data d, Function<UUID, String> names, Predicate<UUID> anonymous) {
+    private static JsonObject summary(Data d, Function<UUID, String> names) {
         Track t = d.track;
         JsonObject o = new JsonObject();
         o.addProperty("id", t.id());
@@ -416,19 +408,14 @@ final class RaceStore extends JsonStore {
             o.addProperty("startZ", Math.floor(start.z()));
         }
         List<Lap> board = leaderboard(d);
-        if (!board.isEmpty()) o.add("record", lapJson(board.getFirst(), names, anonymous));
+        if (!board.isEmpty()) o.add("record", lapJson(board.getFirst(), names));
         return o;
     }
 
-    private static JsonObject lapJson(Lap l, Function<UUID, String> names, Predicate<UUID> anonymous) {
+    private static JsonObject lapJson(Lap l, Function<UUID, String> names) {
         JsonObject x = new JsonObject();
-        if (anonymous.test(l.player())) {
-            x.addProperty("name", "ausgeblendet");
-            x.addProperty("hidden", true);
-        } else {
-            x.addProperty("uuid", l.player().toString());
-            x.addProperty("name", names.apply(l.player()));
-        }
+        x.addProperty("uuid", l.player().toString());
+        x.addProperty("name", names.apply(l.player()));
         x.addProperty("ms", l.ms());
         if (l.sectors() != null) x.add("sectors", longs(l.sectors()));
         x.addProperty("at", l.at());

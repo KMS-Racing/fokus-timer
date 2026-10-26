@@ -29,8 +29,7 @@ die Datenspeicher (alle Methoden `synchronized`) und Momentaufnahmen (`AtomicRef
 
 **Reihenfolge der Sperren (gegen Verklemmungen):** Handel/Projekte/Marker → Länder → Teams. Teams fragen niemanden,
 Länder fragen nur Teams. `PlannerServices.onTeamDissolved()` ruft die Bereiche nacheinander auf, nie verschachtelt.
-`StatsStore` und `RaceStore` fragen keinen anderen Speicher (nur `PlayerDirectory` für Namen – der fragt niemanden);
-wer ausgeblendet ist, holt `StatsRoutes` vorher aus `PrefsStore` und gibt es als Liste mit.
+`StatsStore` und `RaceStore` fragen keinen anderen Speicher (nur `PlayerDirectory` für Namen – der fragt niemanden).
 
 **Speichern:**
 - Länder, Marker, Teams, Projekte, Favoriten, Aktivität, Rennen: Änderung setzt „dirty“, ein Timer speichert alle 5 Sekunden im
@@ -146,7 +145,7 @@ Aktivität: Ereignis (Zeit, Text, Bezug, Publikum "all" | "team:<id>")
 | **Projekt** | Name, Beschreibung, Status, Priorität, Start/Ziel, Sichtbarkeit (alle/Team/Beteiligte), Land, Team, Ort, Verantwortliche, Aufgaben (erledigt von/wann), Updates, Notizen | – |
 | **Angebot** | Art (Auktion/Festpreis/Tausch), Biete/Suche, Titel, Kategorie, Item, Menge, Preise, Laufzeit, Team, Status (aktiv/verkauft/nicht verkauft/abgebrochen), Gebote, Gegenangebote, Übergabe (offen/bestätigt/Streit/geklärt), Verlauf | Angebote werden nie automatisch gelöscht |
 | **Rennstrecke** | Name (eindeutig), Dimension, Rundkurs/Sprint, Fahrzeug-Regel, Tore (Mitte, Fahrtrichtung, Breite), Version, beste Runde je Fahrer mit Abschnitten, beste Abschnitte je Fahrer, letzte 100 Runden, Archiv alter Versionen | Löschen nur mit eingetipptem Namen; Tore/Fahrzeug ändern = neue Version, alte Bestzeiten ins Archiv |
-| **Statistik** (`stats.json`) | je Spieler: Werte, Top-Listen, Tagesstände, Sitzungen, Aktiv/AFK, Wann online, Todesursachen, Verlauf (100) · Server: Rekorde, Wann ist am meisten los, Tage (60) | Wird nie gelöscht; ausgeblendete Spieler werden nur nicht gezeigt |
+| **Statistik** (`stats.json`) | je Spieler: Werte, Top-Listen, Tagesstände, Sitzungen, Aktiv/AFK, Wann online, Todesursachen, Verlauf (100) · Server: Rekorde, Wann ist am meisten los, Tage (60) | Wird nie gelöscht |
 
 Alle Dateien haben eine `schemaVersion`. Länder und Marker sind auf Version 2 (0.3), alle neuen Bereiche auf Version 1.
 
@@ -207,13 +206,13 @@ Handels-Aktionen (alle POST unter `/api/trades`) brauchen eine `requestId` (8–
 | GET | `/api/discovered?dimension=…&since=<version>` | – | `{unchanged:true}`, wenn sich nichts geändert hat |
 | GET | `/api/people` | – | Spieler mit Rolle, online/zuletzt da, sichtbaren Teams, Ländern |
 | GET/POST | `/api/prefs` · `/api/prefs/favorite` | `{kind, id, on}` | Favoriten (lands, markers, projects, teams, listings) |
-| POST | `/api/prefs/game` | `{key, on}` | Schalter: `notify`, `landEnter`, `deathMarker`, `rankings` (`/api/meta` → `gameFeatures`: was der Server anbietet) |
+| POST | `/api/prefs/game` | `{key, on}` | Schalter: `notify`, `landEnter`, `deathMarker` (`/api/meta` → `gameFeatures`: was der Server anbietet; `rankings` gab es nur in 0.5.0 → 400) |
 | GET | `/api/sessions` | – | Eigene Geräte: `{sessions: [{id, device, created, lastUsed, current}]}` – nie die Tokens |
 | POST | `/api/sessions/{id}/logout` · `/api/sessions/logout-others` | – | Ein Gerät / alle anderen abmelden |
 | POST | `/api/markers/{id}/navigate` · `/api/lands/{id}/navigate` · `/api/races/{id}/navigate` | – | Wegweiser im Spiel starten (409, wenn du nicht online bist) |
 | GET | `/api/stats/server` | – | Summen (ohne Ausgeblendete), Rekorde, `heat` [7][24] (null = keine Messung), Tage, Todesursachen, Verlauf |
 | GET | `/api/stats/rankings?range=all\|week\|yesterday\|today` | – | 16 Ranglisten mit Top 10, `me` = dein Platz, `available` |
-| GET | `/api/stats/players` · `/api/stats/players/{uuid}` | – | Spielerseite: Werte, Zuwachs, pro Stunde, Plätze, Wann online, Top-Listen, Verlauf (404 bei ausgeblendeten Spielern, außer für sie selbst) |
+| GET | `/api/stats/players` · `/api/stats/players/{uuid}` | – | Spielerseite: Werte, Zuwachs, pro Stunde, Plätze, Wann online, Top-Listen, Verlauf – für alle sichtbar (404 nur, wenn der Spieler noch nie online war) |
 | GET | `/api/races` · `/api/races/{id}` | – | Strecken; Detail mit Toren, Bestenliste, besten Abschnitten, letzten Runden |
 | POST | `/api/races/{id}/rename {name}` · `vehicle {vehicle}` · `delete {confirmName}` | | Nur wer die Strecke angelegt hat oder Admins; Tore setzt man im Spiel |
 | GET | `/api/todo` | – | „Zu erledigen“ wie im Spiel: `{items: [{id, kind, text, href}]}` |

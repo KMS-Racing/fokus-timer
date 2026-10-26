@@ -87,13 +87,13 @@ for who in (b_name, d_name):
 # ------------------------------------------------------------------ Grundlagen
 st, meta = call("api/meta", token=a)
 check("Server bietet die Spiel-Funktionen an", meta.get("gameFeatures") == {"notify": True, "landEnter": True, "deathMarker": True, "teamChat": True,
-                                                                         "statistics": True, "rankings": True, "races": True},
+                                                                         "statistics": True, "races": True},
       meta.get("gameFeatures"))
 for tok in (a, b, d):
-    for key in ("notify", "landEnter", "deathMarker", "rankings"):
+    for key in ("notify", "landEnter", "deathMarker"):
         call("api/prefs/game", {"key": key, "on": True}, tok)
 st, prefs = call("api/prefs", token=b)
-check("Schalter stehen in /api/prefs", prefs.get("game") == {"notify": True, "landEnter": True, "deathMarker": True, "rankings": True}, prefs)
+check("Schalter stehen in /api/prefs", prefs.get("game") == {"notify": True, "landEnter": True, "deathMarker": True}, prefs)
 st, r = call("api/prefs/game", {"key": "alles", "on": False}, b)
 check("Unbekannter Schalter wird abgelehnt", st == 400, (st, r))
 m = mark()

@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
 
 /**
  * Persönliche Einstellungen, die auf dem Server liegen (damit sie auf jedem Gerät gleich sind):
- * Favoriten und die Schalter fürs Spiel (Nachrichten, Land-Anzeige, Todespunkt, in Ranglisten sichtbar). Ansicht, Ebenen und Sortierung
+ * Favoriten und die Schalter fürs Spiel (Nachrichten, Land-Anzeige, Todespunkt). Ansicht, Ebenen und Sortierung
  * speichert der Browser selbst (localStorage). Jeder Spieler sieht und ändert nur seine eigenen Einträge.
  */
 final class PrefsStore extends JsonStore {
@@ -28,24 +28,23 @@ final class PrefsStore extends JsonStore {
     static final Map<String, String> GAME_KEYS = gameKeys();
 
     /**
-     * rankings: in Ranglisten und Statistik für andere sichtbar.
      * deathMarkerId: der automatische Todespunkt-Marker dieses Spielers (wird bei jedem Tod verschoben).
+     * (0.5.0 hatte noch „rankings“ – aus Ranglisten ausblenden. Seit 0.5.1 stehen alle drin; der alte Eintrag wird überlesen.)
      */
-    record Game(boolean notices, boolean landEnter, boolean deathMarker, boolean rankings, String deathMarkerId) {
-        static final Game DEFAULT = new Game(true, true, true, true, null);
+    record Game(boolean notices, boolean landEnter, boolean deathMarker, String deathMarkerId) {
+        static final Game DEFAULT = new Game(true, true, true, null);
 
         boolean get(String key) {
             return switch (key) {
                 case "notify" -> notices;
                 case "landEnter" -> landEnter;
-                case "rankings" -> rankings;
                 default -> deathMarker;
             };
         }
 
         Game with(String key, boolean on) {
             return new Game(key.equals("notify") ? on : notices, key.equals("landEnter") ? on : landEnter,
-                    key.equals("deathMarker") ? on : deathMarker, key.equals("rankings") ? on : rankings, deathMarkerId);
+                    key.equals("deathMarker") ? on : deathMarker, deathMarkerId);
         }
     }
 
@@ -76,7 +75,7 @@ final class PrefsStore extends JsonStore {
                 try {
                     JsonObject o = e.getValue().getAsJsonObject();
                     game.put(UUID.fromString(e.getKey()), new Game(flag(o, "notify"), flag(o, "landEnter"), flag(o, "deathMarker"),
-                            flag(o, "rankings"), o.has("deathMarkerId") ? o.get("deathMarkerId").getAsString() : null));
+                            o.has("deathMarkerId") ? o.get("deathMarkerId").getAsString() : null));
                 } catch (Exception ignored) {
                     // kaputter Eintrag
                 }
@@ -89,7 +88,6 @@ final class PrefsStore extends JsonStore {
         m.put("notify", "Nachrichten im Spiel");
         m.put("landEnter", "Land-Anzeige");
         m.put("deathMarker", "Todespunkt-Marker");
-        m.put("rankings", "In Ranglisten und Statistik sichtbar");
         return java.util.Collections.unmodifiableMap(m);
     }
 
@@ -126,17 +124,8 @@ final class PrefsStore extends JsonStore {
 
     synchronized void setDeathMarkerId(UUID user, String markerId) {
         Game g = game(user);
-        game.put(user, new Game(g.notices, g.landEnter, g.deathMarker, g.rankings, markerId));
+        game.put(user, new Game(g.notices, g.landEnter, g.deathMarker, markerId));
         changed();
-    }
-
-    /** Spieler, die in Ranglisten und Statistik nicht auftauchen wollen. */
-    synchronized Set<UUID> statsHidden() {
-        Set<UUID> out = new java.util.HashSet<>();
-        game.forEach((user, g) -> {
-            if (!g.rankings) out.add(user);
-        });
-        return out;
     }
 
     synchronized void setFavorite(UUID user, String kind, String id, boolean on) {
@@ -170,7 +159,6 @@ final class PrefsStore extends JsonStore {
             o.addProperty("notify", g.notices);
             o.addProperty("landEnter", g.landEnter);
             o.addProperty("deathMarker", g.deathMarker);
-            o.addProperty("rankings", g.rankings);
             if (g.deathMarkerId != null) o.addProperty("deathMarkerId", g.deathMarkerId);
             gameJson.add(user.toString(), o);
         });

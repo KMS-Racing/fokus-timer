@@ -181,7 +181,6 @@ final class RaceCommands {
             t = s.races().track(id);
         }
         List<RaceStore.Lap> board = s.races().leaderboard(t.id());
-        java.util.Set<java.util.UUID> hidden = s.prefs().statsHidden();
         MutableComponent out = RaceText.message().append(GameText.text("Bestenliste »" + t.name() + "«", ChatFormatting.WHITE));
         if (board.isEmpty()) out.append("\n ").append(GameText.text("Noch keine Zeiten – fahr die erste: /rennen start \"" + t.name() + "\"", ChatFormatting.GRAY));
         boolean me = false;
@@ -190,7 +189,7 @@ final class RaceCommands {
             boolean mine = l.player().equals(player.getUUID());
             me |= mine;
             out.append("\n ").append(GameText.text(RaceStore.rank(board, i) + ". ", ChatFormatting.YELLOW))
-                    .append(GameText.text(!mine && hidden.contains(l.player()) ? "ausgeblendet" : s.players().name(l.player()),
+                    .append(GameText.text(s.players().name(l.player()),
                             mine ? ChatFormatting.GREEN : ChatFormatting.WHITE))
                     .append(GameText.text(" " + RaceStore.time(l.ms()), i == 0 ? ChatFormatting.LIGHT_PURPLE : ChatFormatting.GRAY));
         }
@@ -211,7 +210,6 @@ final class RaceCommands {
         PlannerServices s = services.get();
         if (s == null) return fail(ctx, "World Planner startet noch.");
         List<String> names = s.races().names(false);
-        java.util.Set<java.util.UUID> hidden = s.prefs().statsHidden();
         MutableComponent out = RaceText.message().append(GameText.text(names.isEmpty() ? "Noch keine Strecken. Bau die erste: /rennen neu <Name>"
                 : "Strecken (anklicken zum Starten):", ChatFormatting.WHITE));
         for (String name : names) {
@@ -221,8 +219,7 @@ final class RaceCommands {
             out.append("\n ").append(t.ready() ? GameText.command(t.name(), cmd, ChatFormatting.AQUA) : GameText.text(t.name(), ChatFormatting.GRAY))
                     .append(GameText.text(" · " + RaceStore.TYPES.get(t.type()) + ", " + RaceStore.VEHICLES.get(t.vehicle()), ChatFormatting.GRAY))
                     .append(GameText.text(!t.ready() ? " · wird noch gebaut" : board.isEmpty() ? " · noch keine Zeit"
-                            : " · Rekord " + RaceStore.time(board.getFirst().ms()) + (hidden.contains(board.getFirst().player()) ? ""
-                            : " von " + s.players().name(board.getFirst().player())), ChatFormatting.GRAY));
+                            : " · Rekord " + RaceStore.time(board.getFirst().ms()) + " von " + s.players().name(board.getFirst().player()), ChatFormatting.GRAY));
         }
         ctx.getSource().sendSuccess(() -> out, false);
         return 1;

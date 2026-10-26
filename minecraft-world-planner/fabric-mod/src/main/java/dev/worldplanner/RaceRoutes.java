@@ -14,8 +14,8 @@ final class RaceRoutes extends Routes {
     @Override
     JsonElement handle(ApiRequest r) {
         if (!s.config().races()) throw PlannerException.notFound("Rennen sind auf diesem Server ausgeschaltet.");
-        if (r.is("GET", "races")) return s.races().listJson(r.user, s.prefs().statsHidden(), s.players()::name);
-        if (r.is("GET", "races", "*")) return s.races().trackJson(r.seg(1), r.user, r.admin, s.prefs().statsHidden(), s.players()::name);
+        if (r.is("GET", "races")) return s.races().listJson(r.user, s.players()::name);
+        if (r.is("GET", "races", "*")) return s.races().trackJson(r.seg(1), r.user, r.admin, s.players()::name);
         if (r.is("POST", "races", "*", "rename")) {
             s.races().rename(r.user, r.admin, r.seg(1), r.str("name"));
             return ok();

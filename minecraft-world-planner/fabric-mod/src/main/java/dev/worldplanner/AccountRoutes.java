@@ -148,7 +148,6 @@ final class AccountRoutes extends Routes {
         game.addProperty("deathMarker", c.deathMarkers());
         game.addProperty("teamChat", c.teamChat());
         game.addProperty("statistics", c.statistics());
-        game.addProperty("rankings", c.statistics());
         game.addProperty("races", c.races());
         o.add("gameFeatures", game);
         JsonArray cats = new JsonArray();

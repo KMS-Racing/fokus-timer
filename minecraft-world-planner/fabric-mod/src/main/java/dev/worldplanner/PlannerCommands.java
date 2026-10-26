@@ -32,9 +32,7 @@ import java.util.function.Supplier;
  *   /planer todespunkt       wo du zuletzt gestorben bist
  *   /planer marker <Name>    privaten Marker an deiner Position setzen
  *   /planer weg <Ziel>       Pfeil über der Hotbar zu einem Marker, Land oder zum Todespunkt (/planer weg aus = beenden)
- *   /planer statistik [Spieler]  Spielzeit, Tode, Blöcke … und Ränge (wie bei CraftAttack)
- *   /planer top [Rangliste]  wer führt? (z. B. /planer top dauerzocker)
- *   /planer ranglisten an|aus  in Ranglisten und Statistik für andere sichtbar sein
+ *   /planer statistik [Spieler]  Spielzeit, Tode, Blöcke … (die Ranglisten gibt es nur auf der Webseite)
  *   /tc <Nachricht>          Team-Chat (auch /teamchat) – nur Mitglieder deines Teams lesen mit
  *   /land [info]             wem gehört dieser Chunk?
  *   /land neu <Name>         neues Land mit dem Chunk, in dem du stehst
@@ -76,12 +74,7 @@ final class PlannerCommands {
                 .then(Commands.literal("statistik")
                         .executes(ctx -> stats(ctx, null))
                         .then(Commands.argument("spieler", StringArgumentType.word()).suggests(knownPlayers())
-                                .executes(ctx -> stats(ctx, StringArgumentType.getString(ctx, "spieler")))))
-                .then(Commands.literal("top")
-                        .executes(ctx -> top(ctx, null))
-                        .then(Commands.argument("rangliste", StringArgumentType.word()).suggests(rankings())
-                                .executes(ctx -> top(ctx, StringArgumentType.getString(ctx, "rangliste")))))
-                .then(toggle("ranglisten", "rankings")));
+                                .executes(ctx -> stats(ctx, StringArgumentType.getString(ctx, "spieler"))))));
 
         var teamChat = dispatcher.register(Commands.literal("teamchat")
                 .then(Commands.argument("nachricht", StringArgumentType.greedyString()).executes(this::teamChat)));
@@ -198,13 +191,12 @@ final class PlannerCommands {
         String[][] lines = {
                 {"/planer", "was gerade zu erledigen ist"},
                 {"/planer login", "Login-Code für die Webseite"},
-                {"/planer einstellungen", "Nachrichten, Land-Anzeige, Todespunkt, Ranglisten an/aus"},
+                {"/planer einstellungen", "Nachrichten, Land-Anzeige, Todespunkt an/aus"},
                 {"/planer todespunkt", "wo du zuletzt gestorben bist"},
                 {"/planer marker ", "privaten Marker hier setzen (Name dahinter)"},
                 {"/planer weg ", "Pfeil zu einem Marker, Land oder „todespunkt“ (Ziel dahinter)"},
                 {"/land grenzen", "Rand des Landes als Partikel zeigen"},
                 {"/planer statistik", "deine Statistik (oder die eines anderen: Name dahinter)"},
-                {"/planer top", "Ranglisten wie bei CraftAttack – wer führt?"},
                 {"/land", "wem gehört dieser Chunk? Außerdem: neu, erweitern, abgeben, liste, einladen"},
                 {"/tc ", "Team-Chat – nur dein Team liest mit (Nachricht dahinter)"},
                 {"/planer abmelden", "auf allen Geräten von der Webseite abmelden"},
@@ -265,7 +257,6 @@ final class PlannerCommands {
         return switch (key) {
             case "notify" -> "nachrichten";
             case "landEnter" -> "landanzeige";
-            case "rankings" -> "ranglisten";
             default -> "todespunkt";
         };
     }
@@ -274,7 +265,6 @@ final class PlannerCommands {
         return switch (key) {
             case "notify" -> s.config().gameNotifications();
             case "landEnter" -> s.config().landEnterMessages();
-            case "rankings" -> s.config().statistics();
             default -> s.config().deathMarkers();
         };
     }
@@ -420,41 +410,12 @@ final class PlannerCommands {
             if (found.isEmpty()) return fail(ctx, "»" + name + "« war noch nie auf dem Server.");
             target = found.get();
         }
-        java.util.Set<UUID> hidden = s.prefs().statsHidden();
-        boolean self = target.equals(player.getUUID());
-        if (!self && hidden.contains(target)) return fail(ctx, "»" + s.players().name(target) + "« hat die Statistik ausgeblendet.");
-        StatsStore.Summary summary = s.stats().summary(target, java.time.LocalDate.now(s.config().zone()), hidden);
+        StatsStore.Summary summary = s.stats().summary(target, java.time.LocalDate.now(s.config().zone()));
         if (summary == null) return fail(ctx, "Für »" + s.players().name(target) + "« gibt es noch keine Statistik.");
         Component msg = GameText.statsSummary(s.players().name(target), summary, System.currentTimeMillis(), s.config().publicUrl(),
                 "#/statistik/spieler/" + target);
         ctx.getSource().sendSuccess(() -> msg, false);
-        if (self && hidden.contains(target)) reply(ctx, "Du bist ausgeblendet – nur du siehst deine Statistik. Wieder sichtbar: /planer ranglisten an");
         return 1;
-    }
-
-    private int top(CommandContext<CommandSourceStack> ctx, String id) throws CommandSyntaxException {
-        ServerPlayer player = ctx.getSource().getPlayerOrException();
-        PlannerServices s = services.get();
-        if (s == null) return notReady(ctx);
-        if (!s.config().statistics()) return fail(ctx, "Die Statistik ist auf diesem Server ausgeschaltet.");
-        java.time.LocalDate today = java.time.LocalDate.now(s.config().zone());
-        java.util.Set<UUID> hidden = s.prefs().statsHidden();
-        if (id == null) {
-            java.util.Map<String, List<StatsStore.Entry>> lists = new java.util.HashMap<>();
-            for (StatValues.Category c : StatValues.CATEGORIES) lists.put(c.id(), s.stats().ranking(c, "all", today, hidden));
-            Component msg = GameText.leaders(StatValues.CATEGORIES, lists, s.players()::name, s.config().publicUrl());
-            ctx.getSource().sendSuccess(() -> msg, false);
-            return 1;
-        }
-        StatValues.Category c = StatValues.category(id.toLowerCase(java.util.Locale.ROOT));
-        if (c == null) return fail(ctx, "Diese Rangliste gibt es nicht. Alle: /planer top");
-        Component msg = GameText.ranking(c, s.stats().ranking(c, "all", today, hidden), s.players()::name, player.getUUID(), s.config().publicUrl());
-        ctx.getSource().sendSuccess(() -> msg, false);
-        return 1;
-    }
-
-    private static SuggestionProvider<CommandSourceStack> rankings() {
-        return suggestFrom(source -> StatValues.CATEGORIES.stream().map(StatValues.Category::id).toList());
     }
 
     private static int notReady(CommandContext<CommandSourceStack> ctx) {

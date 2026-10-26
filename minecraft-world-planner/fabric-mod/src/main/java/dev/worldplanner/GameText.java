@@ -176,18 +176,7 @@ final class GameText {
                 .append(text(today > 0 ? " (heute +" + StatValues.duration(today) + ")" : "", ChatFormatting.GRAY));
         out.append("\n ").append(pairs(v, "deaths", "mobKills", "diamonds"));
         out.append("\n ").append(pairs(v, "mined", "placed", "distance"));
-        if (!st.places().isEmpty()) {
-            List<Map.Entry<String, Integer>> best = new java.util.ArrayList<>(st.places().entrySet());
-            best.sort(Map.Entry.comparingByValue());
-            MutableComponent places = Component.empty().append(text("Ränge: ", ChatFormatting.GRAY));
-            for (int i = 0; i < best.size() && i < 3; i++) {
-                StatValues.Category c = StatValues.category(best.get(i).getKey());
-                if (i > 0) places.append(text(" · ", ChatFormatting.DARK_GRAY));
-                places.append(text(c.rank() + " ", ChatFormatting.GOLD)).append(text("Platz " + best.get(i).getValue(), ChatFormatting.WHITE));
-            }
-            out.append("\n ").append(places);
-        }
-        return out.append(webLink(publicUrl, href, "\n [Ganze Statistik auf der Webseite]"));
+        return out.append(webLink(publicUrl, href, "\n [Ganze Statistik auf der Webseite]")).append(webLink(publicUrl, "#/ranglisten", " [Ranglisten]"));
     }
 
     private static MutableComponent pairs(Map<String, Long> v, String... keys) {
@@ -198,41 +187,6 @@ final class GameText {
                     .append(text(StatValues.format(keys[i], v.getOrDefault(keys[i], 0L)), ChatFormatting.WHITE));
         }
         return out;
-    }
-
-    /** /planer top <Rangliste>: die ersten fünf und dein Platz. */
-    static Component ranking(StatValues.Category c, List<StatsStore.Entry> list, java.util.function.Function<java.util.UUID, String> names,
-                             java.util.UUID me, String publicUrl) {
-        MutableComponent out = message().append(text(c.rank(), ChatFormatting.GOLD)).append(text(" – " + c.label(), ChatFormatting.GRAY));
-        if (list.isEmpty()) return out.append("\n ").append(text("Noch niemand – sei die oder der Erste!", ChatFormatting.GRAY));
-        boolean meShown = false;
-        for (int i = 0; i < list.size() && i < 5; i++) {
-            StatsStore.Entry e = list.get(i);
-            boolean mine = e.player().equals(me);
-            meShown |= mine;
-            out.append("\n ").append(text(StatsStore.place(list, i) + ". ", ChatFormatting.YELLOW))
-                    .append(text(names.apply(e.player()), mine ? ChatFormatting.GREEN : ChatFormatting.WHITE))
-                    .append(text(" " + StatValues.format(c.key(), e.value()), ChatFormatting.GRAY));
-        }
-        for (int i = 5; !meShown && i < list.size(); i++) {
-            if (!list.get(i).player().equals(me)) continue;
-            out.append("\n ").append(text("… du: Platz " + StatsStore.place(list, i) + " mit " + StatValues.format(c.key(), list.get(i).value()), ChatFormatting.GREEN));
-        }
-        return out.append(webLink(publicUrl, "#/statistik/ranglisten", " [Alle Ranglisten]"));
-    }
-
-    /** /planer top ohne Rangliste: wer führt wo? */
-    static Component leaders(List<StatValues.Category> cats, Map<String, List<StatsStore.Entry>> lists,
-                             java.util.function.Function<java.util.UUID, String> names, String publicUrl) {
-        MutableComponent out = message().append(text("Ranglisten – wer führt? Mehr: /planer top <Rangliste>", ChatFormatting.WHITE));
-        for (StatValues.Category c : cats) {
-            List<StatsStore.Entry> list = lists.get(c.id());
-            out.append("\n ").append(command(c.rank(), "/planer top " + c.id(), ChatFormatting.GOLD)).append(text(": ", ChatFormatting.GRAY));
-            if (list.isEmpty()) out.append(text("noch niemand", ChatFormatting.DARK_GRAY));
-            else out.append(text(names.apply(list.getFirst().player()), ChatFormatting.WHITE))
-                    .append(text(" (" + StatValues.format(c.key(), list.getFirst().value()) + ")", ChatFormatting.GRAY));
-        }
-        return out.append(webLink(publicUrl, "#/statistik/ranglisten", " [Webseite]"));
     }
 
     private static String ago(long ms) {
