@@ -30,5 +30,9 @@
   "maxListingDays": 14,
   "tradeActionsPerMinute": 30,
   "extraTradeCategories": { "potions": "Tränke" },
-  "activityLimit": 1000
+  "activityLimit": 1000,
+  "statistics": true,
+  "timeZone": "Europe/Berlin",
+  "afkMinutes": 5,
+  "races": true
 }

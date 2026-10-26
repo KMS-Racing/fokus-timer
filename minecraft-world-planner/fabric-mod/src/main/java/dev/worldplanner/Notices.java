@@ -35,18 +35,32 @@ final class Notices {
     }
 
     /**
-     * @param live    neu dazugekommen = Nachricht im Spiel (sonst nur in der Zusammenfassung)
-     * @param href    Ziel auf der Webseite, z. B. "#/teams/<id>"
-     * @param command Befehl, den ein Klick im Chat einfügt (oder null)
-     * @param group   Neuigkeiten derselben Gruppe kommen höchstens alle paar Sekunden (z. B. viele Gebote hintereinander)
+     * @param live         neu dazugekommen = Nachricht im Spiel (sonst nur in der Zusammenfassung)
+     * @param href         Ziel auf der Webseite, z. B. "#/teams/<id>"
+     * @param command      Befehl, den ein Klick im Chat einfügt (oder null)
+     * @param group        Neuigkeiten derselben Gruppe kommen höchstens alle paar Sekunden (z. B. viele Gebote hintereinander)
+     * @param commandLabel Beschriftung des Knopfs für den Befehl (null = "[Annehmen]")
+     * @param always       Sicherheits-Hinweis: kommt auch bei "/planer nachrichten aus"
      */
-    record Notice(String id, boolean todo, boolean live, Level level, String text, String href, String command, String group) {}
+    record Notice(String id, boolean todo, boolean live, Level level, String text, String href, String command, String group,
+                  String commandLabel, boolean always) {
+        Notice(String id, boolean todo, boolean live, Level level, String text, String href, String command, String group) {
+            this(id, todo, live, level, text, href, command, group, null, false);
+        }
+    }
+
+    /** So lange gilt ein Web-Login als "neu" (für die Sicherheits-Nachricht). */
+    static final long RECENT_LOGIN_MS = 10 * 60_000L;
 
     private Notices() {
     }
 
     /** @param today heutiges Datum als JJJJ-MM-TT (UTC, wie das Dashboard) – für überfällige Projekte */
     static List<Notice> collect(PlannerServices s, UUID player, boolean admin, String today) {
+        return collect(s, player, admin, today, System.currentTimeMillis());
+    }
+
+    static List<Notice> collect(PlannerServices s, UUID player, boolean admin, String today, long now) {
         List<Notice> out = new ArrayList<>();
         // Reihenfolge wie auf dem Dashboard
         for (LandStore.Ref land : s.lands().invitesFor(player)) {
@@ -111,6 +125,12 @@ final class Notices {
         }
         for (TeamStore.ChatTag t : teams.memberships()) {
             out.add(news("member:" + t.teamId(), Level.INFO, "Du bist jetzt im Team [" + t.tag() + "] " + t.name(), "#/teams/" + t.teamId(), null));
+        }
+        // Sicherheit: Wer sich mit deinem Konto auf der Webseite anmeldet, soll dir nicht entgehen.
+        for (SessionStore.SessionInfo login : s.sessions().recentLogins(player, now - RECENT_LOGIN_MS)) {
+            out.add(new Notice("login:" + login.id(), false, true, Level.WARN,
+                    "Neuer Web-Login auf „" + login.device() + "“. Warst du das nicht, melde dich überall ab:",
+                    "#/einstellungen", "/planer abmelden", null, "[Überall abmelden]", true));
         }
         return out;
     }

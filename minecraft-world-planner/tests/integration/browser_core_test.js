@@ -27,7 +27,9 @@ async function dialogSubmit(page) {
   check('Name oben rechts', (await page.textContent('#accountBox')).includes(nameA));
   check('Kein "null" im Kopfbereich', !(await page.textContent('#accountBox')).includes('null'));
   check('Dashboard ist die Startseite', (await page.textContent('#viewRoot h1')).includes('Hallo'));
-  check('Hauptnavigation mit allen 10 Bereichen', (await page.locator('#sideNav .nav-link').count()) === 10);
+  const routes = await page.$$eval('#sideNav .nav-link', as => as.map(a => a.dataset.route));
+  check('Hauptnavigation mit allen 12 Bereichen (seit 0.5 mit Statistik und Rennen)', JSON.stringify(routes) === JSON.stringify(
+    ['dashboard', 'karte', 'live', 'claims', 'marker', 'teams', 'handel', 'projekte', 'spieler', 'statistik', 'rennen', 'einstellungen']), routes.join(','));
   await page.click('#sideNav a[data-route=einstellungen]');
   await page.waitForSelector('#seedValue');
   check('Seed angezeigt (Einstellungen)', /^-?\d+$/.test(await page.textContent('#seedValue')), await page.textContent('#seedValue'));
@@ -177,7 +179,8 @@ async function dialogSubmit(page) {
   const item = page.locator('#landList .item', { hasText: landName });
   check('B besitzt das Land jetzt mit', (await item.textContent()).includes(nameA) && (await item.textContent()).includes('Meins'));
   await item.locator('a', { hasText: 'Details' }).click();
-  await page.waitForSelector('#viewRoot h1');
+  // Auf die Detailseite dieses Landes warten – die Liste hat auch eine Überschrift („Claims“)
+  await page.waitForSelector(`#viewRoot h1:text-is("${landName}")`);
   check('Mit Mitbesitzer: kein Löschen-Knopf, nur Austreten', !(await page.isVisible('button.danger:has-text("Löschen")')) && await page.isVisible('button:has-text("Austreten")'));
   check('B sieht keine Admin-Knöpfe', (await page.locator('button', { hasText: 'Admin' }).count()) === 0);
 

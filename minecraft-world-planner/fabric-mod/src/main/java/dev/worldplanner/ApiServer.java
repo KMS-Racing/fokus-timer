@@ -64,12 +64,14 @@ final class ApiServer {
         this.logger = logger;
         this.s = services;
         AccountRoutes account = new AccountRoutes(services);
-        for (String key : new String[]{"me", "meta", "people", "prefs", "todo", "activity", "export", "import"}) routes.put(key, account);
+        for (String key : new String[]{"me", "meta", "people", "prefs", "todo", "sessions", "activity", "export", "import"}) routes.put(key, account);
         routes.put("lands", new LandRoutes(services));
         routes.put("markers", new MarkerRoutes(services));
         routes.put("teams", new TeamRoutes(services));
         routes.put("projects", new ProjectRoutes(services));
         routes.put("trades", new TradeRoutes(services));
+        routes.put("stats", new StatsRoutes(services));
+        routes.put("races", new RaceRoutes(services));
     }
 
     void start() throws IOException {
@@ -147,7 +149,7 @@ final class ApiServer {
         if (get && first.equals("info") && p.size() == 1) return info();
         if (post && first.equals("login") && p.size() == 1) {
             ApiRequest r = new ApiRequest(method, p, Map.of(), null, false, client, null, ex.getRequestBody(), MAX_BODY_BYTES);
-            return login(r);
+            return login(r, ex.getRequestHeaders().getFirst("User-Agent"));
         }
 
         // --- ab hier nur mit Login
@@ -186,8 +188,8 @@ final class ApiServer {
         return o;
     }
 
-    private JsonObject login(ApiRequest r) {
-        SessionStore.LoginResult result = s.sessions().redeem(r.str("code"), s.config().sessionDays(), r.client);
+    private JsonObject login(ApiRequest r, String userAgent) {
+        SessionStore.LoginResult result = s.sessions().redeem(r.str("code"), s.config().sessionDays(), r.client, userAgent);
         JsonObject o = new JsonObject();
         o.addProperty("token", result.token());
         o.addProperty("uuid", result.uuid().toString());

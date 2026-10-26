@@ -40,6 +40,10 @@ final class LandRoutes extends Routes {
                     if (deleted) deleted(r, id, landName);
                 }
             }
+            case "navigate" -> {
+                LandStore.Shape shape = lands.shapeById(id);
+                s.requestWaypoint(r.user, new Waypoints.Target(shape.name(), "⌂", shape.dimension(), shape.centerX() + 0.5, null, shape.centerZ() + 0.5));
+            }
             case "edit" -> lands.edit(r.user, r.admin, id, r.optStr("name"), r.optStr("color"), r.optStr("description"), r.optStr("notes"));
             case "invite" -> lands.invite(r.user, id, r.player("player", s.players()));
             case "uninvite" -> lands.uninvite(r.user, id, r.player("player", s.players()));

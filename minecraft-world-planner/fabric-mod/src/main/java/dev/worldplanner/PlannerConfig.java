@@ -58,9 +58,20 @@ record PlannerConfig(
         int tradeActionsPerMinute,
         Map<String, String> extraTradeCategories,
         // Aktivitäts-Übersicht
-        int activityLimit
+        int activityLimit,
+        // Statistik und Rennen
+        /** Statistik wie bei CraftAttack (Zahlen aus Minecrafts eigener Statistik) und Ranglisten. Jeder kann sich ausblenden. */
+        boolean statistics,
+        /** Zeitzone für "Heute", "Gestern" und "Wann ist am meisten los" – z. B. Europe/Berlin. */
+        String timeZone,
+        /** So viele Minuten ohne Bewegung und ohne Umschauen = AFK. */
+        int afkMinutes,
+        /** Rennstrecken mit Zeitmessung (/rennen). */
+        boolean races,
+        int maxTracksPerPlayer
 ) {
     private static final Pattern EXTRA_ID = Pattern.compile("[a-z0-9_]{2,24}");
+    private static final String DEFAULT_ZONE = "Europe/Berlin";
 
     static PlannerConfig defaults() {
         return fromJson(new JsonObject());
@@ -122,7 +133,12 @@ record PlannerConfig(
                 clamp(integer(json, "maxListingDays", 14), 1, 90),
                 clamp(integer(json, "tradeActionsPerMinute", 30), 1, 1000),
                 stringMap(json, "extraTradeCategories", EXTRA_ID),
-                clamp(integer(json, "activityLimit", 1000), 50, 100_000)
+                clamp(integer(json, "activityLimit", 1000), 50, 100_000),
+                bool(json, "statistics", true),
+                zone(str(json, "timeZone", DEFAULT_ZONE)),
+                clamp(integer(json, "afkMinutes", 5), 1, 60),
+                bool(json, "races", true),
+                clamp(integer(json, "maxTracksPerPlayer", 5), 0, 100)
         );
     }
 
@@ -160,7 +176,25 @@ record PlannerConfig(
         o.addProperty("tradeActionsPerMinute", tradeActionsPerMinute);
         o.add("extraTradeCategories", mapJson(extraTradeCategories));
         o.addProperty("activityLimit", activityLimit);
+        o.addProperty("statistics", statistics);
+        o.addProperty("timeZone", timeZone);
+        o.addProperty("afkMinutes", afkMinutes);
+        o.addProperty("races", races);
+        o.addProperty("maxTracksPerPlayer", maxTracksPerPlayer);
         return o;
+    }
+
+    java.time.ZoneId zone() {
+        return java.time.ZoneId.of(timeZone);
+    }
+
+    /** Unbekannte Zeitzone → Standard (statt beim Start abzustürzen). */
+    private static String zone(String id) {
+        try {
+            return java.time.ZoneId.of(id).getId();
+        } catch (Exception e) {
+            return DEFAULT_ZONE;
+        }
     }
 
     private static JsonObject mapJson(Map<String, String> map) {

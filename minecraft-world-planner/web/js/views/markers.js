@@ -14,6 +14,12 @@ export function myPosition() {
   return store.me && store.players.find(p => p.uuid === store.me.uuid);
 }
 
+/** Setzt im Spiel den Wegweiser (Pfeil über der Hotbar) – nur sichtbar, wenn du gerade online bist. */
+export function navigateButton(path) {
+  return el('button', { class: 'small', title: 'Zeigt im Spiel einen Pfeil zum Ziel über der Hotbar (kein Teleport)',
+    onclick: () => act(() => api(path, {}), 'Wegweiser gestartet – schau ins Spiel, der Pfeil steht über der Hotbar.') }, '🧭 Im Spiel hinführen');
+}
+
 /** Formular zum Anlegen/Bearbeiten. prefill: {x, y, z, dimension} von der Karte. */
 export async function openMarkerForm(marker = null, prefill = {}) {
   const src = marker || prefill;
@@ -108,6 +114,7 @@ export function markerItem(m, compact = false) {
       el('button', { class: 'small', onclick: () => { showPoint(m.dimension, m.x + 0.5, m.z + 0.5).then(() => showIn3D(m.x + 0.5, m.z + 0.5, navigate)); } }, 'In 3D'),
       el('button', { class: 'small', onclick: () => copyText(tpCommand(m.dimension, m.x, m.y ?? 64, m.z)) }, 'TP-Befehl'),
       el('button', { class: 'small', onclick: () => copyText(`${m.x} ${m.y ?? '~'} ${m.z}`) }, 'Koordinaten'),
+      myPosition() ? navigateButton(`api/markers/${enc(m.id)}/navigate`) : null,
       m.canEdit ? el('button', { class: 'small', onclick: () => openMarkerForm(m) }, 'Bearbeiten') : null,
       m.canEdit ? el('button', { class: 'small danger-text', onclick: () => deleteMarker(m) }, 'Löschen') : null));
 }

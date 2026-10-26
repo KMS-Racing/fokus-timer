@@ -1,6 +1,6 @@
 # Kompatibilität
 
-Getestet am 22.10.2026 (Version 0.2) und am 24./25.10.2026 (Version 0.3) auf einem echten dedizierten Server mit:
+Getestet am 22.10.2026 (Version 0.2), am 24./25.10.2026 (Versionen 0.3 und 0.4) und am 25./26.10.2026 (Version 0.5) auf einem echten dedizierten Server mit:
 
 | Teil | Version |
 |---|---|
@@ -11,6 +11,7 @@ Getestet am 22.10.2026 (Version 0.2) und am 24./25.10.2026 (Version 0.3) auf ein
 | Gradle | 9.8.2 (per Wrapper) |
 | Java | 25 (Temurin 25.0.5) |
 | BlueMap | 5.29 (Fabric), API 2.7.x |
+| Carpet (nur für die Tests, Fake-Spieler) | für 26.3 |
 
 - Andere 26.x-Versionen: alle Versionen in `fabric-mod/gradle.properties` **gemeinsam** ändern (Werte von https://fabricmc.net/develop/), dann in `fabric.mod.json` die `minecraft`-Version anpassen und neu bauen. Zwischen Versionen benennt Mojang manchmal Methoden um. Dann meldet der Compiler genau, wo.
 - BlueMap ist optional. Ohne BlueMap funktioniert alles außer der Live-Welt und der Anzeige in BlueMap.

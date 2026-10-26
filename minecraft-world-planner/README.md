@@ -14,8 +14,10 @@ Die Mod bringt ihre Webseite selbst mit – kein extra Webhosting nötig.
 | ⚖ **Handel** | Auktion, Sofortkauf, Festpreis, Tausch und **Hilfe** (Bauen, Kämpfen …) · Gebote, Gegenangebote, Übergabe-Bestätigung, Streitfall |
 | ⚒ **Projekte** | Bauprojekte mit Aufgaben, Fortschritt, Verantwortlichen, Updates, Land/Team/Ort |
 | ☺ **Spieler** | Wer ist online, wer war zuletzt da, Teams, Länder |
-| ⚙ **Einstellungen** | Hell/Dunkel, Schalter fürs Spiel, Favoriten, **Export/Import** mit Vorschau, Server-Infos |
-| 🎮 **Im Spiel** | Kurz nach dem Einloggen „Zu erledigen“ im Chat, danach Neues sofort (Einladung, überboten, verkauft …) · Land-Name über der Hotbar beim Betreten · **Todespunkt** als privater Marker · **Team-Chat** `/tc` · alles einzeln abschaltbar |
+| ★ **Statistik** | Wie bei CraftAttack: der Server in Zahlen, **16 Ranglisten** (Dauerzocker, Friedhof, Diamantenbank, Abrissbirne …) gesamt / 7 Tage / gestern / heute, „Wann ist am meisten los?“, Rekorde, Verlauf mit Toden und Meilensteinen, eine Seite pro Spieler · jeder kann sich ausblenden |
+| ⏱ **Rennen** | Rennstrecken im Spiel bauen (Tore), **Zeitmessung** mit Abschnitten in F1-Farben (lila/grün/gelb), Bestenliste, Fahrzeug-Regel (zu Fuß, Boot, Pferd, Elytra) |
+| ⚙ **Einstellungen** | Hell/Dunkel, Schalter fürs Spiel, Statistik sichtbar ja/nein, **angemeldete Geräte**, Favoriten, **Export/Import** mit Vorschau, Server-Infos |
+| 🎮 **Im Spiel** | Kurz nach dem Einloggen „Zu erledigen“ im Chat, danach Neues sofort (Einladung, überboten, verkauft …) · Land-Name über der Hotbar beim Betreten · **Wegweiser** zu Markern, Ländern und zum Todespunkt · **Land-Grenzen** als Partikel · **Todespunkt** als privater Marker · **Team-Chat** `/tc` · Nachricht bei neuem Web-Login · alles einzeln abschaltbar |
 
 Dazu eine **Suche oben** (Länder, Marker, Projekte, Teams, Spieler, Angebote – und Koordinaten wie `100 64 -200`; Taste `/`).
 
@@ -48,12 +50,12 @@ cd fabric-mod
 ```
 
 Beim ersten Mal lädt Gradle viel herunter, das dauert ein paar Minuten. `build` führt auch die Unit-Tests aus.
-Fertig ist die Datei `fabric-mod/build/libs/world-planner-0.4.0.jar` (die `...-sources.jar` daneben brauchst du nicht).
+Fertig ist die Datei `fabric-mod/build/libs/world-planner-0.5.0.jar` (die `...-sources.jar` daneben brauchst du nicht).
 
-## 2. Auf dem Server installieren (oder von 0.2/0.3 updaten)
+## 2. Auf dem Server installieren (oder von 0.2/0.3/0.4 updaten)
 
 1. **Backup** machen (siehe [BACKUP.md](BACKUP.md)), dann Server stoppen.
-2. Alte `world-planner-*.jar` aus `mods/` entfernen, `world-planner-0.4.0.jar` und die passende **Fabric API** hineinlegen. Für 3D auch **BlueMap**.
+2. Alte `world-planner-*.jar` aus `mods/` entfernen, `world-planner-0.5.0.jar` und die passende **Fabric API** hineinlegen. Für 3D auch **BlueMap**.
 3. Server starten. Im Log sollte stehen:
    ```
    [World Planner] Webseite und API laufen auf http://127.0.0.1:8765/
@@ -61,8 +63,10 @@ Fertig ist die Datei `fabric-mod/build/libs/world-planner-0.4.0.jar` (die `...-s
    Beim Update von 0.2 zusätzlich: `lands.json wird auf Version 2 umgestellt. Sicherung der alten Datei: lands.json.v1.bak`
    (genauso für `markers.json`). Alle Länder, Besitzer und Marker bleiben erhalten – getestet mit echten 0.2-Daten.
 4. Die Mod ergänzt `config/world-planner.json` um die neuen Einstellungen (siehe [Einstellungen](#einstellungen)).
-   Beim Update von 0.3 ändert sich an den Daten nichts – getestet: Länder, Marker, Teams, Projekte, Angebote und Favoriten
-   waren nach dem Update auf 0.4 genau gleich.
+   Beim Update von 0.3 oder 0.4 ändert sich an den Daten nichts – getestet: Länder, Marker, Teams, Projekte, Angebote,
+   Favoriten, Spiel-Schalter, Aktivität und Web-Logins waren nach dem Update von 0.4 auf 0.5 genau gleich.
+   Neu kommen `stats.json` und `races.json` dazu. Beim ersten Start übernimmt 0.5 Minecrafts eigene Statistik-Dateien
+   (`world/players/stats/`) der Spieler, die der Planer schon kennt – Log: `Statistik von 4 Spieler(n) … übernommen`.
 
 ## 3. Webseite öffnen und einloggen
 
@@ -86,16 +90,27 @@ Ist `publicUrl` eingetragen, gibt es im Chat einen Link, der direkt einloggt. We
 | `/planer nachrichten an\|aus` · `/planer landanzeige an\|aus` · `/planer todespunkt an\|aus` | Einzelne Schalter (gelten auch für die Webseite) |
 | `/planer todespunkt` | Wo du zuletzt gestorben bist – mit Entfernung und Richtung von hier |
 | `/planer marker <Name>` | Privater Marker an deiner Position (teilen und bearbeiten auf der Webseite) |
+| `/planer weg <Ziel>` | **Wegweiser**: Pfeil über der Hotbar zu einem Marker, Land oder `todespunkt` – gedreht nach deiner Blickrichtung, mit Entfernung (kein Teleport). `/planer weg aus` beendet ihn |
+| `/planer statistik [Spieler]` | Spielzeit, Tode, Blöcke … und deine besten Ränge |
+| `/planer top [Rangliste]` | Wer führt wo? Mit Namen (z. B. `/planer top friedhof`) die ersten fünf und dein Platz |
+| `/planer ranglisten an\|aus` | In Ranglisten und Statistik für andere sichtbar sein (Standard: an) |
 | `/tc <Nachricht>` (lang: `/teamchat`) | **Team-Chat** – nur Mitglieder deines Teams lesen mit, auch bei privaten Teams |
 | `/land` oder `/land info` | Wem gehört der Chunk, in dem ich stehe? |
 | `/land neu <Name>` | Neues Land aus dem Chunk, in dem du stehst |
 | `/land erweitern [Land]` | Chunk zu deinem Land hinzufügen (muss angrenzen) |
 | `/land abgeben` | Chunk aus deinem Land entfernen |
 | `/land liste` | Deine Länder, Chunk-Verbrauch und Einladungen |
+| `/land grenzen [Land]` | Rand des Landes 20 Sekunden lang als Partikel (nur du siehst sie) – auch kurz nach `/land neu` und `/land erweitern` |
 | `/land einladen <Land> <Spieler>` | Mitbesitzer einladen (geht auch, wenn der Spieler offline ist) |
 | `/land annehmen <Land>` / `ablehnen <Land>` | Einladung annehmen / ablehnen |
 | `/land verlassen <Land>` | Austreten. Als letzter Besitzer wird das Land frei. |
 | `/land admin loeschen <Land>` · `/land admin entfernen <Land> <Spieler>` | **Nur OPs** |
+| `/rennen neu <Name> [runde\|sprint] [beliebig\|zu_fuss\|boot\|pferd\|elytra]` | Neue Rennstrecke anfangen (Rundkurs oder Sprint von A nach B, Fahrzeug-Regel) |
+| `/rennen tor [Breite]` | Tor hier, quer zu deiner Blickrichtung (Standard 12 Blöcke). Das erste Tor ist Start/Ziel. `/rennen tor weg` nimmt das letzte zurück |
+| `/rennen fertig` · `/rennen abbrechen` | Strecke fertig (Rundkurs: mind. 3 Tore, Sprint: 2) / Bauen abbrechen |
+| `/rennen bearbeiten <Strecke>` | Tore neu setzen (nur wer sie angelegt hat oder OPs). Alte Zeiten kommen ins Archiv |
+| `/rennen start <Strecke>` · `/rennen stop` | Zeitmessung: Die Uhr läuft ab der Startlinie (fliegender Start) / beenden |
+| `/rennen zeiten [Strecke]` · `/rennen liste` · `/rennen zeigen [Strecke]` | Bestenliste · alle Strecken · Tore 20 Sekunden als Partikel |
 
 Namen mit Leerzeichen in Anführungszeichen: `/land neu "Kims Base"`. Mit **Tab** werden Namen vervollständigt.
 Teams gründen, Handel und Projekte gehen nur auf der Webseite – im Spiel bekommst du dazu aber Nachrichten (siehe Regeln).
@@ -157,6 +172,48 @@ Teams gründen, Handel und Projekte gehen nur auf der Webseite – im Spiel beko
   funktionieren. Das ist Minecraft-Standard; mit Fake-Spielern ließ es sich hier nicht prüfen.
 - Jeder Spieler kann Nachrichten, Land-Anzeige und Todespunkt **für sich** abschalten: im Spiel mit `/planer einstellungen`
   oder auf der Webseite unter Einstellungen → „Im Spiel“.
+- **Wegweiser** (`/planer weg`, auf der Webseite „🧭 Im Spiel hinführen“ bei Markern, Ländern und Rennstrecken): ein Pfeil über
+  der Hotbar, gedreht nach deiner Blickrichtung, mit Entfernung und Höhe. Liegt das Ziel in der Oberwelt und du bist im Nether
+  (oder umgekehrt), führt der Pfeil zur passenden Stelle für ein Portal (Nether = Oberwelt ÷ 8). Am Ziel endet er von selbst.
+  Er teleportiert nicht und zeigt nur, was du auch auf der Webseite sehen darfst (private Marker anderer nicht).
+- **Land-Grenzen** (`/land grenzen`): Partikel in der Landfarbe entlang des Randes, 20 Sekunden lang, nur für dich und nur
+  im Umkreis von 40 Blöcken. Auch das ist nur eine Anzeige.
+- **Neuer Web-Login:** Meldet sich jemand mit deinem Konto auf der Webseite an, kommt im Spiel sofort
+  „⚠ Neuer Web-Login auf „Firefox · Windows““ mit Knopf zum Abmelden – auch wenn du Nachrichten ausgeschaltet hast.
+  Unter Einstellungen → „Angemeldete Geräte“ siehst du jedes Gerät (nur eine grobe Beschreibung, keine IP) und kannst
+  einzelne oder alle anderen abmelden.
+
+**Statistik** (wie bei CraftAttack – `statistics`, Standard an)
+- Die Zahlen kommen aus **Minecrafts eigener Statistik** (dieselben wie unter Esc → Statistiken): Spielzeit, Tode, abgebaute und
+  platzierte Blöcke, Diamanten, Mobs, Strecke, Schaden, Gegessenes, Fische, gezüchtete Tiere, Handel, Hergestelltes, Sprünge.
+  Sie reichen zurück bis zum ersten Login – auch vor der Mod. Die Mod liest sie jede Minute für Online-Spieler und beim Ausloggen.
+- Selbst gemessen (erst **ab der Installation von 0.5**): Aktiv/AFK, Sitzungen, „Wann online“, Todesursachen, Verlauf,
+  Zuwachs pro Tag. **AFK** = `afkMinutes` (Standard 5) Minuten ohne Bewegung und ohne Umschauen; Bewegung zählt immer –
+  auch im Boot oder vom Wasser geschoben. „Heute“ und „Gestern“ richten sich nach `timeZone` (Standard Europe/Berlin).
+- **Ranglisten** mit den Namen von CraftAttack: Dauerzocker, Fleißig, Friedhof, Diamantenbank, Abrissbirne, Baumeister,
+  Monsterjäger, Weltenbummler, Unsterblich, Kampfmaschine, Vielfraß, Angelprofi, Tierfreund, Händler, Handwerker, Flummi –
+  jeweils gesamt, letzte 7 Tage, gestern und heute (Zuwachs zählt ab der Installation). Gleiche Werte = gleicher Platz.
+- **Ausblenden:** Wer `/planer ranglisten aus` tippt (oder in den Einstellungen den Schalter ausmacht), fehlt in allen Ranglisten,
+  in den Server-Summen und im Verlauf; seine Seite sieht nur er selbst. Gezählt wird trotzdem weiter (so wie Minecraft selbst
+  auch zählt). In **anonymen** Zählungen (wie viele online, Rekord, „Wann ist am meisten los“, Spieler pro Tag) ist er dabei.
+- Platziert = benutzte Block-Items, Gegessen = benutzte Essen-Items plus Kuchenstücke. Karotten, Kartoffeln und Beeren zählen
+  bei keinem von beiden – Minecraft zählt dort Pflanzen und Essen in **einer** Zahl, die Mod kann sie nicht trennen.
+
+**Rennen** (`races`, Standard an)
+- Eine Strecke besteht aus **Toren**: Linien quer zur Fahrtrichtung, die du im Spiel setzt (`/rennen tor`). Beim Rundkurs ist das erste
+  Tor Start und Ziel; mindestens zwei Tore dazwischen verhindern, dass man an der Linie hin und her fährt. Beim Sprint ist das letzte
+  Tor das Ziel. Ein Tor zählt nur **vorwärts** und bis 10 Blöcke darüber oder darunter.
+- **Zeitmessung:** `/rennen start <Strecke>` – die Uhr läuft ab der Startlinie (fliegender Start), Runde für Runde. Über der Hotbar
+  stehen Rundenzeit und Abschnitte in F1-Farben: **lila** = schnellster Abschnitt von allen, **grün** = deine Bestzeit, **gelb** =
+  langsamer. Das nächste Tor leuchtet grün. Im Chat: Rundenzeit, Abstand zur Bestzeit, Platz, Streckenrekord.
+- **Genauigkeit:** Minecraft kennt Positionen nur alle 0,05 Sekunden. Der Server rechnet aus, wann zwischen zwei Ticks du die Linie
+  überquert hast – die Hundertstel sind also **geschätzt**, nicht gemessen (etwa ±0,05 s). Gemessen wird in Echtzeit; ruckelt der
+  Server (ein Tick über 0,25 s), heißt die Runde „ungenau“ und kommt nicht in die Bestenliste.
+- **Eine Runde zählt nicht** bei: ausgelassenem Tor, falschem Fahrzeug, Kreativ-/Zuschauermodus oder Fliegen ohne Elytra,
+  Teleport (über 12 Blöcke in einem Tick), Dimension gewechselt, Tod, über 30 Minuten.
+- Werden Tore oder die Fahrzeug-Regel geändert, bekommt die Strecke eine **neue Version**: Die alten Bestzeiten bleiben im Archiv,
+  zählen aber nicht mehr. Ändern und löschen darf nur, wer die Strecke angelegt hat (oder ein Admin); löschen nur mit eingetipptem Namen.
+- Höchstens `maxTracksPerPlayer` Strecken pro Spieler. Neue Streckenrekorde stehen in der Aktivität.
 
 ---
 
@@ -194,6 +251,11 @@ Datei: `config/world-planner.json` (Server neu starten nach Änderungen). Unsinn
 | `tradeActionsPerMinute` | `30` | Handels-Aktionen pro Spieler und Minute |
 | `extraTradeCategories` | `{}` | Eigene Kategorien, z. B. `{"potions": "Tränke"}` |
 | `activityLimit` | `1000` | So viele Einträge behält die Aktivitäts-Übersicht |
+| `statistics` | `true` | Statistik und Ranglisten (jeder kann sich ausblenden) |
+| `timeZone` | `"Europe/Berlin"` | Zeitzone für „Heute“, „Gestern“ und „Wann ist am meisten los“ |
+| `afkMinutes` | `5` | So viele Minuten ohne Bewegung und ohne Umschauen = AFK (1–60) |
+| `races` | `true` | Rennstrecken mit Zeitmessung (`/rennen`) |
+| `maxTracksPerPlayer` | `5` | Höchstzahl Rennstrecken pro Spieler (Admins ausgenommen) |
 | `sessionDays` | `30` | Wie lange ein Web-Login gültig bleibt |
 | `showSeed` | `true` | Seed anzeigen. Auf `false`, wenn der Seed geheim sein soll! |
 | `showOnlinePlayers` | `true` | Online-Status und Positionen der Spieler anzeigen |
@@ -257,9 +319,18 @@ Export/Import auf der Webseite (Einstellungen) ist für **deine eigenen** Daten;
 - **Teams, Handel und Projekte** bedienst du auf der Webseite. Im Spiel gibt es dazu Nachrichten, aber keine Befehle zum Bieten,
   Kaufen oder Annehmen von Team-Einladungen.
 - **Getestet mit Fake-Spielern, nicht mit einem echten Minecraft-Fenster:** Dass Nachrichten beim richtigen Spieler ankommen, ist
-  auf einem echten Server geprüft. Wie Farben, Klick-Links und die Anzeige über der Hotbar in deinem Spiel **aussehen**, konnte ich
-  ohne echten Minecraft-Client nicht ansehen. Auch der Hinweis **nach dem Wiederbeleben** ist nur per Unit-Test geprüft
+  auf einem echten Server geprüft. Wie Farben, Klick-Links, Partikel und die Anzeige über der Hotbar in deinem Spiel **aussehen**,
+  konnte ich ohne echten Minecraft-Client nicht ansehen. Auch der Hinweis **nach dem Wiederbeleben** ist nur per Unit-Test geprüft
   (Fake-Spieler werden beim Tod entfernt statt wiederbelebt).
+- **Rennen mit echten Fahrzeugen:** Die Zeitmessung ist auf dem Server mit einem Fake-Spieler geprüft, der in vielen kleinen
+  Schritten über die Tore teleportiert wird (so bewegt er sich zuverlässig). Ob die Fahrzeug-Regel im **Boot, auf dem Pferd oder
+  mit Elytra** richtig erkennt, ist nur per Unit-Test geprüft – Fake-Spieler können nicht lenken.
+- **Statistik:** Minecrafts Zahlen gehen bis zum ersten Login zurück, alles Selbstgemessene (AFK, Wann online, Zuwachs, Verlauf)
+  erst ab 0.5. Spieler, die seit der Installation des Planers nie online waren, erscheinen erst nach ihrem nächsten Login.
+  Blöcke und Mobs haben deutsche Namen, soweit sie in der Mod stehen; seltene erscheinen mit ihrem englischen Namen aus der ID
+  (der Server kennt nur Minecrafts englische Texte).
+- **Logout bei Fake-Spielern:** Fabrics Abmelde-Ereignis kommt bei Carpet-Fake-Spielern nicht. Die Mod merkt deshalb jede Sekunde
+  selbst, wer fehlt – so ist auch das geprüft. Bei echten Spielern kommt das Ereignis normalerweise sofort.
 - **Kürzel nach dem Entfernen der Mod:** Minecraft speichert Scoreboard-Teams selbst. Wer die Mod löscht, sollte vorher
   `chatTeamTags` auf `false` stellen und einmal starten – sonst bleiben die `wpt_…`-Teams, bis man sie mit `/team remove` löscht.
 - **Nur Minecraft 26.3**, nur dedizierter Server.

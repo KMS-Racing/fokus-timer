@@ -136,6 +136,31 @@ final class MarkerStore extends JsonStore {
         }
     }
 
+    /** Für /planer weg: ein Marker, den der Spieler sehen darf – eigene zuerst. Name ohne Groß/klein, oder null. */
+    synchronized Marker findVisible(UUID viewer, String name) {
+        if (name == null) return null;
+        String wanted = name.strip();
+        Marker other = null;
+        for (Marker m : markers.values()) {
+            if (!m.name.equalsIgnoreCase(wanted) || !canSee(m, viewer)) continue;
+            if (m.owner.equals(viewer)) return m;
+            if (other == null) other = m;
+        }
+        return other;
+    }
+
+    /** Marker per id, wenn der Spieler ihn sehen darf – sonst 404 (wie überall). */
+    synchronized Marker visible(UUID viewer, String id) {
+        return requireVisible(viewer, id);
+    }
+
+    /** Namen aller Marker, die der Spieler sehen darf (für die Vorschläge mit Tab). */
+    synchronized List<String> visibleNames(UUID viewer) {
+        java.util.TreeSet<String> names = new java.util.TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        for (Marker m : markers.values()) if (canSee(m, viewer)) names.add(m.name);
+        return List.copyOf(names);
+    }
+
     /** Eigener Marker mit dieser id oder null (z. B. für den Todespunkt). */
     synchronized Marker ownMarker(UUID owner, String id) {
         Marker m = id == null ? null : markers.get(id);

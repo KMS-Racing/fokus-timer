@@ -169,3 +169,56 @@ noch einmal mit genau der Jar, die ausgeliefert wird:
 
 **Nicht geprüft** (ehrlich): wie es in einem echten Minecraft-Fenster aussieht (Farben, Klick-Links, Actionbar), der Hinweis
 nach dem Wiederbeleben auf dem Server (Fake-Spieler werden beim Tod entfernt) und Minecrafts eigenes `/teammsg`.
+
+# Version 0.5: Wegweiser, Statistik wie bei CraftAttack, Rennen
+
+- **Wegweiser** (`/planer weg <Marker|Land|todespunkt>`, auf der Webseite „🧭 Im Spiel hinführen“): Pfeil über der Hotbar, gedreht
+  nach der Blickrichtung, mit Entfernung und Höhe; im Nether zur passenden Portal-Stelle. Kein Teleport.
+- **Land-Grenzen** als Partikel (`/land grenzen`, auch kurz nach `/land neu` und `/land erweitern`), nur für den, der fragt.
+- **Sicherheit:** Nachricht im Spiel bei jedem neuen Web-Login (auch bei „Nachrichten aus“) mit Knopf „Überall abmelden“,
+  Liste der angemeldeten Geräte in den Einstellungen (nur „Firefox · Windows“, keine IP), einzelne Geräte abmelden.
+- **Statistik wie bei CraftAttack:** Server in Zahlen, 16 Ranglisten mit den Namen von CraftAttack (gesamt, 7 Tage, gestern, heute),
+  „Wann ist am meisten los?“, Spieler und Spielstunden pro Tag, Rekorde, Verlauf mit Toden und Meilensteinen, eine Seite pro Spieler
+  (Zuwachs, pro Online-Stunde, Plätze mit Veränderung zur Vorwoche, Wann online, Top-Listen, Todesursachen), `/planer statistik`
+  und `/planer top`. Die Zahlen kommen aus Minecrafts eigener Statistik – nichts wird geschätzt. Jeder kann sich ausblenden.
+- **Rennen:** Strecken im Spiel bauen (Tore quer zur Fahrtrichtung), Zeitmessung mit Abschnitten in F1-Farben, Bestenliste,
+  Fahrzeug-Regel, Versionen (alte Zeiten ins Archiv), Webseite mit Streckenplan. Die Hundertstel sind zwischen zwei Ticks
+  geschätzt – das steht überall dabei; geruckelte Runden heißen „ungenau“ und zählen nicht.
+
+## Fehler, die beim Bauen und Testen von 0.5 gefunden und behoben wurden
+
+| Fehler | Gefunden durch | Behoben |
+|---|---|---|
+| Fabrics Abmelde-Ereignis kommt bei Carpet-Fake-Spielern nie – die Statistik wurde beim Ausloggen nicht gelesen (ein Tod kurz vor dem Logout fehlte bis zum nächsten Login) | Integrationstest: „Bob: ein Tod mehr“ schlug fehl | Die Mod bemerkt jede Sekunde selbst, wer fehlt, und meldet ihn genau einmal ab (auch für Wegweiser, Land-Anzeige und Zeitmessung) |
+| Nach jedem Neustart wurden die Statistik-Dateien erneut „übernommen“ (Minecraft speichert sie kurz nach dem letzten Stand der Mod) | Server-Log | Nur übernehmen, wenn sich die Zahlen wirklich geändert haben |
+| Wer im Ranglisten-Schalter „aus“ gewählt hatte, stand in der Bestenliste der Rennen trotzdem mit Namen | Code-Durchsicht | Zeit bleibt (sonst wäre die Bestenliste falsch), der Name heißt für andere „ausgeblendet“ – auch im Chat und in der Aktivität |
+| Zeitmessung und Wegweiser hätten sich über der Hotbar abgewechselt (beide schreiben regelmäßig neu) | Code-Durchsicht | Die Rennanzeige hält ihren Platz eine halbe Sekunde |
+| Nach „/planer nachrichten aus“ konnten schon wartende Nachrichten noch kommen | Unit-Test | Warteschlange wird beim Abschalten geleert |
+| Statistik-Pfad: In 26.3 liegen Minecrafts Statistik-Dateien in `world/players/stats`, nicht mehr in `world/stats` | Nachgesehen in der echten Welt | Pfad von Minecraft selbst (`LevelResource.PLAYER_STATS_DIR`) |
+| Handy: Die Diagramme wurden verkleinert, die Schrift war nur noch ~6 px groß | Screenshot | Zeichnungen richten sich nach der Breite, die Schrift bleibt 11 px |
+| „Zuwachs“ und „Pro Online-Stunde“ waren lange Listen voller Nullen; Achse „0 / 1,5 / 3“ für Spielerzahlen | Screenshots | Nur Zeilen mit Werten; ganze Zahlen auf der Achse |
+| Test-Fehler: Ein Browser-Test wartete nach „Details“ auf irgendeine Überschrift – die Liste hat auch eine; manchmal prüfte er zu früh | voller Testlauf (1 von 48 rot) | wartet jetzt auf die Überschrift mit dem Landnamen (strenger, ohne Zufall) |
+
+Und ehrlich zum **Testaufbau**: Die Fake-Spieler sind wieder gestorben – sie wurden auf eine Plattform teleportiert, die es noch
+nicht gab (erst bauen, dann hinstellen, behoben). Carpets `look` nimmt die Winkel anders herum als gedacht (jetzt `look at`).
+Und `tp` mit ganzen Zahlen setzt auf die Blockmitte: Die Startlinie lag bei x = 600,5, der Test hielt bei 600,0 an – die Runde
+zählte erst bei der nächsten Bewegung. Die Mod hatte recht; der Testweg endet jetzt hinter der Linie.
+
+## So wurde 0.5 getestet
+
+Auf demselben echten Minecraft-26.3-Server (Fabric API, BlueMap 5.29, Carpet, vier Fake-Spieler, einer OP) – zum Schluss alles
+noch einmal mit genau der Jar, die ausgeliefert wird:
+- **163** Java-Unit-Tests (35 neu: Wegweiser, Grenzen, Actionbar, Geräte, Login-Nachricht; Statistik-Kennzahlen, Zuwachs pro Tag,
+  Meilensteine, Ranglisten mit Gleichstand, Ausblenden, AFK, Neustart; Zeitmessung zwischen den Ticks, ausgelassene Tore,
+  Teleport, Ruckler, Fahrzeug-Regeln, Sprint, Bestenliste, Versionen, Texte, API)
+- **15** Web-Unit-Tests (neu: Statistik-Zahlen, Tage über die Zeitumstellung, Rundenzeiten, Streckenplan)
+- Alte Tests, alle grün: API **59** Kern + **85** SMP + **46** Handel, Chat-Kürzel **10**, Spiel-Integration **36** + **20** Webseite,
+  Browser **48** Kern + **33** SMP + **22** BlueMap
+- Neu auf dem Server: **39** Statistik (echte Aktionen: Blöcke setzen, springen, Diamanterz abbauen, an Fallschaden sterben),
+  **30** Rennen (bauen, Runden, Abschnitte, ausgelassenes Tor, Teleport, Fahrzeug-Regel, Rechte), **26** Browser (Seite = API,
+  Wärmekarte ohne erfundene Nullen, Pfeiltasten, Tabellen-Ansicht, lila Abschnitte, Handy)
+- Update von 0.4.0 auf 0.5: **19/19** – Länder, Marker, Teams, Projekte, Angebote, Favoriten, Spiel-Schalter, Aktivität und Logins gleich
+
+**Nicht geprüft** (ehrlich): wie Pfeil, Partikel und Rennanzeige in einem echten Minecraft-Fenster aussehen; Rennen mit echtem
+Boot, Pferd oder Elytra (Fake-Spieler können nicht lenken – die Fahrzeug-Erkennung ist nur per Unit-Test geprüft); dass Fabrics
+Abmelde-Ereignis bei echten Spielern sofort kommt (die Mod kommt aber auch ohne aus).

@@ -89,8 +89,11 @@ if mode == "compare":
                 continue
             same = json.loads(json.dumps(before[area])) == json.loads(json.dumps(after[area]))
             check(f"{who.upper()}: {area} unverändert", same, f"vorher {before[area]} nachher {after[area]}" if not same else "")
-        check(f"{who.upper()}: Spiel-Schalter unverändert", before.get("game") is not None and before.get("game") == after.get("game"),
-              f"vorher {before.get('game')} nachher {after.get('game')}")
+        # Nach einem Update können neue Schalter dazukommen – die alten müssen gleich bleiben, neue stehen auf "an" (Standard)
+        bg, ag = before.get("game"), after.get("game") or {}
+        kept = bg is not None and all(ag.get(k) == v for k, v in bg.items())
+        new_default = all(v is True for k, v in ag.items() if k not in (bg or {}))
+        check(f"{who.upper()}: Spiel-Schalter unverändert", kept and new_default, f"vorher {bg} nachher {ag}")
     # Die requestId des Gebots kennt der Server noch: derselbe Klick wird nicht noch einmal ausgeführt
     st, r = call(f"api/trades/{saved['listing']}/bid", {"requestId": saved["bidRequest"], "amount": 2}, saved["b"])
     check("Gleiche requestId nach dem Neustart: kein zweites Gebot", st == 200 and r.get("repeated") is True, r)

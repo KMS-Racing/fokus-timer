@@ -1,7 +1,7 @@
 // Einstellungen: Konto, Darstellung, Schalter fürs Spiel, Favoriten, Export/Import (mit Vorschau), Server-Infos.
 import { api } from '../api.js';
 import { load, store, landById, teamById, projectById, tradeById, toggleFavorite, setGameSwitch } from '../store.js';
-import { act, confirmDialog, el, fill, fmtDateTime, fmtNum, storageGet, storageSet, toast } from '../util.js';
+import { act, confirmDialog, el, fill, fmtAgo, fmtDateTime, fmtNum, pill, storageGet, storageSet, toast } from '../util.js';
 import { bind, pageHead, segmented } from './common.js';
 
 const THEME_KEY = 'mcwp-theme';
@@ -62,25 +62,57 @@ const GAME_SWITCHES = [
   ['deathMarker', 'Todespunkt-Marker', 'Stirbst du, merkt sich der Planer die Stelle als privaten Marker ☠ (nur du siehst ihn). Die Items schützt das nicht.'],
 ];
 
-function gameSection() {
+/** Ein Schalter, der sofort auf dem Server gespeichert wird (gilt im Spiel und auf der Webseite). */
+function switchRow([key, title, text]) {
   const mine = (store.prefs && store.prefs.game) || {};
   const server = (store.meta && store.meta.gameFeatures) || {};
+  const off = server[key] === false;
+  const cb = el('input', { type: 'checkbox', 'data-game': key, disabled: off });
+  cb.checked = !off && mine[key] !== false;
+  cb.addEventListener('change', async () => {
+    const on = cb.checked;
+    if (!await act(() => setGameSwitch(key, on), `${title}: ${on ? 'an' : 'aus'}`)) cb.checked = !on;
+  });
+  return el('label', { class: 'check multiline' }, cb,
+    el('span', {}, el('strong', { text: title }), el('br'), el('small', { class: 'muted', text: off ? 'Vom Server-Admin für alle ausgeschaltet.' : text })));
+}
+
+function statsSection() {
+  return el('section', { class: 'card', id: 'statsSettings' }, el('h2', { text: 'Statistik' }),
+    switchRow(['rankings', 'In Ranglisten und Statistik sichtbar',
+      'Andere sehen deine Statistik-Seite und dich in den Ranglisten. Aus: Nur du siehst deine Zahlen, und du fehlst in Ranglisten, Server-Summen und im Verlauf. Gezählt wird trotzdem weiter – so wie Minecraft selbst auch zählt.']),
+    el('p', { class: 'muted small', text: 'Im Spiel: /planer ranglisten an oder aus.' }));
+}
+
+function gameSection() {
+  const server = (store.meta && store.meta.gameFeatures) || {};
   return el('section', { class: 'card', id: 'gameSettings' }, el('h2', { text: 'Im Spiel' }),
-    el('div', { class: 'stack' }, GAME_SWITCHES.map(([key, title, text]) => {
-      const off = server[key] === false;
-      const cb = el('input', { type: 'checkbox', 'data-game': key, disabled: off });
-      cb.checked = !off && mine[key] !== false;
-      cb.addEventListener('change', async () => {
-        const on = cb.checked;
-        if (!await act(() => setGameSwitch(key, on), `${title}: ${on ? 'an' : 'aus'}`)) cb.checked = !on;
-      });
-      return el('label', { class: 'check multiline' }, cb,
-        el('span', {}, el('strong', { text: title }), el('br'), el('small', { class: 'muted', text: off ? 'Vom Server-Admin für alle ausgeschaltet.' : text })));
-    })),
+    el('div', { class: 'stack' }, GAME_SWITCHES.map(switchRow)),
     el('p', { class: 'muted small', text: 'Das geht auch im Spiel mit /planer einstellungen. Alle Befehle: /planer hilfe.' }),
     server.teamChat !== false
       ? el('p', { class: 'muted small', text: 'Team-Chat im Spiel: /tc <Nachricht> – nur Mitglieder deines Teams lesen mit. Wie jeder Chat steht er im Server-Log.' })
       : null);
+}
+
+async function logoutDevice(d) {
+  if (await act(() => api(`api/sessions/${encodeURIComponent(d.id)}/logout`, {}), `${d.device} abgemeldet.`)) await load.sessions();
+}
+
+async function logoutOthers() {
+  if (!await confirmDialog({ title: 'Alle anderen Geräte abmelden?', text: 'Dieses Gerät bleibt angemeldet. Auf allen anderen musst du dich neu mit /planer login anmelden.', confirmLabel: 'Abmelden', danger: true })) return;
+  if (await act(() => api('api/sessions/logout-others', {}), r => `${r.removed} Gerät(e) abgemeldet.`)) await load.sessions();
+}
+
+function devicesSection() {
+  const list = store.sessions || [];
+  const others = list.filter(d => !d.current);
+  return el('section', { class: 'card', id: 'devicesCard' }, el('h2', { text: 'Angemeldete Geräte' }),
+    el('ul', { class: 'mini-list' }, list.map(d => el('li', { class: 'device' },
+      el('div', {}, el('strong', { text: d.device }), ' ', d.current ? pill('dieses Gerät', 'ok') : null, el('br'),
+        el('small', { class: 'muted', text: `angemeldet ${fmtDateTime(d.created)} · zuletzt benutzt etwa ${fmtAgo(d.lastUsed)}` })),
+      d.current ? null : el('button', { class: 'small', onclick: () => logoutDevice(d) }, 'Abmelden')))),
+    others.length ? el('button', { id: 'logoutOthersBtn', onclick: logoutOthers }, 'Alle anderen Geräte abmelden') : null,
+    el('p', { class: 'muted small', text: 'Gespeichert wird nur eine grobe Beschreibung wie „Firefox · Windows“ – keine IP-Adresse. Meldet sich jemand mit deinem Konto an, bekommst du im Spiel eine Nachricht (auch wenn Nachrichten aus sind). Im Spiel meldet /planer abmelden dich überall ab.' }));
 }
 
 function favoritesSection() {
@@ -111,6 +143,7 @@ export default {
   title: 'Einstellungen',
   render(root) {
     load.prefs().catch(() => {});
+    load.sessions().catch(() => {});
     const resultBox = el('div', { class: 'import-result' });
     const file = el('input', { type: 'file', accept: '.json,application/json', class: 'hidden', id: 'importFile' });
     file.addEventListener('change', () => {
@@ -138,6 +171,8 @@ export default {
             segmented([['system', 'Wie das Gerät'], ['dark', 'Dunkel'], ['light', 'Hell']], theme, v => { storageSet(THEME_KEY, v === 'system' ? null : v); applyTheme(); draw(); }),
             el('p', { class: 'muted small', text: 'Ebenen der Karte, die letzte Ansicht und Filter merkt sich dieser Browser.' }))),
         gameSection(),
+        statsSection(),
+        devicesSection(),
         favoritesSection(),
         el('section', { class: 'card' }, el('h2', { text: 'Export und Import' }),
           el('p', { text: 'Der Export enthält deine eigenen Länder (inkl. Notizen), Marker, Projekte und Favoriten als JSON-Datei mit Versionsnummer.' }),
@@ -166,6 +201,6 @@ export default {
             el('li', { text: 'Die Karte zeigt nur Gebiete, in deren Nähe schon jemand war. Was niemand besucht hat, bleibt dunkel.' }))));
     };
     fill(root, pageHead('Einstellungen'), body);
-    return bind(root, ['me', 'meta', 'world', 'prefs', 'lands', 'markers', 'projects', 'teams', 'trades'], draw);
+    return bind(root, ['me', 'meta', 'world', 'prefs', 'sessions', 'lands', 'markers', 'projects', 'teams', 'trades'], draw);
   },
 };

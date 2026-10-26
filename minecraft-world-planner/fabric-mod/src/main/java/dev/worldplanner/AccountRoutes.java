@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** /api/me, /api/meta, /api/people, /api/prefs, /api/todo, /api/activity, /api/export, /api/import */
+/** /api/me, /api/meta, /api/people, /api/prefs, /api/todo, /api/sessions, /api/activity, /api/export, /api/import */
 final class AccountRoutes extends Routes {
     private final ImportExport importExport;
 
@@ -34,6 +34,16 @@ final class AccountRoutes extends Routes {
         if (r.is("GET", "todo")) {
             String today = java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString();
             return Notices.toApiJson(Notices.collect(s, r.user, r.admin, today));
+        }
+        if (r.is("GET", "sessions")) return sessions(r);
+        if (r.is("POST", "sessions", "logout-others")) {
+            JsonObject o = ok();
+            o.addProperty("removed", s.sessions().logoutOthers(r.user, r.token));
+            return o;
+        }
+        if (r.is("POST", "sessions", "*", "logout")) {
+            if (!s.sessions().logoutSession(r.user, r.seg(1))) throw PlannerException.notFound("Dieses Gerät ist nicht (mehr) angemeldet.");
+            return ok();
         }
         if (r.is("GET", "activity")) {
             int limit = 50;
@@ -90,6 +100,23 @@ final class AccountRoutes extends Routes {
         return o;
     }
 
+    /** Eigene angemeldete Geräte (Geräte-Etikett, Zeiten) – nie die Tokens selbst. */
+    private JsonObject sessions(ApiRequest r) {
+        JsonArray arr = new JsonArray();
+        for (SessionStore.SessionInfo i : s.sessions().sessionsOf(r.user, r.token)) {
+            JsonObject o = new JsonObject();
+            o.addProperty("id", i.id());
+            o.addProperty("device", i.device());
+            o.addProperty("created", i.created());
+            o.addProperty("lastUsed", i.lastUsed());
+            o.addProperty("current", i.current());
+            arr.add(o);
+        }
+        JsonObject o = new JsonObject();
+        o.add("sessions", arr);
+        return o;
+    }
+
     /** Auswahl-Listen und Grenzen für die Webseite – so steht jede Kategorie nur an einer Stelle (auf dem Server). */
     private JsonObject meta() {
         PlannerConfig c = s.config();
@@ -120,7 +147,21 @@ final class AccountRoutes extends Routes {
         game.addProperty("landEnter", c.landEnterMessages());
         game.addProperty("deathMarker", c.deathMarkers());
         game.addProperty("teamChat", c.teamChat());
+        game.addProperty("statistics", c.statistics());
+        game.addProperty("rankings", c.statistics());
+        game.addProperty("races", c.races());
         o.add("gameFeatures", game);
+        JsonArray cats = new JsonArray();
+        for (StatValues.Category cat : StatValues.CATEGORIES) cats.add(StatsStore.category(cat));
+        o.add("statCategories", cats);
+        o.add("statLabels", map(StatValues.LABELS));
+        JsonObject units = new JsonObject();
+        StatValues.LABELS.keySet().forEach(k -> units.addProperty(k, StatValues.unitOf(k).name().toLowerCase(java.util.Locale.ROOT)));
+        o.add("statUnits", units);
+        o.addProperty("timeZone", c.timeZone());
+        o.addProperty("afkMinutes", c.afkMinutes());
+        o.add("raceTypes", map(RaceStore.TYPES));
+        o.add("raceVehicles", map(RaceStore.VEHICLES));
         o.addProperty("serverTime", System.currentTimeMillis());
         return o;
     }

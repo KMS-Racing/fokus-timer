@@ -171,6 +171,45 @@ final class LandStore extends JsonStore {
 
     record Ref(String id, String name) {}
 
+    /** Ein Land für Grenzen und Navigation: Chunks, Farbe und eine Stelle mitten im Land (Blockkoordinaten). */
+    record Shape(String id, String name, String dimension, String color, long[] chunks, int centerX, int centerZ) {}
+
+    /** Per Name (ohne Groß/klein) oder null. Die Mitte liegt sicher im Land – auch bei L-förmigen Ländern. */
+    synchronized Shape shapeByName(String name) {
+        Land land = name == null ? null : byName(name);
+        return land == null ? null : shape(land);
+    }
+
+    synchronized Shape shapeById(String id) {
+        return shape(require(id));
+    }
+
+    synchronized Shape shapeAt(String dimension, long chunk) {
+        Land land = chunkIndex.containsKey(dimension) ? chunkIndex.get(dimension).get(chunk) : null;
+        return land == null ? null : shape(land);
+    }
+
+    private static Shape shape(Land land) {
+        long[] chunks = land.chunks.toLongArray();
+        double ax = 0, az = 0;
+        for (long c : chunks) {
+            ax += Chunks.x(c);
+            az += Chunks.z(c);
+        }
+        ax /= chunks.length;
+        az /= chunks.length;
+        long best = chunks[0];
+        double bestD = Double.MAX_VALUE;
+        for (long c : chunks) {
+            double d = Math.hypot(Chunks.x(c) - ax, Chunks.z(c) - az);
+            if (d < bestD) {
+                bestD = d;
+                best = c;
+            }
+        }
+        return new Shape(land.id, land.name, land.dimension, land.color, chunks, Chunks.x(best) * 16 + 8, Chunks.z(best) * 16 + 8);
+    }
+
     /** Länder, zu denen der Spieler als Mitbesitzer eingeladen ist. */
     synchronized List<Ref> invitesFor(UUID uuid) {
         return lands.values().stream().filter(l -> l.invites.contains(uuid)).map(l -> new Ref(l.id, l.name)).toList();

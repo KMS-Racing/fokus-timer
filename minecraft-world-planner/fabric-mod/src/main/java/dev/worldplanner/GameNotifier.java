@@ -27,6 +27,7 @@ import java.util.function.LongSupplier;
  *
  * Es gibt keine Nachrichten "auf Vorrat": Wer offline war, bekommt beim Einloggen nur, was jetzt noch zu erledigen ist.
  * Wer "/planer nachrichten aus" eingestellt hat, bekommt nichts – auch keine Nachholung, wenn er es wieder anschaltet.
+ * Ausnahme: Sicherheits-Hinweise (neuer Web-Login) kommen immer.
  */
 final class GameNotifier {
     /** Nach dem Einloggen kurz warten, damit die Zusammenfassung nicht zwischen den Join-Meldungen untergeht. */
@@ -77,16 +78,17 @@ final class GameNotifier {
             UUID player = e.getKey();
             Online st = e.getValue();
             if (!st.started && now - st.joinedAt < SUMMARY_DELAY_MS) continue;
-            List<Notices.Notice> notices = Notices.collect(s, player, s.players().isAdmin(player), today);
+            List<Notices.Notice> notices = Notices.collect(s, player, s.players().isAdmin(player), today, now);
             Set<String> ids = new HashSet<>(Notices.ids(notices));
             boolean wanted = s.prefs().game(player).notices();
             if (!st.started) {
                 st.started = true;
                 List<Notices.Notice> todos = Notices.todos(notices);
                 if (wanted && !todos.isEmpty()) out.add(new Outgoing(player, GameText.summary(todos, url, true)));
-            } else if (wanted) {
+            } else {
                 List<Notices.Notice> send = new ArrayList<>();
                 // Zurückgehaltene Neuigkeiten, deren Pause vorbei ist – aber nur, wenn sie noch stimmen.
+                if (!wanted) st.waiting.clear();
                 for (Iterator<Notices.Notice> it = st.waiting.values().iterator(); it.hasNext(); ) {
                     Notices.Notice n = it.next();
                     if (!ids.contains(n.id())) {
@@ -98,7 +100,7 @@ final class GameNotifier {
                     }
                 }
                 for (Notices.Notice n : notices) {
-                    if (!n.live() || st.seen.contains(n.id())) continue;
+                    if (!n.live() || st.seen.contains(n.id()) || !(wanted || n.always())) continue;
                     if (n.group() != null) {
                         if (!cooledDown(st, n.group(), now)) {
                             st.waiting.put(n.group(), n);
@@ -110,8 +112,6 @@ final class GameNotifier {
                 }
                 for (int i = 0; i < send.size() && i < MAX_LIVE_PER_POLL; i++) out.add(new Outgoing(player, GameText.live(send.get(i), url)));
                 if (send.size() > MAX_LIVE_PER_POLL) out.add(new Outgoing(player, GameText.more(send.size() - MAX_LIVE_PER_POLL)));
-            } else {
-                st.waiting.clear();
             }
             st.seen = ids;
         }

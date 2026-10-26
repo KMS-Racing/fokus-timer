@@ -16,15 +16,19 @@ import markers from './views/markers.js';
 import players from './views/players.js';
 import projects from './views/projects.js';
 import settings, { applyTheme } from './views/settings.js';
+import races from './views/races.js';
+import stats from './views/stats.js';
 import teams from './views/teams.js';
 import trade from './views/trade.js';
 
 const VIEWS = {
-  dashboard, karte, live, seed: live, claims, marker: markers, teams, handel: trade, projekte: projects, spieler: players, einstellungen: settings,
+  dashboard, karte, live, seed: live, claims, marker: markers, teams, handel: trade, projekte: projects, spieler: players, statistik: stats, rennen: races,
+  einstellungen: settings,
 };
 const NAV = [
   ['dashboard', 'Dashboard', '⌂'], ['karte', 'Karte', '▦'], ['live', 'Live-Welt', '◈'], ['claims', 'Claims', '⚑'], ['marker', 'Marker', '◆'],
-  ['teams', 'Teams', '⚔'], ['handel', 'Handel', '⚖'], ['projekte', 'Projekte', '⚒'], ['spieler', 'Spieler', '☺'], ['einstellungen', 'Einstellungen', '⚙'],
+  ['teams', 'Teams', '⚔'], ['handel', 'Handel', '⚖'], ['projekte', 'Projekte', '⚒'], ['spieler', 'Spieler', '☺'], ['statistik', 'Statistik', '★'], ['rennen', 'Rennen', '⏱'],
+  ['einstellungen', 'Einstellungen', '⚙'],
 ];
 
 let cleanup = null;
@@ -44,6 +48,15 @@ let started = false;
 function buildNav() {
   fill($('sideNav'), NAV.map(([name, text, icon]) => el('a', { href: '#/' + name, 'data-route': name, class: 'nav-link' },
     el('span', { class: 'nav-icon', 'aria-hidden': 'true', text: icon }), el('span', { class: 'nav-text', text }), el('span', { class: 'badge hidden', 'data-badge': name }))));
+}
+
+/** Bereiche, die der Server-Admin abgeschaltet hat, verschwinden aus der Navigation. */
+function updateNavVisibility() {
+  const features = (store.meta && store.meta.gameFeatures) || {};
+  for (const [route, key] of [['statistik', 'statistics'], ['rennen', 'races']]) {
+    const link = document.querySelector(`.nav-link[data-route="${route}"]`);
+    if (link) link.classList.toggle('hidden', features[key] === false);
+  }
 }
 
 function updateBadges() {
@@ -205,6 +218,7 @@ function setupUi() {
   $('sideNav').addEventListener('click', e => { if (e.target.closest('a')) document.body.classList.remove('nav-open'); });
   setupSearch($('searchInput'), $('searchResults'));
   for (const k of ['lands', 'teams', 'trades', 'projects', 'me']) on(k, updateBadges);
+  on('meta', updateNavVisibility);
   // Daten der Karte nach einem Dimensionswechsel
   mapModule.map.onDimension = () => { if (current === 'live' || current === 'seed') bluemap.openBlueMap(current); emit('discovered'); };
   document.addEventListener('visibilitychange', () => {

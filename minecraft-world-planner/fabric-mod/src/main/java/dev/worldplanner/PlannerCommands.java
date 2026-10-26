@@ -31,12 +31,17 @@ import java.util.function.Supplier;
  *   /planer einstellungen    Nachrichten, Land-Anzeige und Todespunkt an/aus (auch einzeln: /planer nachrichten aus)
  *   /planer todespunkt       wo du zuletzt gestorben bist
  *   /planer marker <Name>    privaten Marker an deiner Position setzen
+ *   /planer weg <Ziel>       Pfeil über der Hotbar zu einem Marker, Land oder zum Todespunkt (/planer weg aus = beenden)
+ *   /planer statistik [Spieler]  Spielzeit, Tode, Blöcke … und Ränge (wie bei CraftAttack)
+ *   /planer top [Rangliste]  wer führt? (z. B. /planer top dauerzocker)
+ *   /planer ranglisten an|aus  in Ranglisten und Statistik für andere sichtbar sein
  *   /tc <Nachricht>          Team-Chat (auch /teamchat) – nur Mitglieder deines Teams lesen mit
  *   /land [info]             wem gehört dieser Chunk?
  *   /land neu <Name>         neues Land mit dem Chunk, in dem du stehst
  *   /land erweitern [Name]   Chunk zu deinem Land hinzufügen (muss angrenzen)
  *   /land abgeben            Chunk aus deinem Land entfernen
  *   /land liste              deine Länder und Einladungen
+ *   /land grenzen [Land]     Rand des Landes 20 Sekunden lang als Partikel zeigen (nur für dich)
  *   /land einladen <Land> <Spieler>, annehmen <Land>, ablehnen <Land>, verlassen <Land>
  *   /land admin loeschen <Land>, /land admin entfernen <Land> <Spieler>
  *
@@ -45,9 +50,11 @@ import java.util.function.Supplier;
 final class PlannerCommands {
     private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(WorldPlannerMod.MOD_ID);
     private final Supplier<PlannerServices> services;
+    private final GameState game;
 
-    PlannerCommands(Supplier<PlannerServices> services) {
+    PlannerCommands(Supplier<PlannerServices> services, GameState game) {
         this.services = services;
+        this.game = game;
     }
 
     void register(CommandDispatcher<CommandSourceStack> dispatcher) {
@@ -61,7 +68,20 @@ final class PlannerCommands {
                 .then(toggle("landanzeige", "landEnter"))
                 .then(toggle("todespunkt", "deathMarker").executes(this::deathPoint))
                 .then(Commands.literal("marker")
-                        .then(Commands.argument("name", StringArgumentType.greedyString()).executes(this::marker))));
+                        .then(Commands.argument("name", StringArgumentType.greedyString()).executes(this::marker)))
+                .then(Commands.literal("weg")
+                        .executes(this::stopWay)
+                        .then(Commands.literal("aus").executes(this::stopWay))
+                        .then(Commands.argument("ziel", StringArgumentType.greedyString()).suggests(wayTargets()).executes(this::way)))
+                .then(Commands.literal("statistik")
+                        .executes(ctx -> stats(ctx, null))
+                        .then(Commands.argument("spieler", StringArgumentType.word()).suggests(knownPlayers())
+                                .executes(ctx -> stats(ctx, StringArgumentType.getString(ctx, "spieler")))))
+                .then(Commands.literal("top")
+                        .executes(ctx -> top(ctx, null))
+                        .then(Commands.argument("rangliste", StringArgumentType.word()).suggests(rankings())
+                                .executes(ctx -> top(ctx, StringArgumentType.getString(ctx, "rangliste")))))
+                .then(toggle("ranglisten", "rankings")));
 
         var teamChat = dispatcher.register(Commands.literal("teamchat")
                 .then(Commands.argument("nachricht", StringArgumentType.greedyString()).executes(this::teamChat)));
@@ -78,6 +98,10 @@ final class PlannerCommands {
                         .then(Commands.argument("land", StringArgumentType.string()).suggests(ownLands())
                                 .executes(ctx -> extend(ctx, StringArgumentType.getString(ctx, "land")))))
                 .then(Commands.literal("abgeben").executes(this::release))
+                .then(Commands.literal("grenzen")
+                        .executes(ctx -> borders(ctx, null))
+                        .then(Commands.argument("land", StringArgumentType.string()).suggests(allLands())
+                                .executes(ctx -> borders(ctx, StringArgumentType.getString(ctx, "land")))))
                 .then(Commands.literal("einladen")
                         .then(Commands.argument("land", StringArgumentType.string()).suggests(ownLands())
                                 .then(Commands.argument("spieler", StringArgumentType.word()).suggests(knownPlayers())
@@ -174,9 +198,13 @@ final class PlannerCommands {
         String[][] lines = {
                 {"/planer", "was gerade zu erledigen ist"},
                 {"/planer login", "Login-Code für die Webseite"},
-                {"/planer einstellungen", "Nachrichten, Land-Anzeige, Todespunkt an/aus"},
+                {"/planer einstellungen", "Nachrichten, Land-Anzeige, Todespunkt, Ranglisten an/aus"},
                 {"/planer todespunkt", "wo du zuletzt gestorben bist"},
                 {"/planer marker ", "privaten Marker hier setzen (Name dahinter)"},
+                {"/planer weg ", "Pfeil zu einem Marker, Land oder „todespunkt“ (Ziel dahinter)"},
+                {"/land grenzen", "Rand des Landes als Partikel zeigen"},
+                {"/planer statistik", "deine Statistik (oder die eines anderen: Name dahinter)"},
+                {"/planer top", "Ranglisten wie bei CraftAttack – wer führt?"},
                 {"/land", "wem gehört dieser Chunk? Außerdem: neu, erweitern, abgeben, liste, einladen"},
                 {"/tc ", "Team-Chat – nur dein Team liest mit (Nachricht dahinter)"},
                 {"/planer abmelden", "auf allen Geräten von der Webseite abmelden"},
@@ -237,6 +265,7 @@ final class PlannerCommands {
         return switch (key) {
             case "notify" -> "nachrichten";
             case "landEnter" -> "landanzeige";
+            case "rankings" -> "ranglisten";
             default -> "todespunkt";
         };
     }
@@ -245,6 +274,7 @@ final class PlannerCommands {
         return switch (key) {
             case "notify" -> s.config().gameNotifications();
             case "landEnter" -> s.config().landEnterMessages();
+            case "rankings" -> s.config().statistics();
             default -> s.config().deathMarkers();
         };
     }
@@ -309,6 +339,124 @@ final class PlannerCommands {
         return 1;
     }
 
+    // ------------------------------------------------------------------ Navigation und Grenzen
+
+    private int way(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        return withPlayer(ctx, (player, s) -> {
+            String name = StringArgumentType.getString(ctx, "ziel").strip();
+            Waypoints.Target target = wayTarget(s, player, name);
+            game.waypoints.set(player.getUUID(), target);
+            return "Wegweiser zu »" + target.label() + "« – der Pfeil steht über der Hotbar. Beenden: /planer weg aus";
+        });
+    }
+
+    private int stopWay(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        Waypoints.Target old = game.waypoints.clear(player.getUUID());
+        reply(ctx, old == null ? "Du hast gerade keinen Wegweiser. Starten: /planer weg <Marker, Land oder todespunkt>"
+                : "Wegweiser zu »" + old.label() + "« beendet.");
+        return 1;
+    }
+
+    /** Ziel per Name: "todespunkt", ein Marker, den du sehen darfst (eigene zuerst), oder ein Land. */
+    private static Waypoints.Target wayTarget(PlannerServices s, ServerPlayer player, String name) {
+        if (name.equalsIgnoreCase("todespunkt")) {
+            DeathPoints.Point p = DeathPoints.load(s, player.getUUID());
+            if (p == null) throw PlannerException.notFound("Du hast noch keinen Todespunkt.");
+            return new Waypoints.Target("Todespunkt", "☠", p.dimension(), p.x() + 0.5, p.y(), p.z() + 0.5);
+        }
+        MarkerStore.Marker m = s.markers().findVisible(player.getUUID(), name);
+        if (m != null) return new Waypoints.Target(m.name(), m.symbol() == null ? "◆" : m.symbol(), m.dimension(), m.x() + 0.5, m.y(), m.z() + 0.5);
+        LandStore.Shape land = s.lands().shapeByName(name);
+        if (land != null) return new Waypoints.Target(land.name(), "⌂", land.dimension(), land.centerX() + 0.5, null, land.centerZ() + 0.5);
+        throw PlannerException.notFound("Kein Marker und kein Land namens »" + name + "«. Mit Tab siehst du die Namen.");
+    }
+
+    private int borders(CommandContext<CommandSourceStack> ctx, String landName) throws CommandSyntaxException {
+        return withPlayer(ctx, (player, s) -> {
+            LandStore.Shape shape = landName == null
+                    ? s.lands().shapeAt(dimension(player), Chunks.key(player.chunkPosition().x(), player.chunkPosition().z()))
+                    : s.lands().shapeByName(landName);
+            if (shape == null) {
+                throw PlannerException.notFound(landName == null ? "Du stehst in keinem Land. Von weitem geht es mit /land grenzen <Land>."
+                        : "Es gibt kein Land namens »" + landName + "«.");
+            }
+            if (!shape.dimension().equals(dimension(player))) {
+                throw PlannerException.badRequest("»" + shape.name() + "« liegt in: " + GameText.dimensionName(shape.dimension()) + ".");
+            }
+            showBorders(player, shape, 20);
+            return "Die Grenzen von »" + shape.name() + "« leuchten jetzt 20 Sekunden lang (nur für dich, in der Landfarbe).";
+        });
+    }
+
+    private void showBorders(ServerPlayer player, LandStore.Shape shape, int seconds) {
+        if (shape != null) game.borders.show(player.getUUID(), shape.dimension(), shape.chunks(), shape.color(), game.tick + seconds * 20L);
+    }
+
+    /** Vorschläge für /planer weg – ohne Anführungszeichen, weil das Ziel der ganze Rest der Zeile ist. */
+    private SuggestionProvider<CommandSourceStack> wayTargets() {
+        return (ctx, builder) -> {
+            ServerPlayer p = ctx.getSource().getPlayer();
+            PlannerServices s = services.get();
+            List<String> names = new java.util.ArrayList<>(List.of("aus", "todespunkt"));
+            if (p != null && s != null) {
+                names.addAll(s.markers().visibleNames(p.getUUID()));
+                names.addAll(s.lands().allNames());
+            }
+            return SharedSuggestionProvider.suggest(names, builder);
+        };
+    }
+
+    // ------------------------------------------------------------------ Statistik
+
+    private int stats(CommandContext<CommandSourceStack> ctx, String name) throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        PlannerServices s = services.get();
+        if (s == null) return notReady(ctx);
+        if (!s.config().statistics()) return fail(ctx, "Die Statistik ist auf diesem Server ausgeschaltet.");
+        UUID target = player.getUUID();
+        if (name != null) {
+            java.util.Optional<UUID> found = s.players().findByName(name);
+            if (found.isEmpty()) return fail(ctx, "»" + name + "« war noch nie auf dem Server.");
+            target = found.get();
+        }
+        java.util.Set<UUID> hidden = s.prefs().statsHidden();
+        boolean self = target.equals(player.getUUID());
+        if (!self && hidden.contains(target)) return fail(ctx, "»" + s.players().name(target) + "« hat die Statistik ausgeblendet.");
+        StatsStore.Summary summary = s.stats().summary(target, java.time.LocalDate.now(s.config().zone()), hidden);
+        if (summary == null) return fail(ctx, "Für »" + s.players().name(target) + "« gibt es noch keine Statistik.");
+        Component msg = GameText.statsSummary(s.players().name(target), summary, System.currentTimeMillis(), s.config().publicUrl(),
+                "#/statistik/spieler/" + target);
+        ctx.getSource().sendSuccess(() -> msg, false);
+        if (self && hidden.contains(target)) reply(ctx, "Du bist ausgeblendet – nur du siehst deine Statistik. Wieder sichtbar: /planer ranglisten an");
+        return 1;
+    }
+
+    private int top(CommandContext<CommandSourceStack> ctx, String id) throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        PlannerServices s = services.get();
+        if (s == null) return notReady(ctx);
+        if (!s.config().statistics()) return fail(ctx, "Die Statistik ist auf diesem Server ausgeschaltet.");
+        java.time.LocalDate today = java.time.LocalDate.now(s.config().zone());
+        java.util.Set<UUID> hidden = s.prefs().statsHidden();
+        if (id == null) {
+            java.util.Map<String, List<StatsStore.Entry>> lists = new java.util.HashMap<>();
+            for (StatValues.Category c : StatValues.CATEGORIES) lists.put(c.id(), s.stats().ranking(c, "all", today, hidden));
+            Component msg = GameText.leaders(StatValues.CATEGORIES, lists, s.players()::name, s.config().publicUrl());
+            ctx.getSource().sendSuccess(() -> msg, false);
+            return 1;
+        }
+        StatValues.Category c = StatValues.category(id.toLowerCase(java.util.Locale.ROOT));
+        if (c == null) return fail(ctx, "Diese Rangliste gibt es nicht. Alle: /planer top");
+        Component msg = GameText.ranking(c, s.stats().ranking(c, "all", today, hidden), s.players()::name, player.getUUID(), s.config().publicUrl());
+        ctx.getSource().sendSuccess(() -> msg, false);
+        return 1;
+    }
+
+    private static SuggestionProvider<CommandSourceStack> rankings() {
+        return suggestFrom(source -> StatValues.CATEGORIES.stream().map(StatValues.Category::id).toList());
+    }
+
     private static int notReady(CommandContext<CommandSourceStack> ctx) {
         ctx.getSource().sendFailure(Component.literal("World Planner startet noch."));
         return 0;
@@ -348,6 +496,7 @@ final class PlannerCommands {
             String id = s.lands().create(player.getUUID(), isAdmin(ctx), StringArgumentType.getString(ctx, "name"),
                     dimension(player), new long[]{chunk});
             s.activity().add(player.getUUID(), "land.created", s.players().name(player.getUUID()) + " hat das Land »" + s.lands().nameOf(id) + "« erstellt.", "land", id, "all");
+            showBorders(player, s.lands().shapeByName(s.lands().nameOf(id)), 10);
             return "Land erstellt: " + s.lands().summary(id) + ". Erweitern mit /land erweitern.";
         });
     }
@@ -364,6 +513,7 @@ final class PlannerCommands {
             }
             String id = landId(s, name);
             s.lands().addChunks(player.getUUID(), isAdmin(ctx), id, new long[]{chunk});
+            showBorders(player, s.lands().shapeByName(s.lands().nameOf(id)), 10);
             return "Chunk hinzugefügt: " + s.lands().summary(id);
         });
     }

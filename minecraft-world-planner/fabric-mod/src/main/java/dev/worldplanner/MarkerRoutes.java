@@ -28,6 +28,11 @@ final class MarkerRoutes extends Routes {
             markers.update(r.user, r.admin, r.seg(1), r.body());
             return ok();
         }
+        if (r.is("POST", "markers", "*", "navigate")) {
+            MarkerStore.Marker m = markers.visible(r.user, r.seg(1));
+            s.requestWaypoint(r.user, new Waypoints.Target(m.name(), m.symbol() == null ? "◆" : m.symbol(), m.dimension(), m.x() + 0.5, m.y(), m.z() + 0.5));
+            return ok();
+        }
         if (r.is("POST", "markers", "*", "delete")) {
             markers.delete(r.user, r.admin, r.seg(1));
             return ok();

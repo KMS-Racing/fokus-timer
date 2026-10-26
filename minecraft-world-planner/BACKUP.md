@@ -12,9 +12,11 @@ entsprechend `<welt>/world-planner/`). Die Einstellungen liegen in **`config/wor
 | `trades.json` | Handel: Angebote, Gebote, Gegenangebote, Übergaben, Verlauf, zuletzt verarbeitete `requestId`s | ja |
 | `players.json` | Bekannte Spieler (Name ↔ UUID, OP-Status, zuletzt gesehen) | ja |
 | `discovered.json` | Entdeckte Chunks | ja (sonst ist die Karte wieder dunkel) |
-| `prefs.json` | Favoriten | nett zu haben |
+| `races.json` | Rennstrecken (Tore, Versionen), Bestzeiten, letzte Runden, Archiv | ja |
+| `stats.json` | Statistik: was der Planer selbst misst (Tagesstände, Aktiv/AFK, Sitzungen, Wann online, Verlauf, Rekorde). Minecrafts eigene Zahlen liegen ohnehin in `world/players/stats/` | nett zu haben |
+| `prefs.json` | Favoriten und Schalter (Nachrichten, Land-Anzeige, Todespunkt, in Ranglisten sichtbar) | nett zu haben |
 | `activity.json` | Aktivitäts-Übersicht (die letzten `activityLimit` Einträge) | nett zu haben |
-| `sessions.json` | Web-Logins (nur Hashes). Ohne die Datei müssen sich alle neu einloggen. | egal |
+| `sessions.json` | Web-Logins (nur Hashes und eine grobe Geräte-Beschreibung). Ohne die Datei müssen sich alle neu einloggen. | egal |
 | `*.v1.bak` | Automatische Sicherung vor einer Format-Umstellung (z. B. beim Update von 0.2 auf 0.3) | aufheben, bis alles läuft |
 | `*.kaputt-<Zeit>` | Eine Datei, die beim Start nicht lesbar war (die Mod überschreibt sie nicht) | ansehen, reparieren |
 
@@ -41,6 +43,13 @@ Wer ganz sicher gehen will, nimmt das Backup bei gestopptem Server.
 - Marker mit `"public": true` werden „für alle“, mit `false` „nur ich“. Länder, Besitzer und Einladungen bleiben gleich.
 - Zurück auf 0.2: Server stoppen, 0.2-Jar einsetzen, `lands.json.v1.bak` → `lands.json` und `markers.json.v1.bak` → `markers.json`
   zurückkopieren. Was in 0.3 neu angelegt wurde (Teams, Projekte, Handel), kennt 0.2 nicht.
+
+## Update von 0.4 auf 0.5
+
+- Nichts wird umgestellt: Alle Dateien bleiben, wie sie sind; neu kommen `stats.json` und `races.json` dazu. In `prefs.json`
+  bekommt jeder Spieler beim ersten Ändern den Schalter „in Ranglisten sichtbar“ (fehlt er, gilt „an“).
+- Zurück auf 0.4 (nicht ausprobiert): Server stoppen, 0.4-Jar einsetzen. 0.4 kennt `stats.json` und `races.json` nicht und lässt
+  sie liegen; den Schalter „in Ranglisten sichtbar“ und die Geräte-Namen der Web-Logins vergisst es beim nächsten Speichern.
 
 ## Export/Import auf der Webseite ist kein Server-Backup
 

@@ -9,7 +9,7 @@ export const store = {
   trades: [], tradeUnit: '', serverOffset: 0, // serverOffset = Serverzeit - Browserzeit
   people: [], onlineHidden: false,
   players: [], playersHidden: false,
-  activity: [], prefs: { favorites: {} },
+  activity: [], prefs: { favorites: {} }, sessions: [],
   knownPlayers: [],
   blueMapStatus: null,
   loaded: {},
@@ -81,6 +81,7 @@ export const load = {
   },
   async activity() { store.activity = (await api('api/activity?limit=100')).events || []; mark('activity', store.activity); },
   async prefs() { store.prefs = await api('api/prefs'); mark('prefs', store.prefs); },
+  async sessions() { store.sessions = (await api('api/sessions')).sessions || []; mark('sessions', store.sessions); },
   async knownPlayers() { store.knownPlayers = (await api('api/known-players')).players || []; mark('knownPlayers', store.knownPlayers); },
   async blueMapStatus() { store.blueMapStatus = await api('api/bluemap-status'); mark('blueMapStatus', store.blueMapStatus); },
 };

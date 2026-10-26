@@ -6,6 +6,7 @@ import { navigate } from '../router.js';
 import { landById, load, myTeams, store } from '../store.js';
 import { act, confirmDialog, dimName, el, fill, fmtAgo, fmtDate, formDialog, pill, plural, swatch } from '../util.js';
 import { bind, favButton, pageHead, playerDatalist, searchInput, segmented, selectInput, teamBadgeById } from './common.js';
+import { myPosition, navigateButton } from './markers.js';
 
 const state = { filter: 'all', q: '', dim: '', sort: 'name' };
 
@@ -49,6 +50,7 @@ export function landItem(l) {
     el('div', { class: 'row' },
       el('button', { class: 'small', onclick: () => openOnMap(l) }, 'Auf Karte'),
       el('button', { class: 'small', onclick: () => in3D(l) }, 'In 3D'),
+      myPosition() ? navigateButton(`api/lands/${enc(l.id)}/navigate`) : null,
       el('a', { class: 'button small', href: '#/claims/' + enc(l.id) }, 'Details')));
 }
 
@@ -109,7 +111,7 @@ function renderList(root) {
       : el('div', { class: 'empty' }, el('p', { text: store.lands.length ? 'Kein Land passt zu den Filtern.' : 'Noch hat niemand Land geclaimt. Auf der Karte kannst du entdeckte Chunks auswählen.' })));
   };
   fill(root, head, controls, listBox);
-  return bind(root, ['lands', 'me', 'teams', 'prefs', 'world'], draw);
+  return bind(root, ['lands', 'me', 'teams', 'prefs', 'world', 'players'], draw);
 }
 
 // ------------------------------------------------------------------ Detail
@@ -198,6 +200,7 @@ function renderDetail(root, id) {
         el('div', { class: 'row' },
           el('button', { onclick: () => openOnMap(l) }, 'Auf Karte'),
           el('button', { onclick: () => in3D(l) }, 'In 3D'),
+          myPosition() ? navigateButton(`api/lands/${enc(l.id)}/navigate`) : null,
           l.can && l.can.edit ? el('button', { class: 'primary', onclick: () => editLand(l) }, 'Bearbeiten') : null)),
       l.invitedMe ? el('section', { class: 'card highlight' }, el('p', { text: 'Du bist eingeladen, dieses Land mitzubesitzen.' }),
         el('div', { class: 'row' },
@@ -233,7 +236,7 @@ function renderDetail(root, id) {
         !canDelete && l.mine ? el('p', { class: 'muted small', text: 'Löschen geht nur, wenn du der einzige Besitzer bist. Mit Mitbesitzern kannst du austreten.' }) : null,
         !l.mine && !me.admin ? el('p', { class: 'muted small', text: 'Nur Besitzer können austreten oder löschen.' }) : null));
   };
-  return bind(root, ['lands', 'me', 'teams', 'projects', 'markers', 'activity', 'prefs'], draw);
+  return bind(root, ['lands', 'me', 'teams', 'projects', 'markers', 'activity', 'prefs', 'players'], draw);
 }
 
 export default {

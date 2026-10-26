@@ -77,6 +77,12 @@ final class PlayerDirectory extends JsonStore {
         return out;
     }
 
+    /** Zuletzt gesehen (höchstens alle 10 Minuten gespeichert, also ungefähr) – 0 = unbekannt. */
+    synchronized long lastSeen(UUID uuid) {
+        Entry e = byId.get(uuid);
+        return e == null ? 0 : e.lastSeen;
+    }
+
     synchronized boolean known(UUID uuid) {
         return byId.containsKey(uuid);
     }
