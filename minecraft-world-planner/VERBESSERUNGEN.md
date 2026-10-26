@@ -197,8 +197,10 @@ nach dem Wiederbeleben auf dem Server (Fake-Spieler werden beim Tod entfernt) un
 | Statistik-Pfad: In 26.3 liegen Minecrafts Statistik-Dateien in `world/players/stats`, nicht mehr in `world/stats` | Nachgesehen in der echten Welt | Pfad von Minecraft selbst (`LevelResource.PLAYER_STATS_DIR`) |
 | Handy: Die Diagramme wurden verkleinert, die Schrift war nur noch ~6 px groß | Screenshot | Zeichnungen richten sich nach der Breite, die Schrift bleibt 11 px |
 | „Zuwachs“ und „Pro Online-Stunde“ waren lange Listen voller Nullen; Achse „0 / 1,5 / 3“ für Spielerzahlen | Screenshots | Nur Zeilen mit Werten; ganze Zahlen auf der Achse |
+| **Nach einem Absturz war der ganze Statistik-Verlauf eines Spielers weg.** Minecraft speichert seine Statistik nur alle paar Minuten, der Planer öfter. Stirbt der Server dazwischen (hier: die Testumgebung wurde nachts hart beendet), ist Minecrafts Spielzeit danach kleiner als der letzte Stand des Planers – der hielt das für „Statistik gelöscht“ und warf alle Tagesstände weg (Zuwachs heute und gestern: 0). Außerdem wären Meilensteine doppelt gekommen | Screenshot: „Minecraft-Statistik wurde zurückgesetzt“, obwohl niemand etwas gelöscht hatte; im Log fehlte das Herunterfahren | Tagesstände werden um genau den Rücksprung verschoben – jeder Tageszuwachs bleibt, nichts wird negativ, „Gesamt“ bleibt Minecrafts Zahl. Meilensteine zählen ab dem höchsten je gesehenen Wert. Neu: 2 Unit-Tests und `crash_check.py` mit echtem `kill -9` (alte Jar: Spielzeit heute 32 min → 0, durchgefallen; neue Jar: 6/6) |
 | „Aktiv (ohne AFK)“ konnte größer sein als die Spielzeit (Screenshot: 10 min gegen 9 min). Minecraft zählt Spielzeit in Ticks, der Planer zählte Aktiv/AFK mit der echten Uhr – bei Ruckeln zählt Minecraft weniger. Hier waren es nur 2 Sekunden (plus Abrunden), auf einem Server mit 18 statt 20 Ticks pro Sekunde wären es 10 % | Screenshot nach dem Commit, dann die genauen Millisekunden nachgesehen | Aktiv/AFK zählen jetzt dieselben Ticks; die AFK-Grenze (5 Minuten) bleibt echte Zeit. Neuer Unit-Test mit einem Server auf 10 Ticks pro Sekunde |
 | Handy: In der Rennen-Bestenliste war die Spalte S4 unsichtbar – man konnte zwar seitlich wischen, aber nichts zeigte das an | Screenshot nach dem Commit | Engere Zellen auf schmalen Bildschirmen (4 Abschnitte passen ab 390 px) und ein Schatten am Rand jeder Tabelle, solange es seitlich weitergeht. Bei sehr vielen Toren muss man weiterhin wischen |
+| Test-Fehler: Der Browser-Test prüfte die Rennen-Seiten nur, weil von Hand angelegte Demo-Zeiten herumlagen – die vom Renn-Test behaltene Strecke hatte keine aktuellen Zeiten (der Test baut sie am Ende um). Und nach 5 behaltenen Strecken lief der Renn-Test in die Grenze „höchstens 5 Strecken“ | voller Testlauf (Renn-Test 2 von 26) | Der Renn-Test räumt Alices alte „Testkurs …“-Strecken auf und fährt im Behalte-Modus zum Schluss zwei gültige Runden – der Browser-Test hängt nicht mehr an Zufallsdaten |
 | Test-Fehler: Ein Browser-Test wartete nach „Details“ auf irgendeine Überschrift – die Liste hat auch eine; manchmal prüfte er zu früh | voller Testlauf (1 von 48 rot) | wartet jetzt auf die Überschrift mit dem Landnamen (strenger, ohne Zufall) |
 
 Und ehrlich zum **Testaufbau**: Die Fake-Spieler sind wieder gestorben – sie wurden auf eine Plattform teleportiert, die es noch
@@ -210,8 +212,8 @@ zählte erst bei der nächsten Bewegung. Die Mod hatte recht; der Testweg endet 
 
 Auf demselben echten Minecraft-26.3-Server (Fabric API, BlueMap 5.29, Carpet, vier Fake-Spieler, einer OP) – zum Schluss alles
 noch einmal mit genau der Jar, die ausgeliefert wird:
-- **164** Java-Unit-Tests (36 neu: Wegweiser, Grenzen, Actionbar, Geräte, Login-Nachricht; Statistik-Kennzahlen, Zuwachs pro Tag,
-  Meilensteine, Ranglisten mit Gleichstand, Ausblenden, AFK, Neustart; Zeitmessung zwischen den Ticks, ausgelassene Tore,
+- **165** Java-Unit-Tests (37 neu: Wegweiser, Grenzen, Actionbar, Geräte, Login-Nachricht; Statistik-Kennzahlen, Zuwachs pro Tag,
+  Meilensteine, Ranglisten mit Gleichstand, Ausblenden, AFK (auch bei Lag), Neustart, Absturz; Zeitmessung zwischen den Ticks, ausgelassene Tore,
   Teleport, Ruckler, Fahrzeug-Regeln, Sprint, Bestenliste, Versionen, Texte, API)
 - **15** Web-Unit-Tests (neu: Statistik-Zahlen, Tage über die Zeitumstellung, Rundenzeiten, Streckenplan)
 - Alte Tests, alle grün: API **59** Kern + **85** SMP + **46** Handel, Chat-Kürzel **10**, Spiel-Integration **36** + **20** Webseite,
@@ -219,6 +221,7 @@ noch einmal mit genau der Jar, die ausgeliefert wird:
 - Neu auf dem Server: **41** Statistik (echte Aktionen: Blöcke setzen, springen, Diamanterz abbauen, an Fallschaden sterben; 20 s Lag mit `/tick rate 10`),
   **30** Rennen (bauen, Runden, Abschnitte, ausgelassenes Tor, Teleport, Fahrzeug-Regel, Rechte), **26** Browser (Seite = API,
   Wärmekarte ohne erfundene Nullen, Pfeiltasten, Tabellen-Ansicht, lila Abschnitte, Handy)
+- Absturz mit `kill -9`, bevor Minecraft gespeichert hat: **6/6** (Verlauf, Zuwachs, Aktiv ≤ Spielzeit)
 - Update von 0.4.0 auf 0.5: **19/19** – Länder, Marker, Teams, Projekte, Angebote, Favoriten, Spiel-Schalter, Aktivität und Logins gleich
 
 **Nicht geprüft** (ehrlich): wie Pfeil, Partikel und Rennanzeige in einem echten Minecraft-Fenster aussehen; Rennen mit echtem

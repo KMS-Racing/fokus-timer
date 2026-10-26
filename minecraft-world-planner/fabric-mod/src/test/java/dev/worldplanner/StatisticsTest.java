@@ -145,16 +145,49 @@ class StatisticsTest {
     }
 
     @Test
-    void resetMinecraftStatsDoNotGiveNegativeNumbers() {
+    void deletedMinecraftStatsGiveNoNegativeNumbersAndNoRepeatedMilestones() {
+        StatValues.Category mined = StatValues.category("abrissbirne");
         st.observe(alice, snap(10, 5000), 1, D0);
         st.observe(alice, snap(0, 0), 2, D0); // Admin hat die Statistik-Datei gelöscht
-        assertTrue(st.ranking(StatValues.category("abrissbirne"), "today", D0, Set.of()).isEmpty());
-        st.observe(alice, snap(1, 50), 3, D0);
-        assertEquals(50, st.ranking(StatValues.category("abrissbirne"), "today", D0, Set.of()).getFirst().value());
-        JsonArray events = st.playerJson(alice, alice, D0, Set.of(), false, w.players::name).getAsJsonArray("events");
+        assertTrue(st.ranking(mined, "today", D0, Set.of()).isEmpty());
+        assertTrue(st.ranking(mined, "all", D0, Set.of()).isEmpty(), "Gesamt = Minecrafts Zahl, auch nach dem Löschen");
+        assertTrue(st.observe(alice, snap(1, 50), 3, D0).isEmpty(), "die erste Stunde war schon – kein zweites „Erste Stunde gespielt“");
+        assertEquals(50, st.ranking(mined, "today", D0, Set.of()).getFirst().value());
+        assertEquals(List.of("Minecrafts Statistik ist zurückgesprungen (Spielzeit −10 h 0 min), z. B. nach einem Absturz – der Verlauf bleibt"),
+                eventTexts(D0));
+    }
+
+    @Test
+    void aCrashBeforeMinecraftSavedKeepsTheHistory() throws Exception {
+        StatValues.Category mined = StatValues.category("abrissbirne");
+        LocalDate d1 = D0.plusDays(1), d2 = D0.plusDays(2);
+        st.observe(alice, snap(1, 100), 1, D0);
+        st.observe(alice, snap(2, 300), 2, D0); // Tag 0: +200
+        assertEquals(List.of("1.000 Blöcke abgebaut"), st.observe(alice, snap(3, 1000), 3, d1)); // Tag 1: +700
+        // Absturz: Minecraft hatte zuletzt bei 900 Blöcken gespeichert, der Planer kannte schon 1000
+        st.observe(alice, snap(2, 900), 4, d1);
+        assertEquals(900, st.ranking(mined, "all", d1, Set.of()).getFirst().value(), "Gesamt = Minecrafts Zahl");
+        assertEquals(700, st.ranking(mined, "today", d1, Set.of()).getFirst().value(), "der Zuwachs von heute bleibt");
+        assertEquals(200, st.ranking(mined, "yesterday", d1, Set.of()).getFirst().value(), "gestern bleibt, wie es war");
+        assertEquals("Minecrafts Statistik ist zurückgesprungen (Spielzeit −1 h 0 min), z. B. nach einem Absturz – der Verlauf bleibt",
+                eventTexts(d1).getFirst());
+
+        TestSupport.World again = w.restart(); // auch nach einem Neustart: derselbe Meilenstein kommt nicht noch einmal
+        StatsStore st2 = again.services.stats();
+        assertTrue(st2.observe(alice, snap(3, 1000), 5, d1).isEmpty());
+        assertEquals(800, st2.ranking(mined, "today", d1, Set.of()).getFirst().value());
+        st2.observe(alice, snap(4, 1100), 6, d2);
+        JsonArray history = st2.playerJson(alice, alice, d2, Set.of(), false, again.players::name).getAsJsonArray("history");
+        List<Long> perDay = new java.util.ArrayList<>();
+        for (int i = 27; i < 30; i++) perDay.add(history.get(i).getAsJsonObject().get("mined").getAsLong());
+        assertEquals(List.of(200L, 800L, 100L), perDay, "Verlauf: kein Tag verloren, keiner negativ");
+    }
+
+    private List<String> eventTexts(LocalDate today) {
         List<String> texts = new java.util.ArrayList<>();
-        events.forEach(e -> texts.add(e.getAsJsonObject().get("text").getAsString()));
-        assertEquals(List.of("Erste Stunde gespielt", "Minecraft-Statistik wurde zurückgesetzt"), texts, "neueste zuerst");
+        st.playerJson(alice, alice, today, Set.of(), false, w.players::name).getAsJsonArray("events")
+                .forEach(e -> texts.add(e.getAsJsonObject().get("text").getAsString()));
+        return texts;
     }
 
     @Test

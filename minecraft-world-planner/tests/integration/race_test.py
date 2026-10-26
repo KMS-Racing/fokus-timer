@@ -26,6 +26,13 @@ NAME = "Testkurs " + run
 X, Y, Z = 600, 200, 600  # Plattform hoch in der Luft, weit weg von den anderen Tests
 console("difficulty peaceful")
 
+# Teststrecken früherer Läufe aufräumen: Jeder darf höchstens 5 Strecken haben, und mit RACE_KEEP=1 bleibt jedes Mal eine stehen.
+# Nur Alices eigene Strecken, deren Name mit „Testkurs “ beginnt.
+a_uuid = call("api/me", token=a)[1]["uuid"]
+for old in call("api/races", token=a)[1].get("tracks", []):
+    if old["owner"] == a_uuid and old["name"].startswith("Testkurs "):
+        call(f"api/races/{old['id']}/delete", {"confirmName": old["name"]}, a)
+
 # Quadrat, 120 Blöcke pro Runde: Start/Ziel Richtung Osten, dann Süden, Westen, Norden (Minecraft: 0° = Süden, -90° = Osten).
 # Die Tore stehen auf der Blockmitte (tp mit ganzen Zahlen = +0,5) – deshalb endet jede Runde bei x = 2, also hinter der Linie.
 GATES = [(0, 0, -90), (20, 10, 0), (0, 20, 90), (-20, 10, 180)]
@@ -135,8 +142,18 @@ m = mark()
 console(f"execute as {b_name} run rennen stop")
 check("/rennen stop", reply(m, "Zeitmessung beendet: auf eigenen Wunsch"), since(m)[-300:])
 
-# Aufräumen (RACE_KEEP=1 lässt die Strecke stehen – z. B. für Screenshots der Webseite)
+# Aufräumen (RACE_KEEP=1 lässt die Strecke stehen – für den Browser-Test danach und Screenshots der Webseite)
 if os.environ.get("RACE_KEEP"):
+    # Die aktuelle Version soll Zeiten haben, sonst kann der Browser-Test Bestenliste und Abschnitte nicht prüfen
+    call(f"api/races/{tid}/vehicle", {"vehicle": "foot"}, a)
+    teleport(b_name, X - 5, Y + 1, Z)
+    m = mark()
+    console(f'execute as {b_name} run rennen start "{NAME}"')
+    drive(b_name, LOOP + LOOP, (-5, 0))
+    reply(m, f"Rennen-Nachricht an {b_name}: [Rennen] Runde 2: ", 10)
+    console(f"execute as {b_name} run rennen stop")
+    st, detail = call(f"api/races/{tid}", token=a)
+    check("Behalten: Version 3 mit Bobs Bestzeit", detail.get("version") == 3 and len(detail.get("leaderboard", [])) == 1, (detail.get("version"), detail.get("leaderboard")))
     sys.exit(check.done())
 st, r = call(f"api/races/{tid}/delete", {"confirmName": "falsch"}, a)
 check("Löschen nur mit richtigem Namen", st == 400, (st, r))

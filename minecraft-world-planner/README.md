@@ -192,6 +192,9 @@ Teams gründen, Handel und Projekte gehen nur auf der Webseite – im Spiel beko
   auch im Boot oder vom Wasser geschoben. Aktiv und AFK werden in Spiel-Ticks gezählt wie Minecrafts Spielzeit – so ist
   „Aktiv“ nie größer als die Spielzeit, auch wenn der Server ruckelt (ob jemand AFK ist, entscheidet die echte Uhr).
   „Heute“ und „Gestern“ richten sich nach `timeZone` (Standard Europe/Berlin).
+- **Nach einem Absturz** kann Minecrafts eigene Zahl ein paar Minuten zurückspringen (Minecraft speichert seine Statistik nur
+  alle paar Minuten). „Gesamt“ zeigt dann Minecrafts Zahl, Verlauf und Zuwachs bleiben, und auf der Spielerseite steht
+  „Minecrafts Statistik ist zurückgesprungen …“. Dasselbe passiert, wenn ein Admin eine Statistik-Datei löscht.
 - **Ranglisten** mit den Namen von CraftAttack: Dauerzocker, Fleißig, Friedhof, Diamantenbank, Abrissbirne, Baumeister,
   Monsterjäger, Weltenbummler, Unsterblich, Kampfmaschine, Vielfraß, Angelprofi, Tierfreund, Händler, Handwerker, Flummi –
   jeweils gesamt, letzte 7 Tage, gestern und heute (Zuwachs zählt ab der Installation). Gleiche Werte = gleicher Platz.

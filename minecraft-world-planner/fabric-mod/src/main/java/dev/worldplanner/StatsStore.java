@@ -53,6 +53,8 @@ final class StatsStore extends JsonStore {
 
     private static final class Player {
         Map<String, Long> values = new LinkedHashMap<>();
+        /** Höchster je gesehener Wert – springt Minecraft zurück, gibt es dieselben Meilensteine nicht noch einmal. */
+        final Map<String, Long> best = new LinkedHashMap<>();
         Map<String, Map<String, Integer>> tops = new LinkedHashMap<>();
         long firstSeen, updated;
         final TreeMap<String, Map<String, Long>> days = new TreeMap<>();
@@ -119,16 +121,18 @@ final class StatsStore extends JsonStore {
             players.put(id, p);
             // Startwert: Alles bis jetzt zählt nicht als Zuwachs von "heute"
             p.days.put(date.minusDays(1).toString(), dayValues(snap.values(), 0));
-        } else if (snap.values().getOrDefault("playTime", 0L) < p.values.getOrDefault("playTime", 0L)) {
-            // Minecrafts Statistik-Datei wurde gelöscht oder ersetzt: neu anfangen, sonst gäbe es negative Zuwächse
-            p.days.clear();
-            p.days.put(date.minusDays(1).toString(), dayValues(snap.values(), p.activeMs));
-            addEvent(p, new Event(now, "info", "Minecraft-Statistik wurde zurückgesetzt"));
         } else {
-            reached = StatValues.milestones(p.values, snap.values());
+            long lost = p.values.getOrDefault("playTime", 0L) - snap.values().getOrDefault("playTime", 0L);
+            shiftDays(p, snap.values());
+            if (lost > 0) {
+                addEvent(p, new Event(now, "info", "Minecrafts Statistik ist zurückgesprungen (Spielzeit −"
+                        + (lost < 60_000 ? lost / 1000 + " s" : StatValues.duration(lost)) + "), z. B. nach einem Absturz – der Verlauf bleibt"));
+            }
+            reached = StatValues.milestones(p.best, snap.values());
             for (String text : reached) addEvent(p, new Event(now, "milestone", text));
         }
         p.values = new LinkedHashMap<>(snap.values());
+        for (Map.Entry<String, Long> e : snap.values().entrySet()) p.best.merge(e.getKey(), e.getValue(), Math::max);
         p.tops = snap.tops();
         p.updated = now;
         p.days.put(date.toString(), dayValues(p.values, p.activeMs));
@@ -234,6 +238,20 @@ final class StatsStore extends JsonStore {
     private static void addEvent(Player p, Event e) {
         p.events.addFirst(e);
         while (p.events.size() > MAX_EVENTS) p.events.removeLast();
+    }
+
+    /**
+     * Minecrafts Zahl ist kleiner als beim letzten Mal: Der Server ist abgestürzt, bevor Minecraft gespeichert hat (es
+     * speichert nur alle 5 Minuten), oder jemand hat die Statistik-Datei gelöscht. Dann alle Tagesstände um genau so viel
+     * verschieben – jeder Tageszuwachs bleibt, wie er war, und nichts wird negativ. „Gesamt“ zeigt weiter Minecrafts Zahl.
+     */
+    private static void shiftDays(Player p, Map<String, Long> now) {
+        for (String key : StatValues.DAY_KEYS) {
+            if (key.equals("activeTime")) continue; // misst der Planer selbst – springt nicht mit zurück
+            long drop = p.values.getOrDefault(key, 0L) - now.getOrDefault(key, 0L);
+            if (drop <= 0) continue;
+            for (Map<String, Long> day : p.days.values()) day.put(key, day.getOrDefault(key, 0L) - drop);
+        }
     }
 
     private static Map<String, Long> dayValues(Map<String, Long> values, long activeMs) {
@@ -673,6 +691,7 @@ final class StatsStore extends JsonStore {
                 p.tops.put(t.getKey(), counts);
             }
         }
+        p.best.putAll(o.has("best") ? longMap(o.getAsJsonObject("best")) : p.values);
         p.firstSeen = o.get("firstSeen").getAsLong();
         p.updated = o.get("updated").getAsLong();
         if (o.has("days")) o.getAsJsonObject("days").entrySet().forEach(d -> p.days.put(d.getKey(), longMap(d.getValue().getAsJsonObject())));
@@ -743,6 +762,7 @@ final class StatsStore extends JsonStore {
         players.forEach((id, p) -> {
             JsonObject o = new JsonObject();
             o.add("values", longJson(p.values));
+            o.add("best", longJson(p.best));
             JsonObject tops = new JsonObject();
             p.tops.forEach((kind, counts) -> {
                 JsonObject c = new JsonObject();

@@ -24,6 +24,7 @@ schicken gleichzeitige Anfragen (Gebote, Käufe) und messen, wo die BlueMap-Kame
 | `race_test.py` | Rennstrecke im Spiel bauen (`/rennen neu`, `tor`, `fertig`), Runden fahren (viele kleine Teleports), Abschnitte, Bestenliste, ausgelassenes Tor, Teleport, Fahrzeug-Regel, Rechte. `RACE_KEEP=1` lässt die Strecke stehen |
 | `stats_web_test.js` | Statistik- und Rennen-Seiten zeigen dasselbe wie die API (Kacheln, Wärmekarte mit leeren Feldern ohne Messung, Pfeiltasten, Tabellen-Ansicht, Ranglisten, Ausblenden, Bestenliste mit lila Abschnitten), Handy |
 | `restart_check.py` | Alle Daten vor und nach einem Server-Neustart vergleichen (`save`, Server neu starten, `compare`) |
+| `crash_check.py` | Absturz: wartet, bis der Planer neuer gespeichert hat als Minecraft (`wait`), dann `kill -9`, Neustart, `compare` – Statistik-Verlauf, Zuwachs gestern und Aktiv ≤ Spielzeit müssen stimmen |
 
 ## Integrationstests vorbereiten
 
@@ -62,7 +63,7 @@ Umgebungsvariablen: `PLANNER_URL` (Standard `http://127.0.0.1:8765/`), `CHROMIUM
 `PLAYWRIGHT_MODULE`, `SHOT_DIR` (Ordner für Screenshots).
 
 Die Tests legen Daten mit zufälligen Namen an (z. B. „Base QWER“), suchen sich freie Chunks selbst und räumen Teams früherer,
-abgebrochener Läufe auf (nur Teams, die mit „Testteam “ beginnen). Sie funktionieren also auch, wenn schon Daten auf dem
+abgebrochener Läufe auf (nur Teams, die mit „Testteam “ beginnen, und Alices Strecken, die mit „Testkurs “ beginnen). Sie funktionieren also auch, wenn schon Daten auf dem
 Testserver liegen. Der Handels-Test hält sich an die Bremse von 30 Aktionen pro Minute – zwei Läufe direkt hintereinander gehen.
 
 **Warum DEBUG-Zeilen?** Minecraft schreibt Nachrichten an einzelne Spieler (Chat, Actionbar) nirgends hin. Mit
